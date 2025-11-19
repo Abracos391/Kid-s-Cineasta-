@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CINEASTA KID'S</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Comic Neue"', 'cursive', 'sans-serif'],
+              heading: ['"Fredoka"', 'sans-serif'],
+            },
+            colors: {
+              cartoon: {
+                yellow: '#FFEA00',
+                pink: '#FF66C4',
+                blue: '#00E5FF',
+                green: '#00E676',
+                purple: '#D500F9',
+                orange: '#FF9100',
+                cream: '#FFF9E5',
+              }
+            },
+            boxShadow: {
+              'cartoon': '5px 5px 0px 0px #000000',
+              'cartoon-hover': '2px 2px 0px 0px #000000',
+              'cartoon-lg': '8px 8px 0px 0px #000000',
+            },
+            borderRadius: {
+              'blob': '2rem 1rem 2rem 1rem',
+            },
+            animation: {
+              'bounce-slow': 'bounce 3s infinite',
+              'wiggle': 'wiggle 1s ease-in-out infinite',
+            },
+            keyframes: {
+              wiggle: {
+                '0%, 100%': { transform: 'rotate(-3deg)' },
+                '50%': { transform: 'rotate(3deg)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #00E5FF;
+        background-image: radial-gradient(#ffffff 20%, transparent 20%), radial-gradient(#ffffff 20%, transparent 20%);
+        background-size: 30px 30px;
+        background-position: 0 0, 15px 15px;
+        overflow-x: hidden;
+      }
+      
+      /* Scrollbar customizada */
+      ::-webkit-scrollbar {
+        width: 12px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #FFF9E5; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #FF66C4; 
+        border: 3px solid black;
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #D500F9; 
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

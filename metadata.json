@@ -1,0 +1,8 @@
+{
+  "name": "Copy of CINEASTA KID'S",
+  "description": "Uma aplicação mágica para criar histórias infantis personalizadas com avatares caricaturais e narração.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

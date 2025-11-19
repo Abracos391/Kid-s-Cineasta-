@@ -1,0 +1,182 @@
+import React, { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
+import { analyzeFaceForAvatar, generateCaricatureImage } from '../services/geminiService';
+import { Avatar } from '../types';
+
+const AvatarCreator: React.FC = () => {
+  const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<'upload' | 'processing' | 'result'>('upload');
+  const [preview, setPreview] = useState<string | null>(null);
+  const [generatedAvatar, setGeneratedAvatar] = useState<Avatar | null>(null);
+  const [name, setName] = useState('');
+  const [statusMsg, setStatusMsg] = useState('');
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const processImage = async () => {
+    if (!preview || !name) return;
+    setStep('processing');
+    setLoading(true);
+
+    try {
+      // 1. Get description from Gemini Vision
+      setStatusMsg("🧐 Olhando bem sua foto...");
+      const base64Data = preview.split(',')[1];
+      const description = await analyzeFaceForAvatar(base64Data);
+      
+      // 2. Generate Image
+      setStatusMsg("🎨 Pintando sua caricatura...");
+      const cartoonUrl = await generateCaricatureImage(description);
+
+      // 3. Save (Mock)
+      const newAvatar: Avatar = {
+        id: Date.now().toString(),
+        name,
+        imageUrl: cartoonUrl,
+        description
+      };
+      
+      const existing = JSON.parse(localStorage.getItem('avatars') || '[]');
+      localStorage.setItem('avatars', JSON.stringify([...existing, newAvatar]));
+
+      setGeneratedAvatar(newAvatar);
+      setStep('result');
+    } catch (error) {
+      console.error(error);
+      alert("Ops! O robô pintor derrubou a tinta. Tente de novo!");
+      setStep('upload');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-8">
+      <div className="relative mb-8 text-center">
+         <h1 className="font-heading text-5xl text-white text-stroke-black drop-shadow-md transform -rotate-2">
+           Fábrica de Avatares
+         </h1>
+      </div>
+
+      {step === 'upload' && (
+        <Card color="white" className="space-y-8" rotate>
+          <div className="space-y-3">
+            <label className="font-heading font-bold text-xl block">1. Como você se chama?</label>
+            <input 
+              type="text" 
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex: Super Maria"
+              className="w-full p-4 rounded-2xl border-4 border-black focus:border-cartoon-pink outline-none font-heading text-2xl bg-cartoon-cream shadow-inner"
+            />
+          </div>
+
+          <div className="space-y-3">
+             <label className="font-heading font-bold text-xl block">2. Mostre seu rosto!</label>
+             <div className="border-4 border-dashed border-black rounded-3xl p-8 text-center space-y-4 bg-blue-50">
+              {preview ? (
+                <div className="relative w-56 h-56 mx-auto rounded-full overflow-hidden border-4 border-black shadow-cartoon bg-white transform rotate-3">
+                  <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                  <button 
+                    onClick={() => setPreview(null)}
+                    className="absolute bottom-0 w-full bg-cartoon-orange text-black font-bold py-2 border-t-2 border-black hover:bg-orange-400"
+                  >
+                    Trocar Foto
+                  </button>
+                </div>
+              ) : (
+                <div className="py-8">
+                  <div className="text-7xl mb-4 animate-bounce-slow">📸</div>
+                  <p className="font-sans font-bold text-lg">Tire uma selfie ou carregue uma foto</p>
+                </div>
+              )}
+              
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                accept="image/*" 
+                className="hidden"
+                onChange={handleFileChange} 
+              />
+              
+              {!preview && (
+                <Button onClick={() => fileInputRef.current?.click()} variant="secondary">
+                  Escolher Arquivo
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-center pt-4">
+            <Button 
+              onClick={processImage} 
+              disabled={!preview || !name} 
+              variant="primary" 
+              size="lg"
+              className="w-full md:w-auto text-2xl"
+              pulse={!!preview && !!name}
+            >
+              ✨ CRIAR MÁGICA ✨
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {step === 'processing' && (
+        <Card color="yellow" className="text-center py-16">
+          <div className="animate-spin text-8xl mb-6 inline-block">🖌️</div>
+          <h2 className="font-heading text-3xl mb-4">{statusMsg}</h2>
+          <div className="w-full bg-white border-4 border-black rounded-full h-6 overflow-hidden relative">
+            <div className="bg-cartoon-pink h-full w-1/2 animate-wiggle absolute top-0 left-0 bottom-0"></div>
+            <div className="bg-cartoon-blue h-full w-1/2 animate-wiggle absolute top-0 right-0 bottom-0" style={{animationDirection: 'reverse'}}></div>
+          </div>
+        </Card>
+      )}
+
+      {step === 'result' && generatedAvatar && (
+        <div className="text-center space-y-8">
+          <div className="relative inline-block">
+             {/* Estrela de fundo */}
+             <div className="absolute inset-0 bg-cartoon-yellow scale-150 animate-spin-slow" style={{clipPath: 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)'}}></div>
+             
+             <Card color="white" className="rotate-3 transform transition-transform hover:rotate-0 max-w-md mx-auto">
+               <img 
+                  src={generatedAvatar.imageUrl} 
+                  alt="Avatar gerado" 
+                  className="w-full rounded-2xl border-4 border-black mb-4 shadow-sm" 
+                />
+                <h2 className="font-heading text-4xl text-cartoon-purple drop-shadow-sm">
+                  {generatedAvatar.name}
+                </h2>
+             </Card>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row justify-center gap-6 mt-12">
+            <Button onClick={() => setStep('upload')} variant="secondary">
+              🔄 Criar Outro
+            </Button>
+            <Button onClick={() => navigate('/create-story')} variant="success" size="lg">
+              Começar Aventura! 🚀
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AvatarCreator;
