@@ -11,12 +11,10 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       sourcemap: false,
-      // Aumenta o limite de aviso para chunks grandes, comum em apps com muitas deps
       chunkSizeWarningLimit: 1600,
     },
     define: {
-      // Garante que process.env.API_KEY funcione no navegador sem quebrar o build
-      // Se env.API_KEY não existir, define como undefined para não quebrar a sintaxe
+      // Garante que process.env.API_KEY funcione no navegador
       'process.env.API_KEY': JSON.stringify(env.API_KEY || '')
     }
   };

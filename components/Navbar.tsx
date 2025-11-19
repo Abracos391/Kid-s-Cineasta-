@@ -7,27 +7,31 @@ const Navbar: React.FC = () => {
 
   return (
     <nav className="sticky top-4 z-50 mx-auto max-w-5xl px-4 mb-12">
-      <div className="bg-white rounded-full border-4 border-black shadow-cartoon px-4 py-3 flex items-center justify-between relative">
+      {/* Cloud shape container */}
+      <div className="bg-white rounded-hand border-[3px] border-black shadow-doodle px-6 py-3 flex items-center justify-between relative transform -rotate-1">
         
-        {/* Logo com efeito divertido */}
-        <Link to="/" className="flex items-center gap-2 transform hover:rotate-3 transition-transform">
-          <div className="w-12 h-12 bg-cartoon-pink rounded-full border-4 border-black flex items-center justify-center font-heading text-white font-bold text-2xl shadow-sm">
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-3 transform hover:scale-105 transition-transform">
+          <div className="w-14 h-14 bg-cartoon-yellow rounded-full border-[3px] border-black flex items-center justify-center font-comic text-black text-3xl shadow-sm animate-bounce-slow">
             CK
           </div>
-          <span className="font-heading font-black text-2xl tracking-tight hidden sm:block text-black drop-shadow-sm">
-            CINEASTA <span className="text-cartoon-purple">KID'S</span>
-          </span>
+          <div className="flex flex-col -space-y-2">
+             <span className="font-comic text-2xl text-black">CINEASTA</span>
+             <span className="font-comic text-3xl text-cartoon-pink text-stroke-black tracking-widest">KID'S</span>
+          </div>
         </Link>
 
-        {/* Links estilo 'pílulas' */}
-        <div className="flex gap-2 sm:gap-3">
-          <NavLink to="/" active={isActive('/')} color="bg-cartoon-yellow">Início 🏠</NavLink>
-          <NavLink to="/avatars" active={isActive('/avatars')} color="bg-cartoon-green">Avatares 👾</NavLink>
-          <NavLink to="/create-story" active={isActive('/create-story')} color="bg-cartoon-blue">Histórias 📚</NavLink>
+        {/* Links */}
+        <div className="flex gap-2 sm:gap-4">
+          <NavLink to="/" active={isActive('/')} color="bg-cartoon-yellow">🏠 Início</NavLink>
+          <NavLink to="/avatars" active={isActive('/avatars')} color="bg-cartoon-green">👾 Avatares</NavLink>
+          <NavLink to="/create-story" active={isActive('/create-story')} color="bg-cartoon-blue">📚 Histórias</NavLink>
         </div>
 
-        {/* Detalhe decorativo */}
-        <div className="absolute -z-10 top-2 left-2 w-full h-full bg-black rounded-full opacity-20 blur-sm hidden"></div>
+        {/* Decorative Scribble */}
+        <svg className="absolute -bottom-8 -right-4 w-16 h-16 text-black opacity-80 rotate-12 pointer-events-none" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="5">
+            <path d="M10,50 Q30,20 50,50 T90,50" />
+        </svg>
       </div>
     </nav>
   );
@@ -36,10 +40,10 @@ const Navbar: React.FC = () => {
 const NavLink: React.FC<{ to: string; active: boolean; children: React.ReactNode; color: string }> = ({ to, active, children, color }) => (
   <Link 
     to={to} 
-    className={`px-3 sm:px-4 py-2 rounded-xl font-heading font-bold text-sm sm:text-base transition-all border-2 ${
+    className={`px-3 sm:px-5 py-2 rounded-hand font-comic text-lg sm:text-xl transition-all border-[3px] ${
       active 
-        ? `${color} border-black -translate-y-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]` 
-        : 'bg-transparent border-transparent hover:bg-gray-100 text-gray-600 hover:border-black hover:border-dashed'
+        ? `${color} border-black -translate-y-1 shadow-doodle-hover rotate-1 text-black` 
+        : 'bg-transparent border-transparent hover:bg-gray-100 text-gray-500 hover:border-gray-300 hover:border-dashed'
     }`}
   >
     {children}
