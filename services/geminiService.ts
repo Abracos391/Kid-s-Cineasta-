@@ -37,25 +37,20 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
     return response.text || "A happy child";
   } catch (error) {
     console.error("Erro ao analisar rosto:", error);
-    // Fallback genérico se a visão falhar, para não travar o fluxo
+    // Fallback genérico se a visão falhar
     return "Cute child cartoon character";
   }
 };
 
 /**
  * 2. Gera a URL da imagem usando Pollinations.ai (Gratuito/Ilimitado)
- * Não requer chamada assíncrona complexa, pois é baseada em URL.
  */
 export const generateCaricatureImage = async (description: string): Promise<string> => {
-  // Adicionamos um seed aleatório para variar a imagem mesmo com a mesma descrição
   const seed = Math.floor(Math.random() * 10000);
-  
-  // Prompt otimizado para estilo 3D Fofo (Pixar/Disney style)
   const prompt = `cute 3d disney pixar character, ${description}, white background, soft studio lighting, 4k render, vibrant colors, --no text`;
-  
   const encodedPrompt = encodeURIComponent(prompt);
   
-  // URL do Pollinations
+  // URL direta do Pollinations
   return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=800&seed=${seed}&nologo=true&model=flux`;
 };
 
@@ -72,6 +67,7 @@ export const generateChapterIllustration = (visualDescription: string): string =
 
 /**
  * 4. Gera a História (Texto e Estrutura)
+ * CORREÇÃO CRÍTICA: Limpeza de JSON adicionada
  */
 export const generateStory = async (theme: string, characters: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
   try {
@@ -86,7 +82,7 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
       Tema: "${theme}".
       Personagens Principais: ${charNames} (${charDescs}).
       
-      Estrutura Obrigatória (JSON):
+      Estrutura Obrigatória (JSON puro, sem markdown):
       1. Título Criativo.
       2. Exatamente 4 capítulos curtos.
       3. Para cada capítulo, inclua:
@@ -94,7 +90,7 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
          - "text": O texto da história (aprox 60 palavras por capítulo).
          - "visualDescription": Uma descrição curta da cena para o ilustrador desenhar (em inglês).
 
-      Garanta que a história seja educativa, engraçada e tenha um final feliz.
+      Responda APENAS com o JSON.
     `;
 
     const response = await ai.models.generateContent({
@@ -122,8 +118,11 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
       }
     });
 
-    const jsonText = response.text;
+    let jsonText = response.text;
     if (!jsonText) throw new Error("A IA retornou um texto vazio.");
+
+    // CORREÇÃO: Remover blocos de código Markdown (```json ... ```) que quebram o parse
+    jsonText = jsonText.replace(/```json|```/g, '').trim();
     
     return JSON.parse(jsonText);
 
@@ -134,7 +133,7 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
 };
 
 /**
- * 5. Gera Áudio (TTS) - Recurso Premium
+ * 5. Gera Áudio (TTS)
  */
 export const generateSpeech = async (text: string): Promise<string> => {
   try {

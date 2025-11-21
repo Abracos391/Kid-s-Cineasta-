@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import AvatarCreator from './pages/AvatarCreator';
 import StoryWizard from './pages/StoryWizard';
 import StoryReader from './pages/StoryReader';
+import Library from './pages/Library';
 
 const App: React.FC = () => {
   return (
@@ -16,6 +17,7 @@ const App: React.FC = () => {
           <Route path="/avatars" element={<AvatarCreator />} />
           <Route path="/create-story" element={<StoryWizard />} />
           <Route path="/story/:id" element={<StoryReader />} />
+          <Route path="/library" element={<Library />} />
         </Routes>
       </div>
     </Router>

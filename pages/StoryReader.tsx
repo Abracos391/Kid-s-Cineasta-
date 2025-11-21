@@ -12,23 +12,28 @@ const StoryReader: React.FC = () => {
   const [activeChapterIndex, setActiveChapterIndex] = useState(0);
   const [generatedAudioMap, setGeneratedAudioMap] = useState<Record<number, string>>({});
   const [generatingAudio, setGeneratingAudio] = useState(false);
-  
-  // Novo: Estado para guardar as URLs das imagens dos capítulos
   const [chapterImages, setChapterImages] = useState<Record<number, string>>({});
 
   useEffect(() => {
-    const saved = localStorage.getItem('currentStory');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      setStory(parsed);
+    // Tenta encontrar a história na biblioteca (savedStories)
+    const allStories: Story[] = JSON.parse(localStorage.getItem('savedStories') || '[]');
+    const found = allStories.find(s => s.id === id);
+    
+    if (found) {
+      setStory(found);
+    } else {
+      // Fallback para "currentStory" se tiver acabado de criar
+      const current = localStorage.getItem('currentStory');
+      if (current) {
+        const parsed = JSON.parse(current);
+        if (parsed.id === id) setStory(parsed);
+      }
     }
   }, [id]);
 
-  // Carrega a imagem do capítulo atual automaticamente ao mudar de página
   useEffect(() => {
     if (story && !chapterImages[activeChapterIndex]) {
       const chapter = story.chapters[activeChapterIndex];
-      // Gera a URL do Pollinations (instantâneo)
       const imageUrl = generateChapterIllustration(chapter.visualDescription);
       setChapterImages(prev => ({
         ...prev,
@@ -40,7 +45,7 @@ const StoryReader: React.FC = () => {
   if (!story) return (
     <div className="min-h-[60vh] flex items-center justify-center flex-col gap-4">
         <div className="animate-spin text-6xl">⏳</div>
-        <div className="font-heading text-3xl text-white text-stroke-black">Abrindo o livro...</div>
+        <div className="font-heading text-3xl text-white text-stroke-black">Procurando o livro na estante...</div>
     </div>
   );
 
@@ -91,12 +96,12 @@ const StoryReader: React.FC = () => {
             <span className="text-xs bg-black text-white px-2 py-0.5 rounded-full">de {story.chapters.length}</span>
           </div>
         </div>
-        <Link to="/create-story">
+        <Link to="/library">
           <Button size="sm" variant="danger" className="whitespace-nowrap">❌ Fechar Livro</Button>
         </Link>
       </div>
 
-      {/* Progress Bar Fun */}
+      {/* Progress Bar */}
       <div className="w-full bg-white rounded-full h-6 mb-8 border-4 border-black overflow-hidden relative shadow-sm">
         <div 
           className="bg-gradient-to-r from-cartoon-yellow to-cartoon-orange h-full transition-all duration-500 ease-out relative" 
@@ -133,7 +138,7 @@ const StoryReader: React.FC = () => {
         <div className="md:col-span-9">
           <Card className="min-h-[500px] flex flex-col bg-white" color="white">
             
-            {/* Ilustração do Capítulo (Novo!) */}
+            {/* Ilustração do Capítulo */}
             <div className="w-full h-64 md:h-80 mb-8 rounded-xl border-4 border-black overflow-hidden bg-gray-100 shadow-inner relative">
                 {chapterImages[activeChapterIndex] ? (
                     <img 
@@ -192,7 +197,7 @@ const StoryReader: React.FC = () => {
                 </Button>
 
                 {activeChapterIndex === story.chapters.length - 1 ? (
-                  <Link to="/">
+                  <Link to="/library">
                     <Button variant="success" pulse>FIM! 🎉</Button>
                   </Link>
                 ) : (

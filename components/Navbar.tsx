@@ -22,10 +22,11 @@ const Navbar: React.FC = () => {
         </Link>
 
         {/* Links */}
-        <div className="flex gap-2 sm:gap-4">
+        <div className="flex gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
           <NavLink to="/" active={isActive('/')} color="bg-cartoon-yellow">🏠 Início</NavLink>
           <NavLink to="/avatars" active={isActive('/avatars')} color="bg-cartoon-green">👾 Avatares</NavLink>
-          <NavLink to="/create-story" active={isActive('/create-story')} color="bg-cartoon-blue">📚 Histórias</NavLink>
+          <NavLink to="/create-story" active={isActive('/create-story')} color="bg-cartoon-blue">📚 Criar</NavLink>
+          <NavLink to="/library" active={isActive('/library')} color="bg-cartoon-purple">🏰 Biblioteca</NavLink>
         </div>
 
         {/* Decorative Scribble */}
@@ -40,9 +41,9 @@ const Navbar: React.FC = () => {
 const NavLink: React.FC<{ to: string; active: boolean; children: React.ReactNode; color: string }> = ({ to, active, children, color }) => (
   <Link 
     to={to} 
-    className={`px-3 sm:px-5 py-2 rounded-hand font-comic text-lg sm:text-xl transition-all border-[3px] ${
+    className={`px-3 sm:px-5 py-2 rounded-hand font-comic text-lg sm:text-xl transition-all border-[3px] whitespace-nowrap ${
       active 
-        ? `${color} border-black -translate-y-1 shadow-doodle-hover rotate-1 text-black` 
+        ? `${color} border-black -translate-y-1 shadow-doodle-hover rotate-1 text-white text-stroke-black` 
         : 'bg-transparent border-transparent hover:bg-gray-100 text-gray-500 hover:border-gray-300 hover:border-dashed'
     }`}
   >

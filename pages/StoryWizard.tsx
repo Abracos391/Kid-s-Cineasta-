@@ -48,11 +48,17 @@ const StoryWizard: React.FC = () => {
         ...storyData
       };
 
+      // Salvar na lista permanente (Biblioteca)
+      const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
+      localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
+      
+      // Salvar como atual também para leitura imediata rápida (cache)
       localStorage.setItem('currentStory', JSON.stringify(fullStory));
+
       navigate(`/story/${fullStory.id}`);
     } catch (error) {
       console.error(error);
-      alert("Ops! Tivemos um bloqueio criativo. Tente mudar o tema!");
+      alert("Ops! Tivemos um bloqueio criativo. Tente mudar o tema ou tente novamente!");
     } finally {
       setLoading(false);
     }
