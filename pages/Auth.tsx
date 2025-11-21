@@ -36,7 +36,7 @@ const Auth: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-white/50">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-            <img src="/logo.png" alt="Cineasta Kids" className="w-32 h-32 mx-auto mb-4 object-contain animate-bounce-slow drop-shadow-lg" />
+            <img src="/logo.svg" alt="Cineasta Kids" className="w-32 h-32 mx-auto mb-4 object-contain animate-bounce-slow drop-shadow-lg" />
             <h2 className="font-comic text-5xl text-cartoon-blue text-stroke-black mb-2 drop-shadow-md">
                 {isLogin ? 'Entrar' : 'Criar Conta'}
             </h2>

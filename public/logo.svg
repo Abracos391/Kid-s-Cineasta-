@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <defs>
+    <style>
+      .skin { fill: #FFCC99; }
+      .hair { fill: #5D4037; }
+      .cap { fill: #333; }
+      .shirt { fill: #FF6B6B; }
+      .vest { fill: #C2B280; }
+      .camera { fill: #555; }
+      .lens { fill: #333; }
+      .stroke { fill: none; stroke: #000; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+  
+  <!-- Circle Background -->
+  <circle cx="250" cy="250" r="240" fill="#FFFACD" stroke="#5D4037" stroke-width="15"/>
+  
+  <!-- Camera Tripod -->
+  <line x1="380" y1="300" x2="340" y2="480" class="stroke" stroke-width="12" />
+  <line x1="380" y1="300" x2="420" y2="480" class="stroke" stroke-width="12" />
+  <line x1="380" y1="300" x2="380" y2="480" class="stroke" stroke-width="12" />
+
+  <!-- Camera Box -->
+  <rect x="320" y="180" width="140" height="120" class="camera" stroke="#000" stroke-width="8" rx="10"/>
+  <circle cx="390" cy="240" r="40" class="lens" stroke="#fff" stroke-width="4"/>
+  <circle cx="400" cy="230" r="10" fill="#fff" opacity="0.5"/>
+  <rect x="340" y="140" width="40" height="40" class="camera" stroke="#000" stroke-width="6"/>
+  <rect x="390" y="140" width="60" height="40" fill="#C0C0C0" stroke="#000" stroke-width="6"/>
+
+  <!-- Boy Body -->
+  <path d="M180,480 L180,350 L120,350 L120,280 L280,280 L280,350 L220,350 L220,480" class="shirt" stroke="#000" stroke-width="8"/>
+  
+  <!-- Vest -->
+  <path d="M120,280 L120,420 L180,420 L180,280 M220,280 L220,420 L280,420 L280,280" class="vest" stroke="#000" stroke-width="8" fill="none"/>
+  <rect x="130" y="350" width="40" height="40" fill="#D2B48C" stroke="#000" stroke-width="4"/>
+  <rect x="230" y="350" width="40" height="40" fill="#D2B48C" stroke="#000" stroke-width="4"/>
+
+  <!-- Boy Head -->
+  <circle cx="200" cy="200" r="70" class="skin" stroke="#000" stroke-width="8"/>
+  
+  <!-- Face -->
+  <circle cx="180" cy="190" r="6" fill="#000"/>
+  <circle cx="220" cy="190" r="6" fill="#000"/>
+  <path d="M190,220 Q200,230 210,220" fill="none" stroke="#000" stroke-width="4"/>
+  <path d="M170,170 Q180,160 190,170" fill="none" stroke="#000" stroke-width="3"/> <!-- Eyebrow -->
+  <path d="M210,170 Q220,160 230,170" fill="none" stroke="#000" stroke-width="3"/> <!-- Eyebrow -->
+
+  <!-- Hair -->
+  <path d="M130,180 Q130,120 200,120 Q270,120 270,180" class="hair" fill="none" stroke="#5D4037" stroke-width="25"/>
+  <path d="M140,180 Q160,150 180,180" class="hair" stroke="#5D4037" stroke-width="10" fill="none"/>
+
+  <!-- Beret -->
+  <path d="M120,160 Q200,80 280,160 L280,170 Q200,190 120,170 Z" class="cap" stroke="#000" stroke-width="8"/>
+  <line x1="200" y1="125" x2="200" y2="110" stroke="#333" stroke-width="8"/>
+
+  <!-- Megaphone -->
+  <path d="M80,250 L20,220 L20,280 L80,250 Z" fill="#D2691E" stroke="#000" stroke-width="6"/>
+  <path d="M80,230 L130,230 L140,270 L80,270 Z" fill="#D2691E" stroke="#000" stroke-width="6"/>
+  <rect x="90" y="270" width="10" height="20" fill="#8B4513" stroke="#000" stroke-width="4"/> <!-- Handle -->
+
+  <!-- Text Arc (Optional, simplistic) -->
+  <path id="curve" d="M 90,100 A 200,200 0 0 1 410,100" fill="none"/>
+  <text font-family="Comic Neue, sans-serif" font-weight="bold" font-size="50" fill="#333">
+    <textPath href="#curve" text-anchor="middle" startOffset="50%">CINEASTA KIDS</textPath>
+  </text>
+</svg>

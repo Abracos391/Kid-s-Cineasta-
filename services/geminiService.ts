@@ -54,7 +54,7 @@ export const generateCaricatureImage = async (description: string): Promise<stri
 
 /**
  * 3. Gera URL para ilustração de um capítulo específico
- * CORREÇÃO: Inclui a descrição dos personagens para manter consistência visual.
+ * Inclui a descrição dos personagens para manter consistência visual.
  */
 export const generateChapterIllustration = (visualDescription: string, charactersDescription: string = ''): string => {
   const seed = Math.floor(Math.random() * 10000);
