@@ -33,13 +33,13 @@ const Auth: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-white/50">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
             <div className="w-24 h-24 bg-cartoon-yellow rounded-full border-[3px] border-black flex items-center justify-center font-comic text-black text-4xl shadow-doodle mx-auto mb-4 animate-bounce-slow">
                 CK
             </div>
-            <h2 className="font-comic text-5xl text-cartoon-blue text-stroke-black mb-2">
+            <h2 className="font-comic text-5xl text-cartoon-blue text-stroke-black mb-2 drop-shadow-md">
                 {isLogin ? 'Entrar' : 'Criar Conta'}
             </h2>
             <p className="font-sans font-bold text-gray-700">
@@ -51,10 +51,10 @@ const Auth: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
                 {!isLogin && (
                     <div>
-                        <label className="block font-bold mb-1">Nome do Responsável</label>
+                        <label className="block font-bold mb-1 font-heading">Nome do Responsável</label>
                         <input 
                             type="text" 
-                            className="w-full p-3 border-4 border-black rounded-xl font-sans"
+                            className="w-full p-3 border-4 border-black rounded-xl font-sans outline-none focus:border-cartoon-pink"
                             placeholder="Ex: Papai do João"
                             value={name}
                             onChange={e => setName(e.target.value)}
@@ -63,35 +63,35 @@ const Auth: React.FC = () => {
                 )}
                 
                 <div>
-                    <label className="block font-bold mb-1">E-mail</label>
+                    <label className="block font-bold mb-1 font-heading">E-mail</label>
                     <input 
                         type="email" 
-                        className="w-full p-3 border-4 border-black rounded-xl font-sans"
-                        placeholder="olivalexcelso@gmail.com"
+                        className="w-full p-3 border-4 border-black rounded-xl font-sans outline-none focus:border-cartoon-blue"
+                        placeholder="exemplo@email.com"
                         value={email}
                         onChange={e => setEmail(e.target.value)}
                     />
                 </div>
 
                 <div>
-                    <label className="block font-bold mb-1">Senha</label>
+                    <label className="block font-bold mb-1 font-heading">Senha</label>
                     <input 
                         type="password" 
-                        className="w-full p-3 border-4 border-black rounded-xl font-sans"
+                        className="w-full p-3 border-4 border-black rounded-xl font-sans outline-none focus:border-cartoon-purple"
                         placeholder="******"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
                     />
                 </div>
 
-                {error && <p className="text-red-500 font-bold text-center bg-red-100 p-2 rounded-lg border-2 border-red-500">{error}</p>}
+                {error && <p className="text-red-500 font-bold text-center bg-red-100 p-2 rounded-lg border-2 border-red-500 animate-pulse">{error}</p>}
 
                 <Button variant="primary" size="lg" className="w-full">
                     {isLogin ? '🚀 DECOLAR!' : '✨ CADASTRAR'}
                 </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-6 text-center border-t-2 border-gray-100 pt-4">
                 <button 
                     onClick={() => setIsLogin(!isLogin)}
                     className="text-blue-600 font-bold hover:underline font-sans"
@@ -102,9 +102,11 @@ const Auth: React.FC = () => {
         </Card>
         
         {!isLogin && (
-            <p className="text-center text-xs text-gray-500 font-sans font-bold">
-                Ao cadastrar, você começa no plano FREE (4 histórias/mês).
-            </p>
+            <div className="bg-yellow-100 border-2 border-black p-2 rounded-lg text-center transform -rotate-2">
+                <p className="text-xs text-black font-sans font-bold">
+                    🎁 Ao cadastrar, você começa no plano FREE (4 histórias/mês).
+                </p>
+            </div>
         )}
       </div>
     </div>

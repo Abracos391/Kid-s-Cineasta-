@@ -49,7 +49,7 @@ const StoryReader: React.FC = () => {
   if (!story) return (
     <div className="min-h-[60vh] flex items-center justify-center flex-col gap-4">
         <div className="animate-spin text-6xl">⏳</div>
-        <div className="font-heading text-3xl text-white text-stroke-black">Procurando o livro na estante...</div>
+        <div className="font-heading text-3xl text-white text-stroke-black">Procurando o livro...</div>
     </div>
   );
 
@@ -58,7 +58,7 @@ const StoryReader: React.FC = () => {
   const handleGenerateAudio = async () => {
     // Regra Premium: Bloquear Áudio para Free
     if (user?.plan !== 'premium') {
-        if(confirm("A narração com voz é exclusiva para membros Premium. Deseja conhecer os planos?")) {
+        if(confirm("🔒 A narração com voz é exclusiva para membros Premium.\n\nDeseja conhecer os planos e liberar esse recurso?")) {
             navigate('/pricing');
         }
         return;
@@ -82,11 +82,11 @@ const StoryReader: React.FC = () => {
   
   const handlePDFDownload = () => {
       if (user?.plan !== 'premium') {
-        if(confirm("O download em PDF é exclusivo para membros Premium. Deseja fazer o upgrade?")) {
+        if(confirm("🔒 O download em PDF é exclusivo para membros Premium.\n\nDeseja fazer o upgrade?")) {
             navigate('/pricing');
         }
       } else {
-          alert("Gerador de PDF em manutenção! (Em breve)");
+          alert("O gerador de PDF está sendo calibrado pelos duendes! (Em breve)");
       }
   }
 
@@ -119,7 +119,9 @@ const StoryReader: React.FC = () => {
           </div>
         </div>
         <div className="flex gap-2">
-            <Button size="sm" variant="primary" onClick={handlePDFDownload} title="Download PDF">📄 PDF 🔒</Button>
+            <Button size="sm" variant="secondary" onClick={handlePDFDownload} title="Download PDF" className="flex items-center gap-1">
+                📄 PDF {user?.plan === 'free' && '🔒'}
+            </Button>
             <Link to="/library">
              <Button size="sm" variant="danger" className="whitespace-nowrap">❌ Fechar</Button>
             </Link>
@@ -195,7 +197,7 @@ const StoryReader: React.FC = () => {
               {/* Audio Player */}
               <div className="bg-cartoon-cream px-4 py-2 rounded-xl border-2 border-black w-full md:w-auto flex justify-center relative">
                 {user?.plan === 'free' && (
-                     <div className="absolute -top-3 -right-3 text-2xl">🔒</div>
+                     <div className="absolute -top-3 -right-3 text-2xl z-20">🔒</div>
                 )}
                 
                 {generatedAudioMap[activeChapterIndex] ? (
@@ -207,7 +209,7 @@ const StoryReader: React.FC = () => {
                     variant={user?.plan === 'free' ? 'secondary' : 'secondary'} 
                     size="sm"
                     loading={generatingAudio}
-                    className={`w-full md:w-auto ${user?.plan === 'free' ? 'opacity-60' : ''}`}
+                    className={`w-full md:w-auto ${user?.plan === 'free' ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
                     {user?.plan === 'free' ? '🔊 Narrador (Premium)' : '🔊 Ouvir Narrador'}
                     </Button>

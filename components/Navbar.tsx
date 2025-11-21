@@ -8,7 +8,7 @@ const Navbar: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
   
-  // Se estiver na página de login, esconde a navbar completa ou mostra simplificada
+  // Se estiver na página de login, esconde a navbar
   if (location.pathname === '/auth') return null;
 
   const isActive = (path: string) => location.pathname === path;
@@ -41,31 +41,26 @@ const Navbar: React.FC = () => {
         <div className="flex items-center gap-3 border-l-2 border-black pl-4 border-dashed">
             {user ? (
                 <div className="flex flex-col items-end">
-                    <div className="font-bold text-xs uppercase tracking-wider">
+                    <div className="font-bold text-xs uppercase tracking-wider mb-1">
                         {user.plan === 'premium' ? (
-                            <span className="text-purple-600">👑 Premium ({user.credits} cr.)</span>
+                            <span className="text-purple-600 font-comic text-sm border border-purple-300 px-1 rounded bg-purple-50">👑 Premium ({user.credits} cr.)</span>
                         ) : (
-                            <span className="text-gray-500">🆓 Free ({4 - user.storiesCreatedThisMonth} rest.)</span>
+                            <span className="text-gray-600 font-comic text-sm border border-gray-300 px-1 rounded bg-gray-50">🆓 Free ({4 - user.storiesCreatedThisMonth} rest.)</span>
                         )}
                     </div>
                     <div className="flex gap-2">
                         <Link to="/pricing">
-                             <button className="text-xs bg-green-500 text-white px-2 py-1 rounded border border-black font-bold hover:bg-green-600">
+                             <button className="text-xs bg-green-500 text-white px-2 py-1 rounded border border-black font-bold hover:bg-green-600 shadow-sm">
                                 💎 Comprar
                              </button>
                         </Link>
-                        <button onClick={logout} className="text-xs underline text-red-500 font-bold">Sair</button>
+                        <button onClick={logout} className="text-xs text-red-500 font-bold hover:underline">Sair</button>
                     </div>
                 </div>
             ) : (
                 <Link to="/auth"><Button size="sm">Entrar</Button></Link>
             )}
         </div>
-
-        {/* Decorative Scribble */}
-        <svg className="absolute -bottom-8 -right-4 w-16 h-16 text-black opacity-80 rotate-12 pointer-events-none hidden md:block" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="5">
-            <path d="M10,50 Q30,20 50,50 T90,50" />
-        </svg>
       </div>
     </nav>
   );

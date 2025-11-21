@@ -43,22 +43,25 @@ export const authService = {
   // Login
   login: (email: string, password: string): User => {
     // Obs: Em um app real, a senha seria verificada com hash. 
-    // Aqui, estamos simplificando aceitando qualquer senha se o email existir,
-    // ou você pode implementar uma checagem simples se quiser salvar a senha no user object.
+    // Aqui, estamos simplificando aceitando qualquer senha se o email existir.
     const users = getUsers();
     const user = users.find(u => u.email === email);
 
     if (!user) {
-      throw new Error('Usuário não encontrado.');
+      throw new Error('Usuário não encontrado. Verifique o e-mail.');
     }
 
     // Reset mensal automático para plano FREE
     const now = new Date();
     const lastReset = new Date(user.lastResetDate);
-    if (now.getMonth() !== lastReset.getMonth()) {
+    // Se mudou o mês (ou ano), reseta o contador
+    if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
       user.storiesCreatedThisMonth = 0;
       user.lastResetDate = Date.now();
-      saveUsers(users.map(u => u.id === user.id ? user : u));
+      // Atualiza na lista geral
+      const userIndex = users.findIndex(u => u.id === user.id);
+      users[userIndex] = user;
+      saveUsers(users);
     }
 
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
@@ -78,10 +81,10 @@ export const authService = {
   canCreateStory: (user: User): { allowed: boolean; reason?: string } => {
     if (user.plan === 'premium') {
       if (user.credits > 0) return { allowed: true };
-      return { allowed: false, reason: 'Sem créditos Premium.' };
+      return { allowed: false, reason: 'Seus créditos acabaram.' };
     } else {
       if (user.storiesCreatedThisMonth < 4) return { allowed: true };
-      return { allowed: false, reason: 'Limite mensal do plano FREE atingido.' };
+      return { allowed: false, reason: 'Você atingiu o limite de 4 histórias grátis este mês.' };
     }
   },
 

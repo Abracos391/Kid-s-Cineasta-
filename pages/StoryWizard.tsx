@@ -41,7 +41,7 @@ const StoryWizard: React.FC = () => {
     // 1. Verificar Permissão do Plano
     const check = authService.canCreateStory(user);
     if (!check.allowed) {
-        if (confirm(`${check.reason}\n\nDeseja fazer o upgrade para o plano Premium?`)) {
+        if (confirm(`${check.reason}\n\n✨ Deseja fazer o upgrade para o plano Premium e desbloquear mais histórias?`)) {
             navigate('/pricing');
         }
         return;
@@ -71,8 +71,8 @@ const StoryWizard: React.FC = () => {
           const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
           localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
       } else {
-          // Free não salva no savedStories, mas precisamos passar para a tela de leitura
-          // O StoryReader já olha 'currentStory' como fallback
+          // Free não salva no savedStories, mas salva como 'current' para leitura imediata
+          // Usuário será avisado na tela.
       }
       
       // Salvar como atual (Cache temporário para leitura imediata)
@@ -89,13 +89,15 @@ const StoryWizard: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-10">
+      <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
         <h1 className="font-heading text-4xl md:text-5xl text-white text-stroke-black drop-shadow-md">
             Montando a Aventura 🗺️
         </h1>
         {user?.plan === 'free' && (
-            <div className="bg-white border-2 border-black px-4 py-2 rounded-lg text-sm font-bold shadow-doodle">
-                Free: {4 - user.storiesCreatedThisMonth} restantes
+            <div className="bg-white border-2 border-black px-4 py-2 rounded-lg text-sm font-bold shadow-doodle flex items-center gap-2">
+                <span>⚠️ Plano Free:</span>
+                <span className="text-red-500">{4 - user.storiesCreatedThisMonth} restantes</span>
+                <Button size="sm" variant="success" onClick={() => navigate('/pricing')}>Upgrade 👑</Button>
             </div>
         )}
       </div>
@@ -165,7 +167,6 @@ const StoryWizard: React.FC = () => {
           </div>
 
           <div className="transform hover:scale-105 transition-transform relative group">
-             {/* Lock overlay logic if needed, but we handle it on click */}
              <Button 
                 className="w-full text-2xl py-6 shadow-cartoon-lg" 
                 variant="primary"
@@ -177,8 +178,9 @@ const StoryWizard: React.FC = () => {
                 {loading ? 'Escrevendo o roteiro...' : 'CRIAR HISTÓRIA! 🎬'}
             </Button>
             {user?.plan === 'free' && (
-                <p className="text-center text-xs font-bold mt-2 opacity-70">
-                    ⚠️ Modo Free: A história não será salva na biblioteca.
+                <p className="text-center text-xs font-bold mt-2 bg-yellow-100 p-2 border border-black rounded mx-auto max-w-xs">
+                    🔒 Usuários FREE não salvam na biblioteca. <br/>
+                    <span className="text-red-600">Faça upgrade para guardar suas histórias!</span>
                 </p>
             )}
           </div>

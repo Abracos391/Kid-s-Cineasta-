@@ -20,9 +20,11 @@ const App: React.FC = () => {
           <Navbar />
           <Routes>
             <Route path="/auth" element={<Auth />} />
-            <Route path="/pricing" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
             
+            {/* Página Inicial agora é protegida (redireciona para login se não logado) */}
             <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+            
+            <Route path="/pricing" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
             
             <Route path="/avatars" element={
               <ProtectedRoute>
@@ -42,9 +44,6 @@ const App: React.FC = () => {
               </ProtectedRoute>
             } />
             
-            {/* Biblioteca exige Premium? O prompt diz que Free não pode SALVAR, mas não explicitamente que não pode VER. 
-                Porém, como não salva, a biblioteca estaria vazia. Vou proteger como rota comum, 
-                mas dentro dela ou no Wizard o salvamento é bloqueado. */}
             <Route path="/library" element={
               <ProtectedRoute>
                 <Library />
