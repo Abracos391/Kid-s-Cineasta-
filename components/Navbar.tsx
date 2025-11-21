@@ -18,9 +18,13 @@ const Navbar: React.FC = () => {
       {/* Cloud shape container */}
       <div className="bg-white rounded-hand border-[3px] border-black shadow-doodle px-4 py-3 flex flex-col md:flex-row items-center justify-between relative transform -rotate-1 gap-4">
         
-        {/* Logo */}
+        {/* Logo CK */}
         <Link to="/" className="flex items-center gap-3 transform hover:scale-105 transition-transform">
-          <img src="/logo.svg" alt="Cineasta Kids Logo" className="w-16 h-16 object-contain drop-shadow-sm" />
+          {/* CK Icon */}
+          <div className="w-14 h-14 bg-cartoon-yellow rounded-full border-[3px] border-black flex items-center justify-center shadow-doodle transform -rotate-6 shrink-0">
+             <span className="font-comic text-3xl text-cartoon-pink text-stroke-black tracking-tighter mt-1">CK</span>
+          </div>
+          
           <div className="flex flex-col -space-y-2">
              <span className="font-comic text-xl text-black">CINEASTA</span>
              <span className="font-comic text-2xl text-cartoon-pink text-stroke-black tracking-widest">KID'S</span>
