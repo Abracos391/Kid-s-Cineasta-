@@ -1,21 +1,23 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Avatar, StoryChapter } from "../types";
 
-// Ensure API Key is handled safely in a real environment.
-// For this demo, we assume it is present in process.env.
+// Função auxiliar para validar a chave
 const getAiClient = () => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) throw new Error("API Key not found");
+  
+  if (!apiKey || apiKey.length < 10) {
+    console.error("API KEY ausente ou inválida. Verifique as configurações do Render.");
+    throw new Error("Chave de API não configurada na aplicação.");
+  }
   return new GoogleGenAI({ apiKey });
 };
 
 /**
- * 1. Analyze photo to get a text description for caricature.
+ * 1. Analisa a foto para criar uma descrição textual (Prompt)
  */
 export const analyzeFaceForAvatar = async (base64Image: string): Promise<string> => {
-  const ai = getAiClient();
-  
   try {
+    const ai = getAiClient();
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: {
@@ -27,75 +29,74 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
             }
           },
           {
-            text: "Descreva as características faciais desta pessoa (cabelo, olhos, acessórios, expressão) para criar uma caricatura divertida e fofa estilo cartoon 2D. Seja breve."
+            text: "Descreva as características físicas principais desta pessoa (cabelo, olhos, cor da pele, óculos, sorriso) em inglês para um prompt de IA. Seja breve. Exemplo: 'Little boy with curly dark hair, glasses, big smile'."
           }
         ]
       }
     });
-    return response.text || "Uma pessoa sorrindo";
+    return response.text || "A happy child";
   } catch (error) {
-    console.error("Error analyzing face:", error);
-    throw error;
+    console.error("Erro ao analisar rosto:", error);
+    // Fallback genérico se a visão falhar, para não travar o fluxo
+    return "Cute child cartoon character";
   }
 };
 
 /**
- * 2. Generate a caricature image based on description.
+ * 2. Gera a URL da imagem usando Pollinations.ai (Gratuito/Ilimitado)
+ * Não requer chamada assíncrona complexa, pois é baseada em URL.
  */
 export const generateCaricatureImage = async (description: string): Promise<string> => {
-  const ai = getAiClient();
+  // Adicionamos um seed aleatório para variar a imagem mesmo com a mesma descrição
+  const seed = Math.floor(Math.random() * 10000);
   
-  try {
-    const prompt = `Uma caricatura fofa e colorida, estilo vetor 2D plano, fundo simples colorido, Incredivel Mundo de Gumball style, de: ${description}`;
-    
-    const response = await ai.models.generateImages({
-      model: 'imagen-4.0-generate-001',
-      prompt: prompt,
-      config: {
-        numberOfImages: 1,
-        aspectRatio: '1:1',
-        outputMimeType: 'image/jpeg'
-      }
-    });
-
-    const base64 = response.generatedImages?.[0]?.image?.imageBytes;
-    if (!base64) throw new Error("Failed to generate image");
-    return `data:image/jpeg;base64,${base64}`;
-  } catch (error) {
-    console.error("Error generating caricature:", error);
-    // Fallback to a placeholder if generation fails (e.g., due to safety filters)
-    return `https://picsum.photos/seed/${Math.random()}/400/400`;
-  }
+  // Prompt otimizado para estilo 3D Fofo (Pixar/Disney style)
+  const prompt = `cute 3d disney pixar character, ${description}, white background, soft studio lighting, 4k render, vibrant colors, --no text`;
+  
+  const encodedPrompt = encodeURIComponent(prompt);
+  
+  // URL do Pollinations
+  return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=800&seed=${seed}&nologo=true&model=flux`;
 };
 
 /**
- * 3. Generate a Story based on theme and characters.
+ * 3. Gera URL para ilustração de um capítulo específico
+ */
+export const generateChapterIllustration = (visualDescription: string): string => {
+  const seed = Math.floor(Math.random() * 10000);
+  const prompt = `children book illustration, vector art, colorful, cute, flat style, ${visualDescription}, --no text`;
+  const encodedPrompt = encodeURIComponent(prompt);
+  
+  return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
+};
+
+/**
+ * 4. Gera a História (Texto e Estrutura)
  */
 export const generateStory = async (theme: string, characters: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
-  const ai = getAiClient();
-  
-  const charNames = characters.map(c => c.name).join(", ");
-  const prompt = `
-    Você é um escritor de livros infantis premiado. Crie uma história curta, divertida e educativa para crianças.
-    Tema: "${theme}".
-    Personagens principais: ${charNames}.
-    
-    A história deve ter 3 capítulos curtos.
-    
-    Retorne APENAS um JSON com a seguinte estrutura:
-    {
-      "title": "Título da História",
-      "chapters": [
-        {
-          "title": "Título do Capítulo",
-          "text": "Texto do capítulo...",
-          "visualDescription": "Descrição visual da cena para ilustração"
-        }
-      ]
-    }
-  `;
-
   try {
+    const ai = getAiClient();
+    
+    const charNames = characters.map(c => c.name).join(", ");
+    const charDescs = characters.map(c => c.description).join("; ");
+
+    const prompt = `
+      Você é um autor de livros infantis premiado. Escreva uma história curta e envolvente para crianças de 5-8 anos.
+      
+      Tema: "${theme}".
+      Personagens Principais: ${charNames} (${charDescs}).
+      
+      Estrutura Obrigatória (JSON):
+      1. Título Criativo.
+      2. Exatamente 4 capítulos curtos.
+      3. Para cada capítulo, inclua:
+         - "title": Título do capítulo.
+         - "text": O texto da história (aprox 60 palavras por capítulo).
+         - "visualDescription": Uma descrição curta da cena para o ilustrador desenhar (em inglês).
+
+      Garanta que a história seja educativa, engraçada e tenha um final feliz.
+    `;
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
@@ -122,22 +123,23 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
     });
 
     const jsonText = response.text;
-    if (!jsonText) throw new Error("No text returned");
+    if (!jsonText) throw new Error("A IA retornou um texto vazio.");
+    
     return JSON.parse(jsonText);
 
   } catch (error) {
-    console.error("Error generating story:", error);
+    console.error("Erro ao gerar história:", error);
     throw error;
   }
 };
 
 /**
- * 4. Generate Audio (TTS) for a chapter.
+ * 5. Gera Áudio (TTS) - Recurso Premium
  */
 export const generateSpeech = async (text: string): Promise<string> => {
-  const ai = getAiClient();
-  
   try {
+    const ai = getAiClient();
+    
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text }] }],
@@ -152,25 +154,12 @@ export const generateSpeech = async (text: string): Promise<string> => {
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) throw new Error("No audio generated");
+    if (!base64Audio) throw new Error("Falha na geração de áudio");
     
-    // Convert base64 to blob url for playback
-    // Note: The API returns raw PCM usually, but for this demo, passing to <audio> src often requires a container. 
-    // However, browsers are tricky with raw PCM blobs directly in <audio>. 
-    // We will return the base64 data URI with a wav header hint, 
-    // or assume the browser can handle the data URI if MIME is correct. 
-    // Re-reading the guide: "The audio bytes returned by the API is raw PCM data... it contains no header information".
-    // Constructing a WAV header is complex for a single file snippet. 
-    // We will use the provided decoding example in the component to play it via AudioContext, 
-    // but to return a "URL" for the state, we might need a workaround.
-    
-    // Let's stick to the AudioContext playback method in the component instead of returning a simple URL.
-    // Use a data URI for storage? No, raw PCM is heavy.
-    // We will return the base64 string and let the UI component decode it.
     return base64Audio;
 
   } catch (error) {
-    console.error("Error generating speech:", error);
+    console.error("Erro ao gerar áudio:", error);
     throw error;
   }
 };
