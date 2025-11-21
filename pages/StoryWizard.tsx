@@ -1,12 +1,16 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { Avatar } from '../types';
 import { generateStory } from '../services/geminiService';
+import { useAuth } from '../context/AuthContext';
+import { authService } from '../services/authService';
 
 const StoryWizard: React.FC = () => {
   const navigate = useNavigate();
+  const { user, refreshUser } = useAuth();
   const [avatars, setAvatars] = useState<Avatar[]>([]);
   const [selectedAvatarIds, setSelectedAvatarIds] = useState<string[]>([]);
   const [theme, setTheme] = useState('');
@@ -32,7 +36,16 @@ const StoryWizard: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    if (!theme || selectedAvatarIds.length === 0) return;
+    if (!theme || selectedAvatarIds.length === 0 || !user) return;
+
+    // 1. Verificar Permissão do Plano
+    const check = authService.canCreateStory(user);
+    if (!check.allowed) {
+        if (confirm(`${check.reason}\n\nDeseja fazer o upgrade para o plano Premium?`)) {
+            navigate('/pricing');
+        }
+        return;
+    }
 
     setLoading(true);
     const selectedChars = avatars.filter(a => selectedAvatarIds.includes(a.id));
@@ -48,11 +61,21 @@ const StoryWizard: React.FC = () => {
         ...storyData
       };
 
-      // Salvar na lista permanente (Biblioteca)
-      const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
-      localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
+      // 2. Consumir Crédito/Cota
+      authService.consumeStoryCredit(user.id);
+      refreshUser();
+
+      // 3. Regra de Salvamento na Biblioteca
+      // Apenas PREMIUM salva na biblioteca persistente
+      if (user.plan === 'premium') {
+          const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
+          localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
+      } else {
+          // Free não salva no savedStories, mas precisamos passar para a tela de leitura
+          // O StoryReader já olha 'currentStory' como fallback
+      }
       
-      // Salvar como atual também para leitura imediata rápida (cache)
+      // Salvar como atual (Cache temporário para leitura imediata)
       localStorage.setItem('currentStory', JSON.stringify(fullStory));
 
       navigate(`/story/${fullStory.id}`);
@@ -66,9 +89,16 @@ const StoryWizard: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <h1 className="font-heading text-5xl text-center mb-10 text-white text-stroke-black drop-shadow-md">
-        Montando a Aventura 🗺️
-      </h1>
+      <div className="flex justify-between items-center mb-10">
+        <h1 className="font-heading text-4xl md:text-5xl text-white text-stroke-black drop-shadow-md">
+            Montando a Aventura 🗺️
+        </h1>
+        {user?.plan === 'free' && (
+            <div className="bg-white border-2 border-black px-4 py-2 rounded-lg text-sm font-bold shadow-doodle">
+                Free: {4 - user.storiesCreatedThisMonth} restantes
+            </div>
+        )}
+      </div>
 
       <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-start">
         
@@ -134,7 +164,8 @@ const StoryWizard: React.FC = () => {
             </Card>
           </div>
 
-          <div className="transform hover:scale-105 transition-transform">
+          <div className="transform hover:scale-105 transition-transform relative group">
+             {/* Lock overlay logic if needed, but we handle it on click */}
              <Button 
                 className="w-full text-2xl py-6 shadow-cartoon-lg" 
                 variant="primary"
@@ -145,6 +176,11 @@ const StoryWizard: React.FC = () => {
             >
                 {loading ? 'Escrevendo o roteiro...' : 'CRIAR HISTÓRIA! 🎬'}
             </Button>
+            {user?.plan === 'free' && (
+                <p className="text-center text-xs font-bold mt-2 opacity-70">
+                    ⚠️ Modo Free: A história não será salva na biblioteca.
+                </p>
+            )}
           </div>
         </div>
       </div>

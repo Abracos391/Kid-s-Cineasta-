@@ -1,22 +1,25 @@
+
 export interface User {
   id: string;
   name: string;
-  role: 'family' | 'educator';
-  avatar?: string;
+  email: string;
+  plan: 'free' | 'premium';
+  credits: number; // Para plano premium
+  storiesCreatedThisMonth: number; // Para controle do plano free
+  lastResetDate: number; // Para resetar o contador mensal
 }
 
 export interface Avatar {
   id: string;
   name: string;
   imageUrl: string;
-  description: string; // Created by AI
+  description: string;
 }
 
 export interface StoryChapter {
   title: string;
   text: string;
   visualDescription: string;
-  audioUrl?: string; // User recording or AI TTS
 }
 
 export interface Story {

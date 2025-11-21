@@ -1,6 +1,8 @@
+
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Story } from '../types';
+import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { generateSpeech, generateChapterIllustration } from '../services/geminiService';
@@ -8,6 +10,8 @@ import AudioPlayer from '../components/AudioPlayer';
 
 const StoryReader: React.FC = () => {
   const { id } = useParams();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [story, setStory] = useState<Story | null>(null);
   const [activeChapterIndex, setActiveChapterIndex] = useState(0);
   const [generatedAudioMap, setGeneratedAudioMap] = useState<Record<number, string>>({});
@@ -22,7 +26,7 @@ const StoryReader: React.FC = () => {
     if (found) {
       setStory(found);
     } else {
-      // Fallback para "currentStory" se tiver acabado de criar
+      // Fallback para "currentStory" se tiver acabado de criar (especialmente importante para FREE users que não salvam)
       const current = localStorage.getItem('currentStory');
       if (current) {
         const parsed = JSON.parse(current);
@@ -52,6 +56,14 @@ const StoryReader: React.FC = () => {
   const currentChapter = story.chapters[activeChapterIndex];
 
   const handleGenerateAudio = async () => {
+    // Regra Premium: Bloquear Áudio para Free
+    if (user?.plan !== 'premium') {
+        if(confirm("A narração com voz é exclusiva para membros Premium. Deseja conhecer os planos?")) {
+            navigate('/pricing');
+        }
+        return;
+    }
+
     if (generatedAudioMap[activeChapterIndex]) return;
     
     setGeneratingAudio(true);
@@ -67,6 +79,16 @@ const StoryReader: React.FC = () => {
       setGeneratingAudio(false);
     }
   };
+  
+  const handlePDFDownload = () => {
+      if (user?.plan !== 'premium') {
+        if(confirm("O download em PDF é exclusivo para membros Premium. Deseja fazer o upgrade?")) {
+            navigate('/pricing');
+        }
+      } else {
+          alert("Gerador de PDF em manutenção! (Em breve)");
+      }
+  }
 
   const nextChapter = () => {
     if (activeChapterIndex < story.chapters.length - 1) {
@@ -96,9 +118,12 @@ const StoryReader: React.FC = () => {
             <span className="text-xs bg-black text-white px-2 py-0.5 rounded-full">de {story.chapters.length}</span>
           </div>
         </div>
-        <Link to="/library">
-          <Button size="sm" variant="danger" className="whitespace-nowrap">❌ Fechar Livro</Button>
-        </Link>
+        <div className="flex gap-2">
+            <Button size="sm" variant="primary" onClick={handlePDFDownload} title="Download PDF">📄 PDF 🔒</Button>
+            <Link to="/library">
+             <Button size="sm" variant="danger" className="whitespace-nowrap">❌ Fechar</Button>
+            </Link>
+        </div>
       </div>
 
       {/* Progress Bar */}
@@ -168,19 +193,23 @@ const StoryReader: React.FC = () => {
             <div className="border-t-4 border-gray-100 border-dashed pt-6 flex flex-col md:flex-row items-center justify-between gap-6">
               
               {/* Audio Player */}
-              <div className="bg-cartoon-cream px-4 py-2 rounded-xl border-2 border-black w-full md:w-auto flex justify-center">
+              <div className="bg-cartoon-cream px-4 py-2 rounded-xl border-2 border-black w-full md:w-auto flex justify-center relative">
+                {user?.plan === 'free' && (
+                     <div className="absolute -top-3 -right-3 text-2xl">🔒</div>
+                )}
+                
                 {generatedAudioMap[activeChapterIndex] ? (
                     <AudioPlayer base64Audio={generatedAudioMap[activeChapterIndex]} />
                 ) : (
                     <Button 
                     onClick={handleGenerateAudio} 
                     disabled={generatingAudio} 
-                    variant="secondary" 
+                    variant={user?.plan === 'free' ? 'secondary' : 'secondary'} 
                     size="sm"
                     loading={generatingAudio}
-                    className="w-full md:w-auto"
+                    className={`w-full md:w-auto ${user?.plan === 'free' ? 'opacity-60' : ''}`}
                     >
-                    🔊 Ouvir Narrador (Premium)
+                    {user?.plan === 'free' ? '🔊 Narrador (Premium)' : '🔊 Ouvir Narrador'}
                     </Button>
                 )}
               </div>
