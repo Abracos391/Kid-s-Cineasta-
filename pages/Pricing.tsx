@@ -13,7 +13,6 @@ const Pricing: React.FC = () => {
   const handleBuy = () => {
     if (!user) return;
     
-    // Simulação de pagamento
     const confirmed = confirm("Simular pagamento aprovado de R$ 19,90?");
     if (confirmed) {
         authService.buyPack(user.id);

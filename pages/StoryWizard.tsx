@@ -71,8 +71,7 @@ const StoryWizard: React.FC = () => {
           const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
           localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
       } else {
-          // Free não salva no savedStories, mas salva como 'current' para leitura imediata
-          // Usuário será avisado na tela.
+          // Free não salva no savedStories
       }
       
       // Salvar como atual (Cache temporário para leitura imediata)

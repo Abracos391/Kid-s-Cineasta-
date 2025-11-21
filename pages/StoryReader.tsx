@@ -12,39 +12,65 @@ const StoryReader: React.FC = () => {
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  
   const [story, setStory] = useState<Story | null>(null);
   const [activeChapterIndex, setActiveChapterIndex] = useState(0);
-  const [generatedAudioMap, setGeneratedAudioMap] = useState<Record<number, string>>({});
   const [generatingAudio, setGeneratingAudio] = useState(false);
-  const [chapterImages, setChapterImages] = useState<Record<number, string>>({});
+
+  // Função para atualizar a história no armazenamento (Persistência)
+  const updateStoryInStorage = (updatedStory: Story) => {
+    setStory(updatedStory);
+    
+    // Se for premium, atualiza na lista savedStories
+    if (user?.plan === 'premium') {
+        const savedStories: Story[] = JSON.parse(localStorage.getItem('savedStories') || '[]');
+        const index = savedStories.findIndex(s => s.id === updatedStory.id);
+        if (index !== -1) {
+            savedStories[index] = updatedStory;
+            localStorage.setItem('savedStories', JSON.stringify(savedStories));
+        }
+    }
+    
+    // Atualiza também no currentStory (cache imediato)
+    localStorage.setItem('currentStory', JSON.stringify(updatedStory));
+  };
 
   useEffect(() => {
-    // Tenta encontrar a história na biblioteca (savedStories)
+    // 1. Tenta carregar da biblioteca permanente
     const allStories: Story[] = JSON.parse(localStorage.getItem('savedStories') || '[]');
-    const found = allStories.find(s => s.id === id);
+    let found = allStories.find(s => s.id === id);
     
-    if (found) {
-      setStory(found);
-    } else {
-      // Fallback para "currentStory" se tiver acabado de criar (especialmente importante para FREE users que não salvam)
+    // 2. Se não achar, tenta carregar do cache temporário
+    if (!found) {
       const current = localStorage.getItem('currentStory');
       if (current) {
         const parsed = JSON.parse(current);
-        if (parsed.id === id) setStory(parsed);
+        if (parsed.id === id) found = parsed;
       }
     }
+    
+    if (found) setStory(found);
   }, [id]);
 
   useEffect(() => {
-    if (story && !chapterImages[activeChapterIndex]) {
+    // Gerar imagem automaticamente se não existir
+    if (story) {
       const chapter = story.chapters[activeChapterIndex];
-      const imageUrl = generateChapterIllustration(chapter.visualDescription);
-      setChapterImages(prev => ({
-        ...prev,
-        [activeChapterIndex]: imageUrl
-      }));
+      
+      if (!chapter.generatedImage) {
+        // Cria descrição combinada dos personagens
+        const charsDesc = story.characters.map(c => `${c.name} (${c.description})`).join(', ');
+        
+        const imageUrl = generateChapterIllustration(chapter.visualDescription, charsDesc);
+        
+        // Atualiza o objeto da história com a nova imagem para não gerar de novo
+        const updatedChapters = [...story.chapters];
+        updatedChapters[activeChapterIndex] = { ...chapter, generatedImage: imageUrl };
+        
+        updateStoryInStorage({ ...story, chapters: updatedChapters });
+      }
     }
-  }, [activeChapterIndex, story, chapterImages]);
+  }, [activeChapterIndex, story]);
 
   if (!story) return (
     <div className="min-h-[60vh] flex items-center justify-center flex-col gap-4">
@@ -56,7 +82,6 @@ const StoryReader: React.FC = () => {
   const currentChapter = story.chapters[activeChapterIndex];
 
   const handleGenerateAudio = async () => {
-    // Regra Premium: Bloquear Áudio para Free
     if (user?.plan !== 'premium') {
         if(confirm("🔒 A narração com voz é exclusiva para membros Premium.\n\nDeseja conhecer os planos e liberar esse recurso?")) {
             navigate('/pricing');
@@ -64,15 +89,19 @@ const StoryReader: React.FC = () => {
         return;
     }
 
-    if (generatedAudioMap[activeChapterIndex]) return;
+    // Se já existe áudio salvo, não faz nada (o componente AudioPlayer já vai ter recebido)
+    if (currentChapter.generatedAudio) return;
     
     setGeneratingAudio(true);
     try {
       const audioBase64 = await generateSpeech(currentChapter.text);
-      setGeneratedAudioMap(prev => ({
-        ...prev,
-        [activeChapterIndex]: audioBase64
-      }));
+      
+      // Salva o áudio na história
+      const updatedChapters = [...story.chapters];
+      updatedChapters[activeChapterIndex] = { ...currentChapter, generatedAudio: audioBase64 };
+      
+      updateStoryInStorage({ ...story, chapters: updatedChapters });
+
     } catch (error) {
       alert("Ops! O narrador teve um problema técnico.");
     } finally {
@@ -167,16 +196,19 @@ const StoryReader: React.FC = () => {
             
             {/* Ilustração do Capítulo */}
             <div className="w-full h-64 md:h-80 mb-8 rounded-xl border-4 border-black overflow-hidden bg-gray-100 shadow-inner relative">
-                {chapterImages[activeChapterIndex] ? (
+                {currentChapter.generatedImage ? (
                     <img 
-                        src={chapterImages[activeChapterIndex]} 
+                        src={currentChapter.generatedImage} 
                         alt="Ilustração da cena" 
                         className="w-full h-full object-cover animate-fade-in"
                         loading="lazy"
                     />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                        <span className="animate-spin text-4xl">🎨</span>
+                    <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                        <div className="text-center">
+                            <span className="animate-spin text-4xl block mb-2">🎨</span>
+                            <span className="font-comic text-gray-500">Pintando a cena...</span>
+                        </div>
                     </div>
                 )}
             </div>
@@ -200,8 +232,8 @@ const StoryReader: React.FC = () => {
                      <div className="absolute -top-3 -right-3 text-2xl z-20">🔒</div>
                 )}
                 
-                {generatedAudioMap[activeChapterIndex] ? (
-                    <AudioPlayer base64Audio={generatedAudioMap[activeChapterIndex]} />
+                {currentChapter.generatedAudio ? (
+                    <AudioPlayer base64Audio={currentChapter.generatedAudio} />
                 ) : (
                     <Button 
                     onClick={handleGenerateAudio} 

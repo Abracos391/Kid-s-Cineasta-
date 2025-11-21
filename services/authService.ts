@@ -5,7 +5,7 @@ import { User } from '../types';
 const USERS_KEY = 'ck_users';
 const CURRENT_USER_KEY = 'ck_current_user';
 
-// Simula um banco de dados
+// Simula um banco de dados local
 const getUsers = (): User[] => {
   const stored = localStorage.getItem(USERS_KEY);
   return stored ? JSON.parse(stored) : [];
@@ -42,8 +42,6 @@ export const authService = {
 
   // Login
   login: (email: string, password: string): User => {
-    // Obs: Em um app real, a senha seria verificada com hash. 
-    // Aqui, estamos simplificando aceitando qualquer senha se o email existir.
     const users = getUsers();
     const user = users.find(u => u.email === email);
 
@@ -54,10 +52,12 @@ export const authService = {
     // Reset mensal automático para plano FREE
     const now = new Date();
     const lastReset = new Date(user.lastResetDate);
-    // Se mudou o mês (ou ano), reseta o contador
+    
+    // Se mudou o mês ou ano desde o último reset
     if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
       user.storiesCreatedThisMonth = 0;
       user.lastResetDate = Date.now();
+      
       // Atualiza na lista geral
       const userIndex = users.findIndex(u => u.id === user.id);
       users[userIndex] = user;
@@ -108,7 +108,7 @@ export const authService = {
     return user;
   },
 
-  // Simula Compra
+  // Simula Compra de Pacote
   buyPack: (userId: string): User => {
     const users = getUsers();
     const userIndex = users.findIndex(u => u.id === userId);
@@ -116,7 +116,7 @@ export const authService = {
     if (userIndex === -1) throw new Error("Usuário não encontrado");
     
     const user = users[userIndex];
-    user.plan = 'premium'; // Upgrade automático ao comprar
+    user.plan = 'premium'; // Garante upgrade para Premium
     user.credits += 5;
 
     users[userIndex] = user;

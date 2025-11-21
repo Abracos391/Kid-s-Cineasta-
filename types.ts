@@ -20,6 +20,8 @@ export interface StoryChapter {
   title: string;
   text: string;
   visualDescription: string;
+  generatedImage?: string; // Cache da imagem gerada
+  generatedAudio?: string; // Cache do áudio gerado
 }
 
 export interface Story {

@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Avatar, StoryChapter } from "../types";
 
@@ -37,37 +38,35 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
     return response.text || "A happy child";
   } catch (error) {
     console.error("Erro ao analisar rosto:", error);
-    // Fallback genérico se a visão falhar
     return "Cute child cartoon character";
   }
 };
 
 /**
- * 2. Gera a URL da imagem usando Pollinations.ai (Gratuito/Ilimitado)
+ * 2. Gera a URL da imagem usando Pollinations.ai
  */
 export const generateCaricatureImage = async (description: string): Promise<string> => {
   const seed = Math.floor(Math.random() * 10000);
   const prompt = `cute 3d disney pixar character, ${description}, white background, soft studio lighting, 4k render, vibrant colors, --no text`;
   const encodedPrompt = encodeURIComponent(prompt);
-  
-  // URL direta do Pollinations
   return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=800&seed=${seed}&nologo=true&model=flux`;
 };
 
 /**
  * 3. Gera URL para ilustração de um capítulo específico
+ * CORREÇÃO: Inclui a descrição dos personagens para manter consistência visual.
  */
-export const generateChapterIllustration = (visualDescription: string): string => {
+export const generateChapterIllustration = (visualDescription: string, charactersDescription: string = ''): string => {
   const seed = Math.floor(Math.random() * 10000);
-  const prompt = `children book illustration, vector art, colorful, cute, flat style, ${visualDescription}, --no text`;
-  const encodedPrompt = encodeURIComponent(prompt);
+  // Mescla a cena com a descrição dos personagens
+  const fullPrompt = `children book illustration, vector art, colorful, cute, flat style, ${visualDescription}, featuring ${charactersDescription}, --no text`;
+  const encodedPrompt = encodeURIComponent(fullPrompt);
   
   return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
 };
 
 /**
  * 4. Gera a História (Texto e Estrutura)
- * CORREÇÃO CRÍTICA: Limpeza de JSON adicionada
  */
 export const generateStory = async (theme: string, characters: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
   try {
@@ -82,7 +81,7 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
       Tema: "${theme}".
       Personagens Principais: ${charNames} (${charDescs}).
       
-      Estrutura Obrigatória (JSON puro, sem markdown):
+      Estrutura Obrigatória (JSON puro):
       1. Título Criativo.
       2. Exatamente 4 capítulos curtos.
       3. Para cada capítulo, inclua:
@@ -121,7 +120,7 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
     let jsonText = response.text;
     if (!jsonText) throw new Error("A IA retornou um texto vazio.");
 
-    // CORREÇÃO: Remover blocos de código Markdown (```json ... ```) que quebram o parse
+    // Limpeza rigorosa
     jsonText = jsonText.replace(/```json|```/g, '').trim();
     
     return JSON.parse(jsonText);

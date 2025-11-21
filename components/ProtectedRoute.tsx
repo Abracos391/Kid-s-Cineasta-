@@ -11,14 +11,13 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requirePremium = false }) => {
   const { user, loading } = useAuth();
 
-  if (loading) return <div className="p-10 text-center font-comic text-2xl">Carregando...</div>;
+  if (loading) return <div className="flex items-center justify-center h-screen"><span className="text-2xl font-comic animate-bounce">Carregando...</span></div>;
 
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
 
   if (requirePremium && user.plan !== 'premium') {
-    // Se a rota exige premium e usuário é free, manda pra página de preços
     return <Navigate to="/pricing" replace />;
   }
 

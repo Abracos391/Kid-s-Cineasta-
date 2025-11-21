@@ -20,9 +20,7 @@ const Navbar: React.FC = () => {
         
         {/* Logo */}
         <Link to="/" className="flex items-center gap-3 transform hover:scale-105 transition-transform">
-          <div className="w-12 h-12 bg-cartoon-yellow rounded-full border-[3px] border-black flex items-center justify-center font-comic text-black text-2xl shadow-sm animate-bounce-slow">
-            CK
-          </div>
+          <img src="/logo.png" alt="Cineasta Kids Logo" className="w-16 h-16 object-contain drop-shadow-sm" />
           <div className="flex flex-col -space-y-2">
              <span className="font-comic text-xl text-black">CINEASTA</span>
              <span className="font-comic text-2xl text-cartoon-pink text-stroke-black tracking-widest">KID'S</span>
