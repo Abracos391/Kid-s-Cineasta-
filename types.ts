@@ -4,8 +4,12 @@ export interface User {
   name: string;
   email: string;
   plan: 'free' | 'premium';
-  credits: number; // Para plano premium
-  storiesCreatedThisMonth: number; // Para controle do plano free
+  credits: number; // Para plano premium (pacotes comprados)
+  
+  // Controle do plano FREE (Mensal)
+  monthlyFreeUsed: number; // Limite: 2
+  monthlyPremiumTrialUsed: number; // Limite: 1
+  
   lastResetDate: number; // Para resetar o contador mensal
 }
 
@@ -31,6 +35,7 @@ export interface Story {
   createdAt: number;
   chapters: StoryChapter[];
   characters: Avatar[];
+  isPremium?: boolean; // Flag para identificar se foi gerada como premium
 }
 
 export enum AppStatus {

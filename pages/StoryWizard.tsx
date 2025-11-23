@@ -15,7 +15,8 @@ const StoryWizard: React.FC = () => {
   const [selectedAvatarIds, setSelectedAvatarIds] = useState<string[]>([]);
   const [theme, setTheme] = useState('');
   const [loading, setLoading] = useState(false);
-
+  
+  // A3: Recarregar avatares sempre que montar o componente
   useEffect(() => {
     const saved = localStorage.getItem('avatars');
     if (saved) {
@@ -36,9 +37,18 @@ const StoryWizard: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    if (!theme || selectedAvatarIds.length === 0 || !user) return;
+    // Validação A1
+    if (!theme.trim()) {
+        alert("Por favor, digite sobre o que será a história!");
+        return;
+    }
+    if (selectedAvatarIds.length === 0) {
+        alert("Selecione pelo menos um personagem!");
+        return;
+    }
+    if (!user) return;
 
-    // 1. Verificar Permissão do Plano
+    // 1. Verificar Permissão do Plano (Regra M1)
     const check = authService.canCreateStory(user);
     if (!check.allowed) {
         if (confirm(`${check.reason}\n\n✨ Deseja fazer o upgrade para o plano Premium e desbloquear mais histórias?`)) {
@@ -47,7 +57,7 @@ const StoryWizard: React.FC = () => {
         return;
     }
 
-    setLoading(true);
+    setLoading(true); // Feedback C3
     const selectedChars = avatars.filter(a => selectedAvatarIds.includes(a.id));
 
     try {
@@ -58,20 +68,19 @@ const StoryWizard: React.FC = () => {
         createdAt: Date.now(),
         characters: selectedChars,
         theme,
+        isPremium: check.type === 'premium', // Marca se a história é "premium" (tem audio, salva, etc)
         ...storyData
       };
 
-      // 2. Consumir Crédito/Cota
-      authService.consumeStoryCredit(user.id);
+      // 2. Consumir Crédito/Cota com base no tipo retornado
+      authService.consumeStoryCredit(user.id, check.type || 'free');
       refreshUser();
 
       // 3. Regra de Salvamento na Biblioteca
-      // Apenas PREMIUM salva na biblioteca persistente
-      if (user.plan === 'premium') {
+      // Se foi gerada como Premium (seja por plano pago ou pela degustação mensal), salva.
+      if (check.type === 'premium') {
           const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
           localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
-      } else {
-          // Free não salva no savedStories
       }
       
       // Salvar como atual (Cache temporário para leitura imediata)
@@ -93,10 +102,20 @@ const StoryWizard: React.FC = () => {
             Montando a Aventura 🗺️
         </h1>
         {user?.plan === 'free' && (
-            <div className="bg-white border-2 border-black px-4 py-2 rounded-lg text-sm font-bold shadow-doodle flex items-center gap-2">
-                <span>⚠️ Plano Free:</span>
-                <span className="text-red-500">{4 - user.storiesCreatedThisMonth} restantes</span>
-                <Button size="sm" variant="success" onClick={() => navigate('/pricing')}>Upgrade 👑</Button>
+            <div className="bg-white border-2 border-black px-4 py-2 rounded-lg text-sm font-bold shadow-doodle flex flex-col items-end gap-1">
+                <div className="flex items-center gap-2">
+                    <span>👑 Premium Trial:</span>
+                    <span className={user.monthlyPremiumTrialUsed < 1 ? "text-green-600" : "text-gray-400"}>
+                        {1 - (user.monthlyPremiumTrialUsed || 0)}/1
+                    </span>
+                </div>
+                 <div className="flex items-center gap-2 text-xs">
+                    <span>🆓 Free Simples:</span>
+                    <span className={user.monthlyFreeUsed < 2 ? "text-blue-600" : "text-gray-400"}>
+                        {2 - (user.monthlyFreeUsed || 0)}/2
+                    </span>
+                </div>
+                <Button size="sm" variant="success" onClick={() => navigate('/pricing')} className="mt-1">Upgrade</Button>
             </div>
         )}
       </div>
@@ -169,17 +188,17 @@ const StoryWizard: React.FC = () => {
              <Button 
                 className="w-full text-2xl py-6 shadow-cartoon-lg" 
                 variant="primary"
-                disabled={loading || !theme || selectedAvatarIds.length === 0}
+                disabled={loading || avatars.length === 0}
                 onClick={handleGenerate}
                 loading={loading}
                 pulse={!loading && !!theme && selectedAvatarIds.length > 0}
             >
-                {loading ? 'Escrevendo o roteiro...' : 'CRIAR HISTÓRIA! 🎬'}
+                {loading ? 'Escrevendo a história... 🪄' : 'CRIAR HISTÓRIA! 🎬'}
             </Button>
             {user?.plan === 'free' && (
                 <p className="text-center text-xs font-bold mt-2 bg-yellow-100 p-2 border border-black rounded mx-auto max-w-xs">
-                    🔒 Usuários FREE não salvam na biblioteca. <br/>
-                    <span className="text-red-600">Faça upgrade para guardar suas histórias!</span>
+                    🔒 Histórias "Free Simples" não salvam na biblioteca e não têm áudio. <br/>
+                    <span className="text-red-600">Use seu crédito Premium mensal com sabedoria!</span>
                 </p>
             )}
           </div>

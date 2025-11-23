@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
@@ -14,6 +15,9 @@ const AvatarCreator: React.FC = () => {
   const [generatedAvatar, setGeneratedAvatar] = useState<Avatar | null>(null);
   const [name, setName] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
+  
+  // Validation State
+  const [errors, setErrors] = useState<{name?: string, image?: string}>({});
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -21,19 +25,29 @@ const AvatarCreator: React.FC = () => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result as string);
+        setErrors(prev => ({ ...prev, image: undefined })); // Clear error
       };
       reader.readAsDataURL(file);
     }
   };
 
   const processImage = async () => {
-    if (!preview || !name) return;
+    // Validação (A1)
+    const newErrors: any = {};
+    if (!name.trim()) newErrors.name = "O personagem precisa de um nome!";
+    if (!preview) newErrors.image = "Precisamos de uma foto para começar!";
+    
+    if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return;
+    }
+
     setStep('processing');
 
     try {
       // 1. Analisar rosto
       setStatusMsg("🧐 O robô está olhando sua foto...");
-      const base64Data = preview.split(',')[1];
+      const base64Data = preview!.split(',')[1];
       const description = await analyzeFaceForAvatar(base64Data);
       
       // 2. Gerar URL da imagem (Instantâneo com Pollinations)
@@ -74,19 +88,23 @@ const AvatarCreator: React.FC = () => {
       {step === 'upload' && (
         <Card color="white" className="space-y-8" rotate>
           <div className="space-y-3">
-            <label className="font-heading font-bold text-xl block">1. Qual o nome do personagem?</label>
+            <label className="font-heading font-bold text-xl block">1. Qual o nome do personagem? <span className="text-red-500">*</span></label>
             <input 
               type="text" 
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                  setName(e.target.value);
+                  setErrors(prev => ({...prev, name: undefined}));
+              }}
               placeholder="Ex: Capitão Feijão"
-              className="w-full p-4 rounded-2xl border-4 border-black focus:border-cartoon-pink outline-none font-heading text-2xl bg-cartoon-cream shadow-inner"
+              className={`w-full p-4 rounded-2xl border-4 ${errors.name ? 'border-red-500 bg-red-50' : 'border-black bg-cartoon-cream'} focus:border-cartoon-pink outline-none font-heading text-2xl shadow-inner transition-colors`}
             />
+            {errors.name && <p className="text-red-500 font-bold text-sm animate-pulse">⚠️ {errors.name}</p>}
           </div>
 
           <div className="space-y-3">
-             <label className="font-heading font-bold text-xl block">2. Escolha a foto:</label>
-             <div className="border-4 border-dashed border-black rounded-3xl p-8 text-center space-y-4 bg-blue-50">
+             <label className="font-heading font-bold text-xl block">2. Escolha a foto: <span className="text-red-500">*</span></label>
+             <div className={`border-4 border-dashed ${errors.image ? 'border-red-500 bg-red-50' : 'border-black bg-blue-50'} rounded-3xl p-8 text-center space-y-4 transition-colors`}>
               {preview ? (
                 <div className="relative w-56 h-56 mx-auto rounded-full overflow-hidden border-4 border-black shadow-cartoon bg-white transform rotate-3">
                   <img src={preview} alt="Preview" className="w-full h-full object-cover" />
@@ -112,12 +130,12 @@ const AvatarCreator: React.FC = () => {
                 onChange={handleFileChange} 
               />
             </div>
+            {errors.image && <p className="text-red-500 font-bold text-center text-sm animate-pulse">⚠️ {errors.image}</p>}
           </div>
 
           <div className="flex justify-center pt-4">
             <Button 
               onClick={processImage} 
-              disabled={!preview || !name} 
               variant="primary" 
               size="lg"
               className="w-full md:w-auto text-2xl"
@@ -129,10 +147,12 @@ const AvatarCreator: React.FC = () => {
         </Card>
       )}
 
+      {/* Loading State (C3) */}
       {step === 'processing' && (
         <Card color="yellow" className="text-center py-16">
           <div className="animate-spin text-8xl mb-6 inline-block">🖌️</div>
           <h2 className="font-heading text-3xl mb-4">{statusMsg}</h2>
+          <p className="text-lg font-bold text-gray-700 mb-6">Não feche essa tela...</p>
           <div className="w-full bg-white border-4 border-black rounded-full h-6 overflow-hidden relative">
             <div className="bg-cartoon-pink h-full w-1/2 animate-wiggle absolute top-0 left-0 bottom-0"></div>
             <div className="bg-cartoon-blue h-full w-1/2 animate-wiggle absolute top-0 right-0 bottom-0" style={{animationDirection: 'reverse'}}></div>

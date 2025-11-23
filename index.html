@@ -43,6 +43,7 @@
               'float': 'float 6s ease-in-out infinite',
               'wobble-slow': 'wobble 4s ease-in-out infinite',
               'spin-slow': 'spin 10s linear infinite',
+              'fade-in': 'fadeIn 0.5s ease-out',
             },
             keyframes: {
               float: {
@@ -52,6 +53,10 @@
               wobble: {
                 '0%, 100%': { borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%' },
                 '50%': { borderRadius: '30% 60% 70% 40% / 50% 60% 30% 60%' },
+              },
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
               }
             }
           }
@@ -102,7 +107,9 @@
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
     "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
     "vite": "https://aistudiocdn.com/vite@^7.2.2",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "html2canvas": "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/+esm",
+    "jspdf": "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/+esm"
   }
 }
 </script>

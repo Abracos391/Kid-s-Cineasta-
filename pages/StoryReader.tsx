@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Story } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -7,15 +7,19 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { generateSpeech, generateChapterIllustration } from '../services/geminiService';
 import AudioPlayer from '../components/AudioPlayer';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 const StoryReader: React.FC = () => {
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const storyContentRef = useRef<HTMLDivElement>(null);
   
   const [story, setStory] = useState<Story | null>(null);
   const [activeChapterIndex, setActiveChapterIndex] = useState(0);
   const [generatingAudio, setGeneratingAudio] = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   // Função para atualizar a história no armazenamento (Persistência)
   const updateStoryInStorage = (updatedStory: Story) => {
@@ -82,14 +86,18 @@ const StoryReader: React.FC = () => {
   const currentChapter = story.chapters[activeChapterIndex];
 
   const handleGenerateAudio = async () => {
-    if (user?.plan !== 'premium') {
-        if(confirm("🔒 A narração com voz é exclusiva para membros Premium.\n\nDeseja conhecer os planos e liberar esse recurso?")) {
+    // Regra M2: Usuários Premium ou Trial Premium podem gerar áudio
+    // Se a história não for marcada como premium e o usuário for free (sem cota), bloqueia
+    const isPremiumStory = story.isPremium === true || user?.plan === 'premium';
+
+    if (!isPremiumStory && user?.plan === 'free') {
+        if(confirm("🔒 A narração com voz é exclusiva para histórias Premium.\n\nDeseja conhecer os planos e liberar esse recurso?")) {
             navigate('/pricing');
         }
         return;
     }
 
-    // Se já existe áudio salvo, não faz nada (o componente AudioPlayer já vai ter recebido)
+    // Se já existe áudio salvo, não faz nada
     if (currentChapter.generatedAudio) return;
     
     setGeneratingAudio(true);
@@ -109,13 +117,55 @@ const StoryReader: React.FC = () => {
     }
   };
   
-  const handlePDFDownload = () => {
-      if (user?.plan !== 'premium') {
-        if(confirm("🔒 O download em PDF é exclusivo para membros Premium.\n\nDeseja fazer o upgrade?")) {
+  // Implementação C2: Gerar PDF usando html2canvas e jsPDF
+  const handlePDFDownload = async () => {
+      // Regra: Apenas se a história for premium ou usuário for premium
+      const isPremiumStory = story.isPremium === true || user?.plan === 'premium';
+
+      if (!isPremiumStory && user?.plan === 'free') {
+        if(confirm("🔒 O download em PDF é exclusivo para Histórias Premium.\n\nDeseja fazer o upgrade para baixar todas as suas histórias?")) {
             navigate('/pricing');
         }
-      } else {
-          alert("O gerador de PDF está sendo calibrado pelos duendes! (Em breve)");
+        return;
+      }
+
+      setGeneratingPDF(true);
+      try {
+        const input = storyContentRef.current;
+        if (!input) throw new Error("Conteúdo não encontrado");
+
+        // Captura o elemento visualmente
+        const canvas = await html2canvas(input, {
+            scale: 2, // Melhor resolução
+            useCORS: true, // Permitir imagens externas (se configurado corretamente no servidor, Pollinations geralmente permite)
+            logging: false
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+        
+        const imgX = (pdfWidth - imgWidth * ratio) / 2;
+        const imgY = 20;
+
+        pdf.setFontSize(20);
+        pdf.text(story.title, pdfWidth / 2, 15, { align: 'center' });
+        
+        // Adiciona a imagem da página atual
+        pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+        
+        pdf.save(`${story.title.replace(/\s+/g, '_')}_Capitulo_${activeChapterIndex + 1}.pdf`);
+
+      } catch (error) {
+          console.error(error);
+          alert("Erro ao gerar PDF. Tente novamente.");
+      } finally {
+          setGeneratingPDF(false);
       }
   }
 
@@ -148,8 +198,16 @@ const StoryReader: React.FC = () => {
           </div>
         </div>
         <div className="flex gap-2">
-            <Button size="sm" variant="secondary" onClick={handlePDFDownload} title="Download PDF" className="flex items-center gap-1">
-                📄 PDF {user?.plan === 'free' && '🔒'}
+            <Button 
+                size="sm" 
+                variant="secondary" 
+                onClick={handlePDFDownload} 
+                loading={generatingPDF}
+                disabled={generatingPDF}
+                className="flex items-center gap-1"
+            >
+                {generatingPDF ? 'Gerando...' : '📄 Baixar PDF'} 
+                {(!story.isPremium && user?.plan === 'free') && '🔒'}
             </Button>
             <Link to="/library">
              <Button size="sm" variant="danger" className="whitespace-nowrap">❌ Fechar</Button>
@@ -190,45 +248,47 @@ const StoryReader: React.FC = () => {
             </div>
         </div>
 
-        {/* Main Story Content */}
-        <div className="md:col-span-9">
+        {/* Main Story Content - Ref for capture */}
+        <div className="md:col-span-9" >
           <Card className="min-h-[500px] flex flex-col bg-white" color="white">
-            
-            {/* Ilustração do Capítulo */}
-            <div className="w-full h-64 md:h-80 mb-8 rounded-xl border-4 border-black overflow-hidden bg-gray-100 shadow-inner relative">
-                {currentChapter.generatedImage ? (
-                    <img 
-                        src={currentChapter.generatedImage} 
-                        alt="Ilustração da cena" 
-                        className="w-full h-full object-cover animate-fade-in"
-                        loading="lazy"
-                    />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                        <div className="text-center">
-                            <span className="animate-spin text-4xl block mb-2">🎨</span>
-                            <span className="font-comic text-gray-500">Pintando a cena...</span>
+             {/* Wrapper para captura do PDF */}
+            <div ref={storyContentRef} className="bg-white p-2"> 
+                {/* Ilustração do Capítulo */}
+                <div className="w-full h-64 md:h-80 mb-8 rounded-xl border-4 border-black overflow-hidden bg-gray-100 shadow-inner relative">
+                    {currentChapter.generatedImage ? (
+                        <img 
+                            src={currentChapter.generatedImage} 
+                            alt="Ilustração da cena" 
+                            className="w-full h-full object-cover animate-fade-in"
+                            crossOrigin="anonymous" 
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                            <div className="text-center">
+                                <span className="animate-spin text-4xl block mb-2">🎨</span>
+                                <span className="font-comic text-gray-500">Pintando a cena...</span>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
+
+                <div className="relative z-10 flex-grow">
+                <h2 className="font-heading text-3xl mb-6 text-black underline decoration-cartoon-yellow decoration-4 underline-offset-4">{currentChapter.title}</h2>
+                
+                <div className="font-sans text-xl md:text-2xl text-gray-800 leading-loose mb-8">
+                    {currentChapter.text.split('\n').map((p, i) => (
+                    <p key={i} className="mb-6">{p}</p>
+                    ))}
+                </div>
+                </div>
             </div>
 
-            <div className="relative z-10 flex-grow">
-              <h2 className="font-heading text-3xl mb-6 text-black underline decoration-cartoon-yellow decoration-4 underline-offset-4">{currentChapter.title}</h2>
-              
-              <div className="font-sans text-xl md:text-2xl text-gray-800 leading-loose mb-8">
-                {currentChapter.text.split('\n').map((p, i) => (
-                  <p key={i} className="mb-6">{p}</p>
-                ))}
-              </div>
-            </div>
-
-            {/* Interactive Footer */}
+            {/* Interactive Footer (Fora da captura) */}
             <div className="border-t-4 border-gray-100 border-dashed pt-6 flex flex-col md:flex-row items-center justify-between gap-6">
               
               {/* Audio Player */}
               <div className="bg-cartoon-cream px-4 py-2 rounded-xl border-2 border-black w-full md:w-auto flex justify-center relative">
-                {user?.plan === 'free' && (
+                {(!story.isPremium && user?.plan === 'free') && (
                      <div className="absolute -top-3 -right-3 text-2xl z-20">🔒</div>
                 )}
                 
@@ -238,12 +298,12 @@ const StoryReader: React.FC = () => {
                     <Button 
                     onClick={handleGenerateAudio} 
                     disabled={generatingAudio} 
-                    variant={user?.plan === 'free' ? 'secondary' : 'secondary'} 
+                    variant={(!story.isPremium && user?.plan === 'free') ? 'secondary' : 'secondary'} 
                     size="sm"
                     loading={generatingAudio}
-                    className={`w-full md:w-auto ${user?.plan === 'free' ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    className={`w-full md:w-auto ${(!story.isPremium && user?.plan === 'free') ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
-                    {user?.plan === 'free' ? '🔊 Narrador (Premium)' : '🔊 Ouvir Narrador'}
+                    {(!story.isPremium && user?.plan === 'free') ? '🔊 Narrador (Premium)' : '🔊 Ouvir Narrador'}
                     </Button>
                 )}
               </div>

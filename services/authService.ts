@@ -19,18 +19,20 @@ export const authService = {
   // Cadastro
   register: (name: string, email: string, password: string): User => {
     const users = getUsers();
+    const cleanEmail = email.toLowerCase().trim();
     
-    if (users.find(u => u.email === email)) {
+    if (users.find(u => u.email.toLowerCase().trim() === cleanEmail)) {
       throw new Error('Este e-mail já está cadastrado.');
     }
 
     const newUser: User = {
       id: Date.now().toString(),
       name,
-      email,
+      email: cleanEmail,
       plan: 'free',
       credits: 0,
-      storiesCreatedThisMonth: 0,
+      monthlyFreeUsed: 0,
+      monthlyPremiumTrialUsed: 0,
       lastResetDate: Date.now()
     };
 
@@ -40,10 +42,11 @@ export const authService = {
     return newUser;
   },
 
-  // Login
+  // Login (Fix C1: Case insensitive check)
   login: (email: string, password: string): User => {
     const users = getUsers();
-    const user = users.find(u => u.email === email);
+    const cleanEmail = email.toLowerCase().trim();
+    const user = users.find(u => u.email.toLowerCase().trim() === cleanEmail);
 
     if (!user) {
       throw new Error('Usuário não encontrado. Verifique o e-mail.');
@@ -55,7 +58,8 @@ export const authService = {
     
     // Se mudou o mês ou ano desde o último reset
     if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
-      user.storiesCreatedThisMonth = 0;
+      user.monthlyFreeUsed = 0;
+      user.monthlyPremiumTrialUsed = 0;
       user.lastResetDate = Date.now();
       
       // Atualiza na lista geral
@@ -77,18 +81,30 @@ export const authService = {
     return stored ? JSON.parse(stored) : null;
   },
 
-  // Regras de Negócio: Consumir Crédito/Cota
-  canCreateStory: (user: User): { allowed: boolean; reason?: string } => {
+  // Regras de Negócio: Verificar Permissão
+  // Retorna o tipo de história que pode ser criada ('premium' ou 'free') ou null
+  canCreateStory: (user: User): { allowed: boolean; type?: 'premium' | 'free'; reason?: string } => {
     if (user.plan === 'premium') {
-      if (user.credits > 0) return { allowed: true };
-      return { allowed: false, reason: 'Seus créditos acabaram.' };
-    } else {
-      if (user.storiesCreatedThisMonth < 4) return { allowed: true };
-      return { allowed: false, reason: 'Você atingiu o limite de 4 histórias grátis este mês.' };
+      if (user.credits > 0) return { allowed: true, type: 'premium' };
+      return { allowed: false, reason: 'Seus créditos de história acabaram. Adquira mais na loja!' };
+    } 
+    
+    // Plano FREE (Nova Regra M1)
+    // 1. Tenta usar o Premium Trial mensal
+    if (user.monthlyPremiumTrialUsed < 1) {
+        return { allowed: true, type: 'premium' }; // Usa cota de degustação premium
     }
+    
+    // 2. Se acabou o premium trial, usa o free (sem salvar/sem audio)
+    if (user.monthlyFreeUsed < 2) {
+        return { allowed: true, type: 'free' };
+    }
+
+    return { allowed: false, reason: 'Você atingiu o limite mensal (1 Premium + 2 Free). Volte mês que vem ou faça upgrade!' };
   },
 
-  consumeStoryCredit: (userId: string): User => {
+  // Consumir Cota
+  consumeStoryCredit: (userId: string, type: 'premium' | 'free'): User => {
     const users = getUsers();
     const userIndex = users.findIndex(u => u.id === userId);
     
@@ -99,7 +115,12 @@ export const authService = {
     if (user.plan === 'premium') {
       user.credits = Math.max(0, user.credits - 1);
     } else {
-      user.storiesCreatedThisMonth += 1;
+      // Consumo Plano FREE
+      if (type === 'premium') {
+         user.monthlyPremiumTrialUsed = (user.monthlyPremiumTrialUsed || 0) + 1;
+      } else {
+         user.monthlyFreeUsed = (user.monthlyFreeUsed || 0) + 1;
+      }
     }
 
     users[userIndex] = user;
@@ -117,7 +138,7 @@ export const authService = {
     
     const user = users[userIndex];
     user.plan = 'premium'; // Garante upgrade para Premium
-    user.credits += 5;
+    user.credits = (user.credits || 0) + 5;
 
     users[userIndex] = user;
     saveUsers(users);
