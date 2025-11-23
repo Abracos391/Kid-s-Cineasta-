@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +8,6 @@ const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
-  // Se estiver na página de login, esconde a navbar
   if (location.pathname === '/auth') return null;
 
   const isActive = (path: string) => location.pathname === path;
@@ -17,109 +15,120 @@ const Navbar: React.FC = () => {
   const closeMenu = () => setIsMenuOpen(false);
 
   return (
-    <nav className="sticky top-2 z-50 mx-auto max-w-6xl px-2 md:px-4 mb-8 font-comic">
-      {/* Main Bar */}
-      <div className="bg-white rounded-hand border-[3px] border-black shadow-doodle px-4 py-2 relative z-50">
+    <nav className="sticky top-2 z-50 mx-auto max-w-6xl px-4 mb-8 font-comic">
+      {/* Main Navbar Container */}
+      <div className="bg-white rounded-full border-[3px] border-black shadow-doodle px-4 py-2 relative z-50 transition-all hover:shadow-doodle-hover">
         <div className="flex items-center justify-between">
           
-          {/* Logo (Esquerda) */}
-          <Link to="/" className="flex items-center gap-2 group" onClick={closeMenu}>
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-cartoon-yellow rounded-full border-[3px] border-black flex items-center justify-center shadow-sm group-hover:rotate-12 transition-transform">
-               <span className="font-comic text-xl md:text-2xl text-cartoon-pink text-stroke-black mt-1">CK</span>
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-3 group" onClick={closeMenu}>
+            <div className="relative">
+                <div className="w-12 h-12 bg-cartoon-yellow rounded-full border-[3px] border-black flex items-center justify-center shadow-sm group-hover:rotate-12 transition-transform z-10 relative">
+                    <span className="font-comic text-2xl text-cartoon-pink text-stroke-black mt-1">CK</span>
+                </div>
+                <div className="absolute top-0 left-0 w-full h-full bg-black rounded-full translate-x-0.5 translate-y-0.5 -z-10"></div>
             </div>
+            
             <div className="flex flex-col -space-y-1 leading-none">
-               <span className="text-base md:text-lg text-black font-bold">CINEASTA</span>
-               <span className="text-lg md:text-xl text-cartoon-pink text-stroke-black tracking-widest">KID'S</span>
+               <span className="text-lg text-black font-bold group-hover:text-cartoon-blue transition-colors">CINEASTA</span>
+               <span className="text-xl text-cartoon-pink text-stroke-black tracking-widest group-hover:scale-105 transition-transform origin-left">KID'S</span>
             </div>
           </Link>
 
-          {/* Desktop Menu (Centro) - Hidden on Mobile */}
-          <div className="hidden md:flex gap-2">
+          {/* Desktop Menu */}
+          <div className="hidden md:flex items-center gap-2">
             <NavLink to="/" active={isActive('/')} color="bg-cartoon-yellow">🏠 Início</NavLink>
             <NavLink to="/avatars" active={isActive('/avatars')} color="bg-cartoon-green">👾 Avatares</NavLink>
             <NavLink to="/create-story" active={isActive('/create-story')} color="bg-cartoon-blue">📚 Criar</NavLink>
             <NavLink to="/library" active={isActive('/library')} color="bg-cartoon-purple">🏰 Biblioteca</NavLink>
-          </div>
+            
+            <div className="w-0.5 h-8 bg-black/10 mx-2 rounded-full"></div>
 
-          {/* User Actions (Direita Desktop) */}
-          <div className="hidden md:flex items-center gap-3 pl-4 border-l-2 border-black border-dashed">
             <UserSection user={user} logout={logout} />
           </div>
 
           {/* Mobile Hamburger Button */}
           <button 
             onClick={toggleMenu}
-            className="md:hidden p-2 border-[3px] border-black rounded-lg bg-cartoon-blue text-white shadow-sm active:translate-y-1 active:shadow-none transition-all"
+            className="md:hidden relative group"
+            aria-label="Abrir Menu"
           >
-            {isMenuOpen ? (
-              <span className="text-2xl leading-none block">✕</span>
-            ) : (
-              <span className="text-2xl leading-none block">☰</span>
-            )}
+            <div className={`w-10 h-10 border-[3px] border-black rounded-lg flex items-center justify-center transition-all ${isMenuOpen ? 'bg-cartoon-pink text-white rotate-90' : 'bg-cartoon-blue text-white'} shadow-sm active:shadow-none active:translate-y-1`}>
+                <span className="text-2xl leading-none font-bold">{isMenuOpen ? '✕' : '☰'}</span>
+            </div>
           </button>
         </div>
       </div>
 
-      {/* Mobile Dropdown Menu */}
+      {/* Mobile Dropdown Menu Overlay */}
       {isMenuOpen && (
-        <div className="md:hidden absolute top-full left-0 right-0 px-2 mt-2 animate-float">
-          <div className="bg-cartoon-cream border-[3px] border-black rounded-hand p-4 shadow-doodle flex flex-col gap-4 relative">
-             {/* Decorative triangle for speech bubble effect */}
-             <div className="absolute -top-3 right-8 w-6 h-6 bg-cartoon-cream border-l-[3px] border-t-[3px] border-black transform rotate-45 z-0"></div>
-             
-             <div className="flex flex-col gap-3 z-10">
-                <MobileNavLink to="/" onClick={closeMenu} active={isActive('/')} emoji="🏠">Início</MobileNavLink>
-                <MobileNavLink to="/avatars" onClick={closeMenu} active={isActive('/avatars')} emoji="👾">Avatares</MobileNavLink>
-                <MobileNavLink to="/create-story" onClick={closeMenu} active={isActive('/create-story')} emoji="📚">Criar História</MobileNavLink>
-                <MobileNavLink to="/library" onClick={closeMenu} active={isActive('/library')} emoji="🏰">Minha Biblioteca</MobileNavLink>
-             </div>
+        <>
+            {/* Backdrop */}
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40" onClick={closeMenu}></div>
+            
+            {/* Menu Panel */}
+            <div className="absolute top-full left-0 right-0 px-2 mt-4 z-50 md:hidden animate-float">
+                <div className="bg-white border-[3px] border-black rounded-hand p-6 shadow-cartoon relative overflow-hidden">
+                    {/* Decorative Blobs */}
+                    <div className="absolute -right-6 -top-6 w-32 h-32 bg-cartoon-yellow rounded-full opacity-30 mix-blend-multiply pointer-events-none"></div>
+                    <div className="absolute -left-6 -bottom-6 w-32 h-32 bg-cartoon-blue rounded-full opacity-30 mix-blend-multiply pointer-events-none"></div>
 
-             <div className="border-t-2 border-black border-dashed my-1"></div>
-             
-             <div className="flex justify-center pb-2 z-10">
-                <UserSection user={user} logout={logout} isMobile={true} onClick={closeMenu} />
-             </div>
-          </div>
-        </div>
+                    <div className="relative z-10 flex flex-col gap-3">
+                        <MobileNavLink to="/" onClick={closeMenu} active={isActive('/')} emoji="🏠" color="hover:bg-cartoon-yellow">Início</MobileNavLink>
+                        <MobileNavLink to="/avatars" onClick={closeMenu} active={isActive('/avatars')} emoji="👾" color="hover:bg-cartoon-green">Avatares</MobileNavLink>
+                        <MobileNavLink to="/create-story" onClick={closeMenu} active={isActive('/create-story')} emoji="📚" color="hover:bg-cartoon-blue">Criar História</MobileNavLink>
+                        <MobileNavLink to="/library" onClick={closeMenu} active={isActive('/library')} emoji="🏰" color="hover:bg-cartoon-purple">Minha Biblioteca</MobileNavLink>
+
+                        <div className="h-0.5 bg-black/10 w-full my-4 border-t-2 border-dashed border-black/20"></div>
+                        
+                        <div className="flex justify-center w-full">
+                            <UserSection user={user} logout={logout} isMobile={true} onClick={closeMenu} />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </>
       )}
     </nav>
   );
 };
 
-// Componente auxiliar para Info do Usuário (Reutilizável)
+// Helper Components
 const UserSection: React.FC<{ user: any, logout: () => void, isMobile?: boolean, onClick?: () => void }> = ({ user, logout, isMobile, onClick }) => {
   if (!user) {
     return (
-      <Link to="/auth" onClick={onClick}>
-        <Button size="sm" variant="primary">Entrar / Cadastrar</Button>
+      <Link to="/auth" onClick={onClick} className={isMobile ? 'w-full' : ''}>
+        <Button size="sm" variant="primary" className={isMobile ? 'w-full text-xl' : ''}>🔐 Entrar</Button>
       </Link>
     );
   }
 
   return (
-    <div className={`flex ${isMobile ? 'flex-col items-center gap-3 w-full' : 'flex-col items-end'}`}>
-      <div className="font-bold text-xs uppercase tracking-wider">
+    <div className={`flex ${isMobile ? 'flex-col items-center gap-4 w-full' : 'items-center gap-3'}`}>
+        {/* Plan Badge */}
+        <div className="relative group cursor-help">
           {user.plan === 'premium' ? (
-              <span className="text-purple-600 font-comic text-sm border-2 border-purple-300 px-2 py-0.5 rounded bg-purple-50 block">
-                👑 Premium ({user.credits} cr.)
+              <span className="bg-cartoon-purple text-white border-2 border-black px-3 py-1 rounded-lg font-bold text-xs shadow-sm flex items-center gap-1 transform hover:scale-105 transition-transform">
+                👑 PRO <span className="bg-white text-black px-1 rounded text-[10px]">{user.credits}</span>
               </span>
           ) : (
-              <span className="text-gray-600 font-comic text-sm border-2 border-gray-300 px-2 py-0.5 rounded bg-gray-50 block">
-                🆓 Free ({4 - user.storiesCreatedThisMonth} rest.)
+              <span className="bg-gray-200 text-gray-600 border-2 border-black px-3 py-1 rounded-lg font-bold text-xs shadow-sm flex items-center gap-1 transform hover:scale-105 transition-transform">
+                🆓 FREE <span className="bg-white text-black px-1 rounded text-[10px]">{4 - user.storiesCreatedThisMonth}</span>
               </span>
           )}
-      </div>
-      <div className={`flex gap-2 ${isMobile ? 'w-full justify-center' : ''}`}>
-          <Link to="/pricing" onClick={onClick} className={isMobile ? 'flex-1' : ''}>
-                <button className={`text-xs bg-green-400 text-black px-3 py-1 rounded border-2 border-black font-bold hover:bg-green-500 shadow-sm ${isMobile ? 'w-full h-10 text-lg' : ''}`}>
-                  💎 Planos
-                </button>
+        </div>
+
+      <div className={`flex gap-2 ${isMobile ? 'w-full grid grid-cols-2' : ''}`}>
+          <Link to="/pricing" onClick={onClick} className="flex-1">
+             <button className="w-full bg-cartoon-green text-black px-3 py-1.5 rounded-lg border-2 border-black font-bold hover:bg-green-400 hover:shadow-sm transition-colors text-sm flex items-center justify-center gap-1">
+               💎 <span className="hidden md:inline">Planos</span>
+             </button>
           </Link>
           <button 
             onClick={() => { logout(); if(onClick) onClick(); }} 
-            className={`text-xs bg-red-400 text-white px-3 py-1 rounded border-2 border-black font-bold hover:bg-red-500 shadow-sm ${isMobile ? 'flex-1 h-10 text-lg' : ''}`}
+            className="w-full bg-red-400 text-white px-3 py-1.5 rounded-lg border-2 border-black font-bold hover:bg-red-500 hover:shadow-sm transition-colors text-sm flex items-center justify-center gap-1"
           >
-            Sair
+            🚪 <span className="hidden md:inline">Sair</span>
           </button>
       </div>
     </div>
@@ -129,29 +138,29 @@ const UserSection: React.FC<{ user: any, logout: () => void, isMobile?: boolean,
 const NavLink: React.FC<{ to: string; active: boolean; children: React.ReactNode; color: string }> = ({ to, active, children, color }) => (
   <Link 
     to={to} 
-    className={`px-3 py-1 rounded-hand font-comic text-lg transition-all border-[3px] whitespace-nowrap ${
+    className={`px-3 py-1.5 rounded-lg font-comic text-lg transition-all border-2 whitespace-nowrap ${
       active 
-        ? `${color} border-black -translate-y-1 shadow-doodle-hover rotate-1 text-white text-stroke-black` 
-        : 'bg-transparent border-transparent hover:bg-gray-100 text-gray-500 hover:border-gray-300 hover:border-dashed'
+        ? `${color} border-black shadow-doodle rotate-1 text-black` 
+        : 'bg-transparent border-transparent hover:bg-gray-100 hover:border-gray-200 text-gray-500'
     }`}
   >
     {children}
   </Link>
 );
 
-const MobileNavLink: React.FC<{ to: string; onClick: () => void; active: boolean; children: React.ReactNode; emoji: string }> = ({ to, onClick, active, children, emoji }) => (
+const MobileNavLink: React.FC<{ to: string; onClick: () => void; active: boolean; children: React.ReactNode; emoji: string; color: string }> = ({ to, onClick, active, children, emoji, color }) => (
   <Link 
     to={to}
     onClick={onClick}
     className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all font-bold text-xl ${
       active
-        ? 'bg-cartoon-yellow border-black shadow-sm'
-        : 'bg-white border-gray-200 hover:border-black hover:bg-gray-50'
+        ? 'bg-black text-white border-black shadow-doodle transform -rotate-1'
+        : `bg-white border-gray-100 text-gray-600 ${color} hover:border-black hover:shadow-sm`
     }`}
   >
     <span className="text-2xl">{emoji}</span>
-    <span className={active ? 'text-black' : 'text-gray-600'}>{children}</span>
-    {active && <span className="ml-auto text-cartoon-pink">★</span>}
+    <span>{children}</span>
+    {active && <span className="ml-auto text-cartoon-yellow animate-spin-slow">★</span>}
   </Link>
 );
 
