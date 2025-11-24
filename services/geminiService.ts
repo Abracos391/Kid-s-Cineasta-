@@ -120,9 +120,7 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
     let jsonText = response.text;
     if (!jsonText) throw new Error("A IA retornou um texto vazio.");
 
-    // Limpeza rigorosa
     jsonText = jsonText.replace(/```json|```/g, '').trim();
-    
     return JSON.parse(jsonText);
 
   } catch (error) {
@@ -130,6 +128,75 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
     throw error;
   }
 };
+
+/**
+ * 4.1 Gera História PEDAGÓGICA (Modo Escola)
+ */
+export const generatePedagogicalStory = async (theme: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
+    try {
+      const ai = getAiClient();
+      
+      const studentNames = students.map(c => c.name).join(", ");
+      const studentDescs = students.map(c => c.description).join("; ");
+  
+      const prompt = `
+        Você é um Pedagogo Especialista em Educação Infantil.
+        Escreva uma fábula educativa ou uma situação do dia a dia escolar para ensinar uma lição importante.
+        
+        Tema da Aula/Lição: "${theme}".
+        Professor(a): ${teacher.name} (guia da história).
+        Alunos Participantes: ${studentNames} (${studentDescs}).
+        
+        Objetivo: Ensinar valores como respeito, segurança, alimentação saudável, amizade ou obediência, de forma lúdica mas clara.
+        
+        Estrutura Obrigatória (JSON puro):
+        1. Título Educativo.
+        2. Exatamente 4 capítulos curtos.
+        3. O Último capítulo DEVE conter explicitamente a "Moral da História".
+        4. Para cada capítulo:
+           - "title": Título.
+           - "text": Texto (aprox 60-70 palavras). Linguagem gentil e instrutiva.
+           - "visualDescription": Descrição para ilustração (school environment, outdoor class, educational context).
+  
+        Responda APENAS com o JSON.
+      `;
+  
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              chapters: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    text: { type: Type.STRING },
+                    visualDescription: { type: Type.STRING }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+  
+      let jsonText = response.text;
+      if (!jsonText) throw new Error("A IA retornou um texto vazio.");
+  
+      jsonText = jsonText.replace(/```json|```/g, '').trim();
+      return JSON.parse(jsonText);
+  
+    } catch (error) {
+      console.error("Erro ao gerar aula:", error);
+      throw error;
+    }
+  };
 
 /**
  * 5. Gera Áudio (TTS)

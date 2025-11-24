@@ -36,6 +36,7 @@ export interface Story {
   chapters: StoryChapter[];
   characters: Avatar[];
   isPremium?: boolean; // Flag para identificar se foi gerada como premium
+  isEducational?: boolean; // Flag para modo escola
 }
 
 export enum AppStatus {
@@ -43,4 +44,14 @@ export enum AppStatus {
   LOADING,
   SUCCESS,
   ERROR
+}
+
+// --- MODO ESCOLA ---
+
+export type SchoolRole = 'director' | 'vice_director' | 'teacher' | 'student';
+
+export interface SchoolMember {
+  slotId: string; // ex: 'dir', 'vice', 'prof_1', 'aluno_01'
+  avatarId: string;
+  role: SchoolRole;
 }

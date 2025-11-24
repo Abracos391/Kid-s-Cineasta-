@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
@@ -108,8 +109,12 @@ const Home: React.FC = () => {
                 Perfeito para aulas de redação e artes.
               </p>
               <div className="mt-6 flex gap-4">
-                <Button size="sm" variant="secondary" className="rotate-1">Ver Planos</Button>
-                <Button size="sm" variant="success" className="-rotate-1">Entrar como Escola</Button>
+                <Link to="/pricing">
+                    <Button size="sm" variant="secondary" className="rotate-1">Ver Planos</Button>
+                </Link>
+                <Link to="/school">
+                    <Button size="sm" variant="success" className="-rotate-1">Entrar na Sala</Button>
+                </Link>
               </div>
             </div>
           </div>

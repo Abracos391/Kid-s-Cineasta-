@@ -11,6 +11,7 @@ import AvatarCreator from './pages/AvatarCreator';
 import StoryWizard from './pages/StoryWizard';
 import StoryReader from './pages/StoryReader';
 import Library from './pages/Library';
+import SchoolRoom from './pages/SchoolRoom';
 
 const App: React.FC = () => {
   return (
@@ -35,6 +36,12 @@ const App: React.FC = () => {
             <Route path="/create-story" element={
               <ProtectedRoute>
                 <StoryWizard />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/school" element={
+              <ProtectedRoute>
+                <SchoolRoom />
               </ProtectedRoute>
             } />
             
