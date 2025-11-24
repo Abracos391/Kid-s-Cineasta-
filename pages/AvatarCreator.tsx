@@ -21,6 +21,9 @@ const AvatarCreator: React.FC = () => {
   const [statusMsg, setStatusMsg] = useState('');
   const [isCameraReady, setIsCameraReady] = useState(false);
   
+  // Camera State
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  
   // Validation State
   const [errors, setErrors] = useState<{name?: string, image?: string}>({});
 
@@ -40,15 +43,19 @@ const AvatarCreator: React.FC = () => {
     setIsCameraReady(false);
   };
 
-  const startCamera = async () => {
+  const startCamera = async (mode: 'user' | 'environment' = 'user') => {
     setErrors(prev => ({ ...prev, image: undefined }));
     setStep('camera');
     setIsCameraReady(false);
+    setFacingMode(mode);
+
+    // Stop previous stream if any
+    stopCameraStream();
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
-          facingMode: "user", // Prefer front camera
+          facingMode: mode,
           width: { ideal: 1280 },
           height: { ideal: 720 }
         },
@@ -68,6 +75,11 @@ const AvatarCreator: React.FC = () => {
     }
   };
 
+  const switchCamera = () => {
+      const newMode = facingMode === 'user' ? 'environment' : 'user';
+      startCamera(newMode);
+  };
+
   const takePhoto = () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -85,9 +97,13 @@ const AvatarCreator: React.FC = () => {
       
       const context = canvas.getContext('2d');
       if (context) {
-        // Flip horizontally for "mirror" effect to match visual preview
-        context.translate(width, 0);
-        context.scale(-1, 1);
+        // Lógica de Espelhamento
+        // Se for câmera frontal ('user'), espelha horizontalmente.
+        // Se for traseira ('environment'), mantém normal.
+        if (facingMode === 'user') {
+            context.translate(width, 0);
+            context.scale(-1, 1);
+        }
         
         context.drawImage(video, 0, 0, width, height);
         
@@ -203,7 +219,7 @@ const AvatarCreator: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Botão Câmera */}
                     <div 
-                        onClick={startCamera}
+                        onClick={() => startCamera('user')}
                         className="cursor-pointer bg-white border-4 border-black rounded-2xl p-6 hover:bg-cartoon-yellow transition-colors hover:scale-105 transform group"
                     >
                         <div className="text-6xl mb-2 group-hover:animate-bounce">📸</div>
@@ -253,13 +269,13 @@ const AvatarCreator: React.FC = () => {
           <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-4">
               <div className="relative w-full max-w-lg bg-black rounded-3xl overflow-hidden border-8 border-cartoon-yellow shadow-2xl">
                   {/* Video Stream */}
-                  {/* playsInline é crucial para iOS */}
+                  {/* Aplica scale-x-[-1] APENAS se for câmera frontal (user) para efeito espelho */}
                   <video 
                       ref={videoRef} 
                       autoPlay 
                       playsInline 
                       muted 
-                      className="w-full h-auto object-cover transform scale-x-[-1]" 
+                      className={`w-full h-auto object-cover transition-transform duration-300 ${facingMode === 'user' ? 'transform scale-x-[-1]' : ''}`} 
                       onCanPlay={() => setIsCameraReady(true)}
                   ></video>
                   
@@ -279,26 +295,37 @@ const AvatarCreator: React.FC = () => {
 
                   {/* Controls */}
                   <div className="absolute bottom-0 left-0 w-full p-6 flex justify-between items-center bg-gradient-to-t from-black/80 to-transparent">
+                       {/* Cancel Button */}
                        <button 
                          onClick={() => { stopCameraStream(); setStep('upload'); }}
-                         className="bg-white/20 text-white rounded-full p-3 hover:bg-white/40 transition-colors"
+                         className="bg-white/20 text-white rounded-full p-3 hover:bg-white/40 transition-colors w-12 h-12 flex items-center justify-center"
+                         title="Cancelar"
                        >
-                           ❌ Cancelar
+                           ✕
                        </button>
 
+                       {/* Shutter Button */}
                        <button 
                          onClick={takePhoto}
                          disabled={!isCameraReady}
-                         className={`w-20 h-20 rounded-full border-8 border-gray-300 shadow-lg flex items-center justify-center group transition-all
+                         className={`w-20 h-20 rounded-full border-8 border-gray-300 shadow-lg flex items-center justify-center group transition-all transform active:scale-95
                             ${isCameraReady 
-                                ? 'bg-white active:scale-95 cursor-pointer hover:border-white' 
+                                ? 'bg-white cursor-pointer hover:border-white' 
                                 : 'bg-gray-400 cursor-not-allowed opacity-50'}`
                          }
                        >
                            <div className={`w-16 h-16 rounded-full border-4 border-white transition-colors ${isCameraReady ? 'bg-cartoon-red group-hover:bg-red-600' : 'bg-gray-500'}`}></div>
                        </button>
 
-                       <div className="w-12"></div> {/* Spacer for center alignment */}
+                       {/* Switch Camera Button */}
+                       <button 
+                         onClick={switchCamera}
+                         disabled={!isCameraReady}
+                         className="bg-white/20 text-white rounded-full p-3 hover:bg-cartoon-blue/80 hover:text-white transition-colors w-12 h-12 flex items-center justify-center disabled:opacity-30"
+                         title="Trocar Câmera (Frontal/Traseira)"
+                       >
+                           🔄
+                       </button>
                   </div>
               </div>
               <p className="text-white font-comic mt-4 text-xl animate-pulse text-center">
