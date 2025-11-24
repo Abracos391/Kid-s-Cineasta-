@@ -19,6 +19,7 @@ const AvatarCreator: React.FC = () => {
   const [generatedAvatar, setGeneratedAvatar] = useState<Avatar | null>(null);
   const [name, setName] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
+  const [isCameraReady, setIsCameraReady] = useState(false);
   
   // Validation State
   const [errors, setErrors] = useState<{name?: string, image?: string}>({});
@@ -36,44 +37,64 @@ const AvatarCreator: React.FC = () => {
       stream.getTracks().forEach(track => track.stop());
       videoRef.current.srcObject = null;
     }
+    setIsCameraReady(false);
   };
 
   const startCamera = async () => {
     setErrors(prev => ({ ...prev, image: undefined }));
     setStep('camera');
+    setIsCameraReady(false);
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "user" } // Prefer front camera on mobile
+        video: { 
+          facingMode: "user", // Prefer front camera
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
       });
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Importante: forçar o play para garantir que inicie em mobile
+        await videoRef.current.play();
+        setIsCameraReady(true);
       }
     } catch (err) {
       console.error("Erro ao acessar câmera:", err);
-      alert("Não conseguimos acessar sua câmera. Verifique as permissões ou use o upload de arquivo.");
+      alert("Não conseguimos acessar sua câmera. Verifique se você deu permissão ou tente usar o botão 'Galeria'.");
       setStep('upload');
     }
   };
 
   const takePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    if (video && canvas && isCameraReady) {
+      // Garantir que temos dimensões
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+
+      if (width === 0 || height === 0) return;
       
-      // Set canvas size to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      // Set canvas size to match video source resolution
+      canvas.width = width;
+      canvas.height = height;
       
       const context = canvas.getContext('2d');
       if (context) {
-        // Flip horizontally for "mirror" effect
-        context.translate(canvas.width, 0);
+        // Flip horizontally for "mirror" effect to match visual preview
+        context.translate(width, 0);
         context.scale(-1, 1);
         
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        context.drawImage(video, 0, 0, width, height);
         
-        const dataUrl = canvas.toDataURL('image/jpeg');
+        // Convert to high quality jpeg
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
         setPreview(dataUrl);
+        
         stopCameraStream();
         setStep('upload');
       }
@@ -227,20 +248,27 @@ const AvatarCreator: React.FC = () => {
         </Card>
       )}
 
-      {/* CAMERA MODAL */}
+      {/* CAMERA MODAL - Z-Index alto para garantir sobreposição */}
       {step === 'camera' && (
-          <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-4">
               <div className="relative w-full max-w-lg bg-black rounded-3xl overflow-hidden border-8 border-cartoon-yellow shadow-2xl">
                   {/* Video Stream */}
+                  {/* playsInline é crucial para iOS */}
                   <video 
                       ref={videoRef} 
                       autoPlay 
                       playsInline 
                       muted 
-                      className="w-full h-auto object-cover transform scale-x-[-1]" // Espelhar vídeo
-                      onLoadedMetadata={() => videoRef.current?.play()}
+                      className="w-full h-auto object-cover transform scale-x-[-1]" 
+                      onCanPlay={() => setIsCameraReady(true)}
                   ></video>
                   
+                  {!isCameraReady && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                          <span className="text-white font-comic text-xl animate-pulse">Ligando câmera...</span>
+                      </div>
+                  )}
+
                   {/* Viewfinder overlay */}
                   <div className="absolute inset-0 border-[3px] border-white/30 pointer-events-none m-4 rounded-xl">
                        <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white"></div>
@@ -260,15 +288,22 @@ const AvatarCreator: React.FC = () => {
 
                        <button 
                          onClick={takePhoto}
-                         className="w-20 h-20 bg-white rounded-full border-8 border-gray-300 shadow-lg active:scale-95 transition-transform flex items-center justify-center group"
+                         disabled={!isCameraReady}
+                         className={`w-20 h-20 rounded-full border-8 border-gray-300 shadow-lg flex items-center justify-center group transition-all
+                            ${isCameraReady 
+                                ? 'bg-white active:scale-95 cursor-pointer hover:border-white' 
+                                : 'bg-gray-400 cursor-not-allowed opacity-50'}`
+                         }
                        >
-                           <div className="w-16 h-16 bg-cartoon-red rounded-full border-4 border-white group-hover:bg-red-600"></div>
+                           <div className={`w-16 h-16 rounded-full border-4 border-white transition-colors ${isCameraReady ? 'bg-cartoon-red group-hover:bg-red-600' : 'bg-gray-500'}`}></div>
                        </button>
 
                        <div className="w-12"></div> {/* Spacer for center alignment */}
                   </div>
               </div>
-              <p className="text-white font-comic mt-4 text-xl animate-pulse">Faça uma careta engraçada! 🤪</p>
+              <p className="text-white font-comic mt-4 text-xl animate-pulse text-center">
+                  {isCameraReady ? "Faça uma careta e clique no botão vermelho! 🤪" : "Aguardando câmera..."}
+              </p>
               
               {/* Hidden Canvas for Capture */}
               <canvas ref={canvasRef} className="hidden"></canvas>
