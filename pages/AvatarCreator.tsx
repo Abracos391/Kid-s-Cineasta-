@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -10,7 +10,11 @@ const AvatarCreator: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const [step, setStep] = useState<'upload' | 'processing' | 'result'>('upload');
+  // Camera Refs
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  const [step, setStep] = useState<'upload' | 'camera' | 'processing' | 'result'>('upload');
   const [preview, setPreview] = useState<string | null>(null);
   const [generatedAvatar, setGeneratedAvatar] = useState<Avatar | null>(null);
   const [name, setName] = useState('');
@@ -18,6 +22,63 @@ const AvatarCreator: React.FC = () => {
   
   // Validation State
   const [errors, setErrors] = useState<{name?: string, image?: string}>({});
+
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      stopCameraStream();
+    };
+  }, []);
+
+  const stopCameraStream = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const startCamera = async () => {
+    setErrors(prev => ({ ...prev, image: undefined }));
+    setStep('camera');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "user" } // Prefer front camera on mobile
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Erro ao acessar câmera:", err);
+      alert("Não conseguimos acessar sua câmera. Verifique as permissões ou use o upload de arquivo.");
+      setStep('upload');
+    }
+  };
+
+  const takePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      // Set canvas size to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      const context = canvas.getContext('2d');
+      if (context) {
+        // Flip horizontally for "mirror" effect
+        context.translate(canvas.width, 0);
+        context.scale(-1, 1);
+        
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const dataUrl = canvas.toDataURL('image/jpeg');
+        setPreview(dataUrl);
+        stopCameraStream();
+        setStep('upload');
+      }
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -103,22 +164,41 @@ const AvatarCreator: React.FC = () => {
           </div>
 
           <div className="space-y-3">
-             <label className="font-heading font-bold text-xl block">2. Escolha a foto: <span className="text-red-500">*</span></label>
-             <div className={`border-4 border-dashed ${errors.image ? 'border-red-500 bg-red-50' : 'border-black bg-blue-50'} rounded-3xl p-8 text-center space-y-4 transition-colors`}>
+             <label className="font-heading font-bold text-xl block">2. Hora da Foto! <span className="text-red-500">*</span></label>
+             
+             {/* Preview Area */}
+             <div className={`border-4 border-dashed ${errors.image ? 'border-red-500 bg-red-50' : 'border-black bg-blue-50'} rounded-3xl p-8 text-center space-y-4 transition-colors relative`}>
               {preview ? (
-                <div className="relative w-56 h-56 mx-auto rounded-full overflow-hidden border-4 border-black shadow-cartoon bg-white transform rotate-3">
+                <div className="relative w-64 h-64 mx-auto rounded-full overflow-hidden border-4 border-black shadow-cartoon bg-white transform rotate-3">
                   <img src={preview} alt="Preview" className="w-full h-full object-cover" />
                   <button 
                     onClick={() => setPreview(null)}
-                    className="absolute bottom-0 w-full bg-cartoon-orange text-black font-bold py-2 border-t-2 border-black hover:bg-orange-400"
+                    className="absolute bottom-0 w-full bg-cartoon-orange text-black font-bold py-2 border-t-2 border-black hover:bg-orange-400 z-10"
                   >
-                    Trocar
+                    Trocar Foto
                   </button>
                 </div>
               ) : (
-                <div className="py-8 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                  <div className="text-7xl mb-4 animate-bounce-slow">📸</div>
-                  <p className="font-sans font-bold text-lg">Clique aqui para enviar foto</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Botão Câmera */}
+                    <div 
+                        onClick={startCamera}
+                        className="cursor-pointer bg-white border-4 border-black rounded-2xl p-6 hover:bg-cartoon-yellow transition-colors hover:scale-105 transform group"
+                    >
+                        <div className="text-6xl mb-2 group-hover:animate-bounce">📸</div>
+                        <p className="font-comic font-bold text-xl">Usar Câmera</p>
+                        <p className="text-sm text-gray-500">Tirar foto agora</p>
+                    </div>
+
+                    {/* Botão Upload */}
+                    <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="cursor-pointer bg-white border-4 border-black rounded-2xl p-6 hover:bg-cartoon-blue hover:text-white transition-colors hover:scale-105 transform group"
+                    >
+                         <div className="text-6xl mb-2 group-hover:animate-pulse">📂</div>
+                        <p className="font-comic font-bold text-xl">Galeria</p>
+                        <p className="text-sm text-gray-500 group-hover:text-white">Escolher arquivo</p>
+                    </div>
                 </div>
               )}
               
@@ -145,6 +225,54 @@ const AvatarCreator: React.FC = () => {
             </Button>
           </div>
         </Card>
+      )}
+
+      {/* CAMERA MODAL */}
+      {step === 'camera' && (
+          <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4">
+              <div className="relative w-full max-w-lg bg-black rounded-3xl overflow-hidden border-8 border-cartoon-yellow shadow-2xl">
+                  {/* Video Stream */}
+                  <video 
+                      ref={videoRef} 
+                      autoPlay 
+                      playsInline 
+                      muted 
+                      className="w-full h-auto object-cover transform scale-x-[-1]" // Espelhar vídeo
+                      onLoadedMetadata={() => videoRef.current?.play()}
+                  ></video>
+                  
+                  {/* Viewfinder overlay */}
+                  <div className="absolute inset-0 border-[3px] border-white/30 pointer-events-none m-4 rounded-xl">
+                       <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white"></div>
+                       <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white"></div>
+                       <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white"></div>
+                       <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white"></div>
+                  </div>
+
+                  {/* Controls */}
+                  <div className="absolute bottom-0 left-0 w-full p-6 flex justify-between items-center bg-gradient-to-t from-black/80 to-transparent">
+                       <button 
+                         onClick={() => { stopCameraStream(); setStep('upload'); }}
+                         className="bg-white/20 text-white rounded-full p-3 hover:bg-white/40 transition-colors"
+                       >
+                           ❌ Cancelar
+                       </button>
+
+                       <button 
+                         onClick={takePhoto}
+                         className="w-20 h-20 bg-white rounded-full border-8 border-gray-300 shadow-lg active:scale-95 transition-transform flex items-center justify-center group"
+                       >
+                           <div className="w-16 h-16 bg-cartoon-red rounded-full border-4 border-white group-hover:bg-red-600"></div>
+                       </button>
+
+                       <div className="w-12"></div> {/* Spacer for center alignment */}
+                  </div>
+              </div>
+              <p className="text-white font-comic mt-4 text-xl animate-pulse">Faça uma careta engraçada! 🤪</p>
+              
+              {/* Hidden Canvas for Capture */}
+              <canvas ref={canvasRef} className="hidden"></canvas>
+          </div>
       )}
 
       {/* Loading State (C3) */}
