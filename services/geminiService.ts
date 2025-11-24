@@ -140,23 +140,22 @@ export const generatePedagogicalStory = async (theme: string, teacher: Avatar, s
       const studentDescs = students.map(c => c.description).join("; ");
   
       const prompt = `
-        Você é um Pedagogo Especialista em Educação Infantil.
-        Escreva uma fábula educativa ou uma situação do dia a dia escolar para ensinar uma lição importante.
+        Você é um Professor Criativo e um Contador de Histórias.
+        Crie uma AVENTURA DIVERTIDA onde o professor e os alunos aprendem algo sobre: "${theme}".
         
-        Tema da Aula/Lição: "${theme}".
-        Professor(a): ${teacher.name} (guia da história).
-        Alunos Participantes: ${studentNames} (${studentDescs}).
-        
-        Objetivo: Ensinar valores como respeito, segurança, alimentação saudável, amizade ou obediência, de forma lúdica mas clara.
+        Importante:
+        - NÃO faça parecer uma aula chata. Faça ser uma aventura mágica, uma viagem de campo ou um mistério.
+        - O Professor(a) ${teacher.name} é o guia sábio.
+        - Os alunos ${studentNames} devem interagir e aprender na prática.
         
         Estrutura Obrigatória (JSON puro):
-        1. Título Educativo.
-        2. Exatamente 4 capítulos curtos.
-        3. O Último capítulo DEVE conter explicitamente a "Moral da História".
+        1. Título Empolgante.
+        2. Exatamente 4 capítulos.
+        3. O Último capítulo deve consolidar o aprendizado (Moral da História ou Conceito aprendido).
         4. Para cada capítulo:
            - "title": Título.
-           - "text": Texto (aprox 60-70 palavras). Linguagem gentil e instrutiva.
-           - "visualDescription": Descrição para ilustração (school environment, outdoor class, educational context).
+           - "text": Texto (aprox 60-70 palavras). Linguagem infantil e envolvente.
+           - "visualDescription": Descrição para ilustração (school trip, magical environment, educational context).
   
         Responda APENAS com o JSON.
       `;

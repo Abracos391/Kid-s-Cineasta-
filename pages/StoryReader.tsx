@@ -90,7 +90,8 @@ const StoryReader: React.FC = () => {
 
   const handleGenerateAudio = async () => {
     // Regra M2: Usuários Premium ou Trial Premium podem gerar áudio
-    const isPremiumStory = story.isPremium === true || user?.plan === 'premium';
+    // Histórias educacionais são consideradas "Premium" em funcionalidade (criadas via SchoolRoom que checa cota)
+    const isPremiumStory = story.isPremium === true || user?.plan === 'premium' || story.isEducational === true;
 
     if (!isPremiumStory && user?.plan === 'free') {
         if(confirm("🔒 A narração com voz é exclusiva para histórias Premium.\n\nDeseja conhecer os planos e liberar esse recurso?")) {
@@ -116,7 +117,7 @@ const StoryReader: React.FC = () => {
   
   // --- GERADOR DE LIVRO PDF COMPLETO (C2 e Melhorias UX) ---
   const handleFullBookDownload = async () => {
-      const isPremiumStory = story.isPremium === true || user?.plan === 'premium';
+      const isPremiumStory = story.isPremium === true || user?.plan === 'premium' || story.isEducational === true;
 
       if (!isPremiumStory && user?.plan === 'free') {
         if(confirm("🔒 O download do Livro Completo em PDF é exclusivo para Histórias Premium.\n\nDeseja fazer o upgrade para colecionar suas histórias?")) {
@@ -128,8 +129,7 @@ const StoryReader: React.FC = () => {
       setGeneratingPDF(true);
       setPdfProgress(10);
 
-      // Pequeno delay para garantir que o DOM oculto do livro renderizou imagens (se houver cache)
-      // O ideal seria esperar o load das imagens, mas um timeout geralmente resolve se as imgs já carregaram no browser
+      // Pequeno delay para garantir que o DOM oculto do livro renderizou imagens
       await new Promise(r => setTimeout(r, 2000));
 
       try {
@@ -143,22 +143,21 @@ const StoryReader: React.FC = () => {
             setPdfProgress(10 + Math.floor(((i + 1) / pages.length) * 80));
             const pageEl = pages[i] as HTMLElement;
 
-            // Renderiza cada página com alta qualidade (scale 2 ou 3)
+            // Renderiza cada página com alta qualidade
             const canvas = await html2canvas(pageEl, {
                 scale: 2, // Melhor resolução para impressão
-                useCORS: true, // Importante para imagens externas
+                useCORS: true, 
                 logging: false,
-                backgroundColor: null // Mantém transparência se houver
+                backgroundColor: null
             });
 
-            const imgData = canvas.toDataURL('image/jpeg', 0.95); // JPEG 95% qualidade para cores vivas
+            const imgData = canvas.toDataURL('image/jpeg', 0.95);
             
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
 
             if (i > 0) pdf.addPage();
             
-            // Adiciona a imagem preenchendo a página A4 inteira
             pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
         }
 
@@ -194,57 +193,99 @@ const StoryReader: React.FC = () => {
     <div className="max-w-5xl mx-auto px-4 pb-20">
       
       {/* 
-          === LAYOUT DE IMPRESSÃO (Escondido visualmente mas renderizado para o html2canvas) === 
-          Estrutura fixa A4: 210mm x 297mm. Em pixels (96dpi) ~ 794px x 1123px.
-          Vamos usar CSS fixo para garantir a proporção.
+          === LAYOUT DE IMPRESSÃO (A4) === 
+          Modificado para suportar capa diferenciada em Modo Escola
       */}
       <div 
         ref={bookPrintRef} 
         style={{ 
             position: 'fixed', 
             top: 0, 
-            left: generatingPDF ? '0' : '-10000px', // Se gerando, traz pra tela (atrás do loader) para garantir render
+            left: generatingPDF ? '0' : '-10000px',
             zIndex: -10,
-            width: '794px' // Largura A4 padrão para html2canvas
+            width: '794px' 
         }}
       >
         {/* CAPA */}
-        <div className="book-page relative w-[794px] h-[1123px] bg-cartoon-yellow overflow-hidden border-8 border-black flex flex-col items-center justify-between p-12">
-            <div className="absolute top-0 left-0 w-full h-full opacity-10" style={{backgroundImage: 'radial-gradient(circle, #000 2px, transparent 2.5px)', backgroundSize: '30px 30px'}}></div>
-            
-            <div className="z-10 text-center w-full mt-10">
-                <h1 className="font-comic text-7xl text-cartoon-blue text-stroke-3 drop-shadow-lg leading-tight mb-4">
-                    {story.title}
-                </h1>
-                <p className="font-heading text-3xl text-black">Uma aventura original</p>
-            </div>
-
-            <div className="z-10 w-[550px] h-[550px] bg-white border-[6px] border-black rounded-full overflow-hidden shadow-2xl rotate-2">
-                 {/* Usa a imagem do cap 1 ou um placeholder se não tiver */}
-                 {story.chapters[0].generatedImage ? (
-                     <img src={story.chapters[0].generatedImage} className="w-full h-full object-cover" crossOrigin="anonymous" />
-                 ) : (
-                     <div className="w-full h-full bg-cartoon-cream flex items-center justify-center text-6xl">🎨</div>
-                 )}
-            </div>
-
-            <div className="z-10 text-center w-full mb-10">
-                <div className="bg-white border-4 border-black rounded-xl p-4 inline-block transform -rotate-1 shadow-doodle">
-                    <p className="font-sans font-bold text-2xl text-gray-500 uppercase tracking-widest text-xs mb-1">Escrito por</p>
-                    <p className="font-comic text-4xl text-cartoon-pink text-stroke-black">{user?.name || "Autor Misterioso"}</p>
+        {story.isEducational ? (
+            // === CAPA ESCOLAR (VERDE) ===
+            <div className="book-page relative w-[794px] h-[1123px] bg-[#1a3c28] overflow-hidden border-8 border-[#8B4513] flex flex-col items-center justify-between p-12">
+                <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none" style={{backgroundImage: 'radial-gradient(circle, #fff 2px, transparent 2.5px)', backgroundSize: '40px 40px'}}></div>
+                
+                {/* Cabeçalho de Lousa */}
+                <div className="z-10 w-full border-b-2 border-white/30 pb-4 mb-4">
+                    <div className="flex justify-between items-center text-white/80 font-comic text-xl">
+                        <span>ESCOLA CINEASTA KIDS</span>
+                        <span>DATA: {new Date(story.createdAt).toLocaleDateString()}</span>
+                    </div>
                 </div>
-                <p className="mt-6 font-bold text-lg opacity-60">Cineasta Kids • Edição Limitada</p>
-            </div>
-        </div>
 
-        {/* PÁGINAS DOS CAPÍTULOS */}
+                <div className="z-10 text-center w-full mt-4">
+                    <h1 className="font-hand text-7xl text-white tracking-wide leading-tight mb-4" style={{ fontFamily: '"Comic Neue", cursive' }}>
+                        {story.title}
+                    </h1>
+                    <div className="inline-block bg-yellow-600 text-black font-bold px-4 py-1 rounded transform -rotate-2 shadow-lg">
+                        MATERIAL DIDÁTICO
+                    </div>
+                </div>
+
+                <div className="z-10 w-[500px] h-[400px] bg-white border-[10px] border-white rounded-lg shadow-2xl rotate-1 transform hover:rotate-0 transition-transform overflow-hidden">
+                     {story.chapters[0].generatedImage ? (
+                         <img src={story.chapters[0].generatedImage} className="w-full h-full object-cover" crossOrigin="anonymous" />
+                     ) : (
+                         <div className="w-full h-full bg-gray-200 flex items-center justify-center">📷</div>
+                     )}
+                </div>
+
+                <div className="z-10 text-center w-full mb-10 text-white">
+                    <p className="font-heading text-2xl mb-2 text-yellow-400">Professor(a): {story.characters[0].name}</p>
+                    <div className="flex flex-wrap justify-center gap-2 mt-4">
+                        {story.characters.slice(1).map(c => (
+                            <span key={c.id} className="bg-white/20 px-3 py-1 rounded-full text-sm font-bold border border-white/30">
+                                {c.name}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        ) : (
+            // === CAPA PADRÃO (AMARELA/COLORIDA) ===
+            <div className="book-page relative w-[794px] h-[1123px] bg-cartoon-yellow overflow-hidden border-8 border-black flex flex-col items-center justify-between p-12">
+                <div className="absolute top-0 left-0 w-full h-full opacity-10" style={{backgroundImage: 'radial-gradient(circle, #000 2px, transparent 2.5px)', backgroundSize: '30px 30px'}}></div>
+                
+                <div className="z-10 text-center w-full mt-10">
+                    <h1 className="font-comic text-7xl text-cartoon-blue text-stroke-3 drop-shadow-lg leading-tight mb-4">
+                        {story.title}
+                    </h1>
+                    <p className="font-heading text-3xl text-black">Uma aventura original</p>
+                </div>
+
+                <div className="z-10 w-[550px] h-[550px] bg-white border-[6px] border-black rounded-full overflow-hidden shadow-2xl rotate-2">
+                     {story.chapters[0].generatedImage ? (
+                         <img src={story.chapters[0].generatedImage} className="w-full h-full object-cover" crossOrigin="anonymous" />
+                     ) : (
+                         <div className="w-full h-full bg-cartoon-cream flex items-center justify-center text-6xl">🎨</div>
+                     )}
+                </div>
+
+                <div className="z-10 text-center w-full mb-10">
+                    <div className="bg-white border-4 border-black rounded-xl p-4 inline-block transform -rotate-1 shadow-doodle">
+                        <p className="font-sans font-bold text-2xl text-gray-500 uppercase tracking-widest text-xs mb-1">Escrito por</p>
+                        <p className="font-comic text-4xl text-cartoon-pink text-stroke-black">{user?.name || "Autor Misterioso"}</p>
+                    </div>
+                    <p className="mt-6 font-bold text-lg opacity-60">Cineasta Kids • Edição Limitada</p>
+                </div>
+            </div>
+        )}
+
+        {/* PÁGINAS DOS CAPÍTULOS (Comum a ambos) */}
         {story.chapters.map((chapter, idx) => (
             <div key={idx} className="book-page w-[794px] h-[1123px] bg-white border-8 border-black relative flex flex-col overflow-hidden">
                 {/* Cabeçalho Decorativo */}
-                <div className="h-4 bg-cartoon-blue w-full border-b-4 border-black"></div>
-                <div className="h-4 bg-cartoon-pink w-full border-b-4 border-black"></div>
+                <div className={`h-4 w-full border-b-4 border-black ${story.isEducational ? 'bg-green-600' : 'bg-cartoon-blue'}`}></div>
+                <div className={`h-4 w-full border-b-4 border-black ${story.isEducational ? 'bg-yellow-500' : 'bg-cartoon-pink'}`}></div>
 
-                {/* Área da Imagem (Metade Superior) */}
+                {/* Área da Imagem */}
                 <div className="h-[550px] w-full bg-gray-100 border-b-8 border-black relative overflow-hidden flex items-center justify-center group">
                     {chapter.generatedImage ? (
                         <img 
@@ -256,17 +297,16 @@ const StoryReader: React.FC = () => {
                     ) : (
                         <span className="text-4xl text-gray-400">Imagem não gerada</span>
                     )}
-                    {/* Número da página estilo badge */}
-                    <div className="absolute bottom-6 right-6 bg-cartoon-yellow w-16 h-16 rounded-full border-4 border-black flex items-center justify-center font-comic text-3xl shadow-doodle z-10">
+                    <div className={`absolute bottom-6 right-6 w-16 h-16 rounded-full border-4 border-black flex items-center justify-center font-comic text-3xl shadow-doodle z-10 ${story.isEducational ? 'bg-green-200' : 'bg-cartoon-yellow'}`}>
                         {idx + 1}
                     </div>
                 </div>
 
-                {/* Área do Texto (Metade Inferior) */}
+                {/* Área do Texto */}
                 <div className="flex-grow p-12 flex flex-col justify-center bg-cartoon-cream relative">
-                    {/* Elementos decorativos de fundo */}
-                    <div className="absolute top-4 left-4 text-6xl opacity-10 rotate-12">✨</div>
-                    <div className="absolute bottom-4 right-4 text-6xl opacity-10 -rotate-12">🌟</div>
+                    {/* Elementos decorativos */}
+                    <div className="absolute top-4 left-4 text-6xl opacity-10 rotate-12">{story.isEducational ? '🎓' : '✨'}</div>
+                    <div className="absolute bottom-4 right-4 text-6xl opacity-10 -rotate-12">{story.isEducational ? '📚' : '🌟'}</div>
 
                     <h2 className="font-heading text-4xl mb-8 text-cartoon-purple text-center underline decoration-wavy decoration-cartoon-orange">{chapter.title}</h2>
                     
@@ -294,12 +334,15 @@ const StoryReader: React.FC = () => {
           </div>
       )}
 
-      {/* --- UI PRINCIPAL DA TELA DE LEITURA --- */}
+      {/* --- UI PRINCIPAL --- */}
       
-      {/* Book Header */}
+      {/* Header */}
       <div className="mb-8 bg-white rounded-2xl border-4 border-black p-4 shadow-cartoon flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
-          <h1 className="font-heading text-3xl md:text-4xl text-cartoon-purple drop-shadow-sm">{story.title}</h1>
+            <div className="flex items-center gap-2">
+                <h1 className="font-heading text-3xl md:text-4xl text-cartoon-purple drop-shadow-sm">{story.title}</h1>
+                {story.isEducational && <span className="bg-green-100 text-green-800 border border-green-600 text-xs px-2 py-1 rounded font-bold">AULA</span>}
+            </div>
           <div className="flex items-center gap-2 font-bold text-gray-500">
             <span>📖 Página {activeChapterIndex + 1}</span>
             <span className="text-xs bg-black text-white px-2 py-0.5 rounded-full">de {story.chapters.length}</span>
@@ -314,7 +357,7 @@ const StoryReader: React.FC = () => {
                 className="flex items-center gap-1 shadow-lg hover:shadow-xl hover:scale-105"
             >
                 {generatingPDF ? 'Processando...' : '📚 Baixar Livro Completo'} 
-                {(!story.isPremium && user?.plan === 'free') && '🔒'}
+                {(!story.isPremium && user?.plan === 'free' && !story.isEducational) && '🔒'}
             </Button>
             <Link to="/library">
              <Button size="sm" variant="danger" className="whitespace-nowrap">❌ Sair</Button>
@@ -325,7 +368,7 @@ const StoryReader: React.FC = () => {
       {/* Progress Bar */}
       <div className="w-full bg-white rounded-full h-6 mb-8 border-4 border-black overflow-hidden relative shadow-sm">
         <div 
-          className="bg-gradient-to-r from-cartoon-yellow to-cartoon-orange h-full transition-all duration-500 ease-out relative" 
+          className={`h-full transition-all duration-500 ease-out relative ${story.isEducational ? 'bg-gradient-to-r from-green-400 to-green-600' : 'bg-gradient-to-r from-cartoon-yellow to-cartoon-orange'}`}
           style={{ width: `${progress}%` }}
         >
             <div className="absolute top-0 left-0 w-full h-1/2 bg-white opacity-30"></div>
@@ -336,8 +379,10 @@ const StoryReader: React.FC = () => {
         
         {/* Characters Side Panel */}
         <div className="hidden md:block md:col-span-3 space-y-6">
-            <div className="bg-cartoon-blue p-4 rounded-3xl border-4 border-black shadow-cartoon rotate-1">
-                <h3 className="font-heading font-bold text-xl text-center text-white mb-4 uppercase tracking-widest text-stroke-black">Elenco</h3>
+            <div className={`p-4 rounded-3xl border-4 border-black shadow-cartoon rotate-1 ${story.isEducational ? 'bg-green-700' : 'bg-cartoon-blue'}`}>
+                <h3 className="font-heading font-bold text-xl text-center text-white mb-4 uppercase tracking-widest text-stroke-black">
+                    {story.isEducational ? 'Chamada' : 'Elenco'}
+                </h3>
                 <div className="space-y-4">
                 {story.characters.map(char => (
                     <div key={char.id} className="relative transform transition-transform hover:scale-105">
@@ -394,9 +439,6 @@ const StoryReader: React.FC = () => {
               
               {/* Audio Player */}
               <div className="bg-cartoon-cream px-4 py-2 rounded-xl border-2 border-black w-full md:w-auto flex justify-center relative">
-                {(!story.isPremium && user?.plan === 'free') && (
-                     <div className="absolute -top-3 -right-3 text-2xl z-20">🔒</div>
-                )}
                 
                 {currentChapter.generatedAudio ? (
                     <AudioPlayer base64Audio={currentChapter.generatedAudio} />
@@ -404,12 +446,12 @@ const StoryReader: React.FC = () => {
                     <Button 
                     onClick={handleGenerateAudio} 
                     disabled={generatingAudio} 
-                    variant={(!story.isPremium && user?.plan === 'free') ? 'secondary' : 'secondary'} 
+                    variant="secondary" 
                     size="sm"
                     loading={generatingAudio}
-                    className={`w-full md:w-auto ${(!story.isPremium && user?.plan === 'free') ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    className="w-full md:w-auto"
                     >
-                    {(!story.isPremium && user?.plan === 'free') ? '🔊 Narrador (Premium)' : '🔊 Ouvir Narrador'}
+                    🔊 Ouvir Narrador
                     </Button>
                 )}
               </div>

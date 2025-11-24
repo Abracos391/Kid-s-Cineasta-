@@ -94,11 +94,11 @@ const SchoolRoom: React.FC = () => {
 
   const handleStartLesson = async () => {
     if (!lessonTheme.trim()) {
-      alert("Por favor, escreva a diretriz da aula na lousa!");
+      alert("Por favor, escreva sobre o que será a aula/aventura na lousa!");
       return;
     }
     if (!selectedTeacherId) {
-      alert("Selecione um professor para dar a aula (clique no avatar do professor).");
+      alert("Selecione um professor para guiar a aventura (clique no avatar do professor).");
       return;
     }
     if (participatingStudents.length === 0) {
@@ -134,8 +134,7 @@ const SchoolRoom: React.FC = () => {
       authService.consumeStoryCredit(user.id, check.type || 'free');
       refreshUser();
 
-      // Salva no LocalStorage (Simulando Banco de Dados)
-      // Se for Premium/Trial, salva permanente. 
+      // Salva no LocalStorage
       if (check.type === 'premium') {
           const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
           localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
@@ -161,7 +160,7 @@ const SchoolRoom: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-cartoon-blue via-blue-200 to-cartoon-green relative overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-b from-cartoon-blue via-blue-200 to-cartoon-green relative overflow-x-hidden pb-20">
       
       {/* Decorative Sky Elements */}
       <div className="absolute top-10 left-10 text-8xl opacity-80 animate-float">☁️</div>
@@ -175,18 +174,23 @@ const SchoolRoom: React.FC = () => {
             <div>
                 <h1 className="font-comic text-6xl text-white text-stroke-black drop-shadow-lg mb-2">Escola da Vida 🏫</h1>
                 <p className="font-heading text-xl text-white font-bold bg-black/20 p-2 rounded-lg inline-block">
-                    Crie histórias educativas e arquive no seu acervo escolar.
+                    Crie histórias educativas, gere áudios e baixe PDFs para sua turma!
                 </p>
-                <LinkButton to="/library" className="block mt-4 text-white underline font-bold hover:text-yellow-300">
-                    📂 Ver Acervo Escolar
-                </LinkButton>
+                <div className="mt-4 flex gap-2">
+                     <LinkButton to="/library" className="bg-white text-black px-4 py-2 rounded-lg font-bold border-2 border-black hover:bg-gray-100 shadow-sm">
+                        📂 Ver Acervo Escolar
+                    </LinkButton>
+                    <LinkButton to="/" className="bg-transparent text-white underline font-bold px-4 py-2">
+                        Voltar
+                    </LinkButton>
+                </div>
             </div>
 
             {/* Lousa Mágica (Input de Tema) */}
             <div className="relative group perspective-1000 w-full lg:w-[500px]">
                 <div className="bg-[#1a3c28] border-[12px] border-[#8B4513] rounded-sm p-6 shadow-2xl transform rotate-1 transition-transform group-hover:rotate-0">
                     <div className="flex justify-between items-center border-b border-white/20 pb-2 mb-4">
-                        <span className="text-white/70 font-comic text-lg">Diretriz da Aula (Tema)</span>
+                        <span className="text-white/70 font-comic text-lg">Lousa Criativa (Tema Livre)</span>
                         <div className="flex gap-1">
                            <div className="w-3 h-3 rounded-full bg-white opacity-50"></div>
                            <div className="w-10 h-3 rounded-sm bg-white opacity-30"></div>
@@ -196,13 +200,14 @@ const SchoolRoom: React.FC = () => {
                     <textarea 
                         value={lessonTheme}
                         onChange={(e) => setLessonTheme(e.target.value)}
-                        placeholder="Escreva aqui o que você quer ensinar hoje..."
-                        className="w-full h-32 bg-transparent text-white font-hand text-2xl placeholder-white/30 outline-none resize-none leading-relaxed"
+                        placeholder="Professor(a), use sua imaginação! &#10;Ex: A turma viaja para dentro de um formigueiro para aprender sobre trabalho em equipe..."
+                        className="w-full h-32 bg-transparent text-white font-hand text-2xl placeholder-white/40 outline-none resize-none leading-relaxed"
                         style={{ fontFamily: '"Comic Neue", cursive' }}
                     />
                     
-                    {/* Sugestões */}
+                    {/* Sugestões (Opcional) */}
                     <div className="flex flex-wrap gap-2 mb-4 mt-2">
+                        <span className="text-white/50 text-xs w-full">Ou clique para inspirar:</span>
                         {suggestedThemes.map((theme, i) => (
                             <button 
                                 key={i}
@@ -223,7 +228,7 @@ const SchoolRoom: React.FC = () => {
                             variant="primary" 
                             className="w-full border-white text-white bg-green-700 hover:bg-green-600 shadow-none text-xl py-3"
                         >
-                            {loading ? 'Escrevendo a lição...' : '🎓 CRIAR E ARQUIVAR AULA'}
+                            {loading ? 'Escrevendo a lição...' : '✨ CRIAR AULA + ÁUDIO + PDF'}
                         </Button>
                     </div>
                 </div>
@@ -287,7 +292,7 @@ const SchoolRoom: React.FC = () => {
             </div>
             <div className="text-center mt-6">
                  <p className="bg-white/80 inline-block px-4 py-1 rounded-full text-blue-900 font-bold border-2 border-blue-200">
-                    👆 Selecione o professor responsável pela aula de hoje
+                    👆 1. Selecione o professor(a) responsável pela aula
                  </p>
             </div>
         </div>
@@ -303,7 +308,7 @@ const SchoolRoom: React.FC = () => {
                 <h2 className="font-heading text-4xl text-white text-stroke-black inline-block transform -rotate-1">
                     Turma 2024 🎒
                 </h2>
-                <p className="text-white font-bold text-sm mt-1">Selecione até 5 alunos para a chamada</p>
+                <p className="text-white font-bold text-sm mt-1">2. Clique para selecionar os alunos participantes (Máx 5)</p>
             </div>
             
             <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-10 gap-y-8 gap-x-4 relative z-10 pb-8">
