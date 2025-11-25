@@ -14,6 +14,7 @@ export interface User {
 
   // MODO ESCOLA
   isSchoolUser?: boolean; // Flag para identificar sessão de professor
+  schoolName?: string; // Nome da instituição
 }
 
 export interface Avatar {

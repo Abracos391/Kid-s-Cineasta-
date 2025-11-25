@@ -75,30 +75,61 @@ export const authService = {
   },
 
   // --- LOGIN EXCLUSIVO MODO ESCOLA ---
+  
+  // Login existente (Professor)
   loginAsTeacher: (teacherName: string, accessCode: string): User => {
     // Código fixo para demonstração. Em produção, viria do backend.
     const SCHOOL_CODE = "PROFESSOR123";
 
+    // Simulação: Aceita o código padrão OU qualquer código se o usuário estiver "simulando" persistência neste MVP
+    // Para simplificar: Se não for o código padrão, rejeita (a menos que tenhamos implementado persistência real de escolas, que faremos no register abaixo)
+    if (accessCode !== SCHOOL_CODE && accessCode !== 'TESTE') {
+         // Verifica se existe uma "sessão salva" (mock) ou rejeita
+         // throw new Error("Código de Acesso Escolar Inválido.");
+    }
+    
+    // Para manter compatibilidade com usuários antigos do teste
     if (accessCode !== SCHOOL_CODE) {
-        throw new Error("Código de Acesso Escolar Inválido.");
+         throw new Error("Código de Acesso Escolar Inválido.");
     }
 
-    // Cria uma sessão temporária de Professor
-    // Professores têm acesso PREMIUM liberado para fins didáticos nesta sessão
     const teacherUser: User = {
         id: `school_${Date.now()}`,
         name: `Prof. ${teacherName}`,
         email: 'school_mode@cineastakids.edu',
-        plan: 'premium', // Escola tem recursos liberados
+        plan: 'premium',
         credits: 9999,
         monthlyFreeUsed: 0,
         monthlyPremiumTrialUsed: 0,
         lastResetDate: Date.now(),
-        isSchoolUser: true // Flag crucial
+        isSchoolUser: true,
+        schoolName: 'Escola Cineasta Kids'
     };
 
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(teacherUser));
     return teacherUser;
+  },
+
+  // Novo: Cadastro de Escola
+  registerSchool: (schoolName: string, teacherName: string, accessCode: string): User => {
+      // Cria uma sessão nova com os dados fornecidos
+      // Como não temos backend real, o "Cadastro" efetivamente loga o usuário com as configurações personalizadas
+      
+      const newSchoolUser: User = {
+        id: `school_${Date.now()}`,
+        name: `Prof. ${teacherName}`,
+        email: `${teacherName.toLowerCase().replace(/\s/g, '.')}@${schoolName.toLowerCase().replace(/\s/g, '')}.edu`,
+        plan: 'premium', // Escolas tem acesso full
+        credits: 9999,
+        monthlyFreeUsed: 0,
+        monthlyPremiumTrialUsed: 0,
+        lastResetDate: Date.now(),
+        isSchoolUser: true,
+        schoolName: schoolName
+    };
+
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(newSchoolUser));
+    return newSchoolUser;
   },
 
   logout: () => {
