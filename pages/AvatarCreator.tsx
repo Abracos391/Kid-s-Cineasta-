@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { analyzeFaceForAvatar, generateCaricatureImage } from '../services/geminiService';
@@ -8,6 +8,9 @@ import { Avatar } from '../types';
 
 const AvatarCreator: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get('returnTo'); // Verifica se deve voltar para a escola
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Camera Refs
@@ -49,7 +52,6 @@ const AvatarCreator: React.FC = () => {
     setIsCameraReady(false);
     setFacingMode(mode);
 
-    // Stop previous stream if any
     stopCameraStream();
 
     try {
@@ -64,7 +66,6 @@ const AvatarCreator: React.FC = () => {
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        // Importante: forçar o play para garantir que inicie em mobile
         await videoRef.current.play();
         setIsCameraReady(true);
       }
@@ -85,21 +86,16 @@ const AvatarCreator: React.FC = () => {
     const canvas = canvasRef.current;
 
     if (video && canvas && isCameraReady) {
-      // Garantir que temos dimensões
       const width = video.videoWidth;
       const height = video.videoHeight;
 
       if (width === 0 || height === 0) return;
       
-      // Set canvas size to match video source resolution
       canvas.width = width;
       canvas.height = height;
       
       const context = canvas.getContext('2d');
       if (context) {
-        // Lógica de Espelhamento
-        // Se for câmera frontal ('user'), espelha horizontalmente.
-        // Se for traseira ('environment'), mantém normal.
         if (facingMode === 'user') {
             context.translate(width, 0);
             context.scale(-1, 1);
@@ -107,7 +103,6 @@ const AvatarCreator: React.FC = () => {
         
         context.drawImage(video, 0, 0, width, height);
         
-        // Convert to high quality jpeg
         const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
         setPreview(dataUrl);
         
@@ -123,14 +118,13 @@ const AvatarCreator: React.FC = () => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result as string);
-        setErrors(prev => ({ ...prev, image: undefined })); // Clear error
+        setErrors(prev => ({ ...prev, image: undefined }));
       };
       reader.readAsDataURL(file);
     }
   };
 
   const processImage = async () => {
-    // Validação (A1)
     const newErrors: any = {};
     if (!name.trim()) newErrors.name = "O personagem precisa de um nome!";
     if (!preview) newErrors.image = "Precisamos de uma foto para começar!";
@@ -143,19 +137,15 @@ const AvatarCreator: React.FC = () => {
     setStep('processing');
 
     try {
-      // 1. Analisar rosto
       setStatusMsg("🧐 O robô está olhando sua foto...");
       const base64Data = preview!.split(',')[1];
       const description = await analyzeFaceForAvatar(base64Data);
       
-      // 2. Gerar URL da imagem (Instantâneo com Pollinations)
       setStatusMsg("🎨 Pintando sua caricatura 3D...");
-      // Pequeno delay artificial para dar sensação de processamento e permitir leitura da mensagem
       await new Promise(r => setTimeout(r, 1500));
       
       const cartoonUrl = await generateCaricatureImage(description);
 
-      // 3. Salvar
       const newAvatar: Avatar = {
         id: Date.now().toString(),
         name,
@@ -175,12 +165,21 @@ const AvatarCreator: React.FC = () => {
     }
   };
 
+  const finishCreation = () => {
+    if (returnTo) {
+        navigate(returnTo);
+    } else {
+        navigate('/create-story');
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="relative mb-8 text-center">
          <h1 className="font-heading text-5xl text-white text-stroke-black drop-shadow-md transform -rotate-2">
            Fábrica de Avatares
          </h1>
+         {returnTo && <span className="bg-cartoon-yellow text-black font-bold px-2 py-1 rounded-lg text-sm">Modo Criação Rápida</span>}
       </div>
 
       {step === 'upload' && (
@@ -203,7 +202,6 @@ const AvatarCreator: React.FC = () => {
           <div className="space-y-3">
              <label className="font-heading font-bold text-xl block">2. Hora da Foto! <span className="text-red-500">*</span></label>
              
-             {/* Preview Area */}
              <div className={`border-4 border-dashed ${errors.image ? 'border-red-500 bg-red-50' : 'border-black bg-blue-50'} rounded-3xl p-8 text-center space-y-4 transition-colors relative`}>
               {preview ? (
                 <div className="relative w-64 h-64 mx-auto rounded-full overflow-hidden border-4 border-black shadow-cartoon bg-white transform rotate-3">
@@ -217,7 +215,6 @@ const AvatarCreator: React.FC = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Botão Câmera */}
                     <div 
                         onClick={() => startCamera('user')}
                         className="cursor-pointer bg-white border-4 border-black rounded-2xl p-6 hover:bg-cartoon-yellow transition-colors hover:scale-105 transform group"
@@ -227,7 +224,6 @@ const AvatarCreator: React.FC = () => {
                         <p className="text-sm text-gray-500">Tirar foto agora</p>
                     </div>
 
-                    {/* Botão Upload */}
                     <div 
                         onClick={() => fileInputRef.current?.click()}
                         className="cursor-pointer bg-white border-4 border-black rounded-2xl p-6 hover:bg-cartoon-blue hover:text-white transition-colors hover:scale-105 transform group"
@@ -264,12 +260,9 @@ const AvatarCreator: React.FC = () => {
         </Card>
       )}
 
-      {/* CAMERA MODAL - Z-Index alto para garantir sobreposição */}
       {step === 'camera' && (
           <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-4">
               <div className="relative w-full max-w-lg bg-black rounded-3xl overflow-hidden border-8 border-cartoon-yellow shadow-2xl">
-                  {/* Video Stream */}
-                  {/* Aplica scale-x-[-1] APENAS se for câmera frontal (user) para efeito espelho */}
                   <video 
                       ref={videoRef} 
                       autoPlay 
@@ -285,7 +278,6 @@ const AvatarCreator: React.FC = () => {
                       </div>
                   )}
 
-                  {/* Viewfinder overlay */}
                   <div className="absolute inset-0 border-[3px] border-white/30 pointer-events-none m-4 rounded-xl">
                        <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white"></div>
                        <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white"></div>
@@ -293,18 +285,14 @@ const AvatarCreator: React.FC = () => {
                        <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white"></div>
                   </div>
 
-                  {/* Controls */}
                   <div className="absolute bottom-0 left-0 w-full p-6 flex justify-between items-center bg-gradient-to-t from-black/80 to-transparent">
-                       {/* Cancel Button */}
                        <button 
                          onClick={() => { stopCameraStream(); setStep('upload'); }}
                          className="bg-white/20 text-white rounded-full p-3 hover:bg-white/40 transition-colors w-12 h-12 flex items-center justify-center"
-                         title="Cancelar"
                        >
                            ✕
                        </button>
 
-                       {/* Shutter Button */}
                        <button 
                          onClick={takePhoto}
                          disabled={!isCameraReady}
@@ -317,12 +305,10 @@ const AvatarCreator: React.FC = () => {
                            <div className={`w-16 h-16 rounded-full border-4 border-white transition-colors ${isCameraReady ? 'bg-cartoon-red group-hover:bg-red-600' : 'bg-gray-500'}`}></div>
                        </button>
 
-                       {/* Switch Camera Button */}
                        <button 
                          onClick={switchCamera}
                          disabled={!isCameraReady}
                          className="bg-white/20 text-white rounded-full p-3 hover:bg-cartoon-blue/80 hover:text-white transition-colors w-12 h-12 flex items-center justify-center disabled:opacity-30"
-                         title="Trocar Câmera (Frontal/Traseira)"
                        >
                            🔄
                        </button>
@@ -332,12 +318,10 @@ const AvatarCreator: React.FC = () => {
                   {isCameraReady ? "Faça uma careta e clique no botão vermelho! 🤪" : "Aguardando câmera..."}
               </p>
               
-              {/* Hidden Canvas for Capture */}
               <canvas ref={canvasRef} className="hidden"></canvas>
           </div>
       )}
 
-      {/* Loading State (C3) */}
       {step === 'processing' && (
         <Card color="yellow" className="text-center py-16">
           <div className="animate-spin text-8xl mb-6 inline-block">🖌️</div>
@@ -371,8 +355,8 @@ const AvatarCreator: React.FC = () => {
             <Button onClick={() => setStep('upload')} variant="secondary">
               🔄 Novo Personagem
             </Button>
-            <Button onClick={() => navigate('/create-story')} variant="success" size="lg">
-              Ir para Histórias 🚀
+            <Button onClick={finishCreation} variant="success" size="lg">
+              {returnTo ? 'Voltar para Sala de Aula 🏫' : 'Ir para Histórias 🚀'}
             </Button>
           </div>
         </div>

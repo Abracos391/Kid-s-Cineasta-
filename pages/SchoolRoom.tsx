@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { Avatar, SchoolMember, SchoolRole } from '../types';
@@ -10,6 +10,7 @@ import { authService } from '../services/authService';
 
 const SchoolRoom: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, refreshUser } = useAuth();
   
   // Data State
@@ -19,8 +20,11 @@ const SchoolRoom: React.FC = () => {
   // UI State
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
-  const [lessonTheme, setLessonTheme] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Pedagogical Inputs
+  const [situation, setSituation] = useState('');
+  const [goal, setGoal] = useState('');
   
   // Lesson Participants
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
@@ -34,7 +38,10 @@ const SchoolRoom: React.FC = () => {
     // Carregar estrutura da escola
     const savedRoster = JSON.parse(localStorage.getItem('schoolRoster') || '[]');
     setSchoolRoster(savedRoster);
-  }, []);
+
+    // Se retornou da criação de avatar, reabre o seletor se havia um slot pendente (opcional, ou apenas atualiza a lista)
+    // Na verdade, apenas recarregar a lista já permite que o usuário veja o novo avatar
+  }, [location]);
 
   const saveRoster = (newRoster: SchoolMember[]) => {
     setSchoolRoster(newRoster);
@@ -50,7 +57,7 @@ const SchoolRoom: React.FC = () => {
   const assignAvatarToSlot = (avatarId: string) => {
     if (!selectedSlotId) return;
     
-    // Remove avatar se já estiver em outro lugar (opcional, mas evita duplicatas na visualização)
+    // Remove avatar se já estiver em outro lugar
     const filteredRoster = schoolRoster.filter(m => m.slotId !== selectedSlotId);
 
     const role = getRoleFromSlotId(selectedSlotId);
@@ -85,7 +92,7 @@ const SchoolRoom: React.FC = () => {
       setParticipatingStudents(prev => prev.filter(id => id !== avatarId));
     } else {
       if (participatingStudents.length >= 5) {
-        alert("Máximo de 5 alunos por história para não virar bagunça!");
+        alert("Máximo de 5 alunos por história para manter o foco pedagógico!");
         return;
       }
       setParticipatingStudents(prev => [...prev, avatarId]);
@@ -93,12 +100,12 @@ const SchoolRoom: React.FC = () => {
   };
 
   const handleStartLesson = async () => {
-    if (!lessonTheme.trim()) {
-      alert("Por favor, escreva sobre o que será a aula/aventura na lousa!");
+    if (!situation.trim() || !goal.trim()) {
+      alert("Professor(a), preencha a situação e o objetivo na lousa para guiar a IA!");
       return;
     }
     if (!selectedTeacherId) {
-      alert("Selecione um professor para guiar a aventura (clique no avatar do professor).");
+      alert("Selecione um professor para guiar a aula (clique no avatar do professor).");
       return;
     }
     if (participatingStudents.length === 0) {
@@ -119,13 +126,14 @@ const SchoolRoom: React.FC = () => {
     const studentAvatars = avatars.filter(a => participatingStudents.includes(a.id));
 
     try {
-      const storyData = await generatePedagogicalStory(lessonTheme, teacherAvatar, studentAvatars);
+      // Usar a nova função pedagógica com inputs separados
+      const storyData = await generatePedagogicalStory(situation, goal, teacherAvatar, studentAvatars);
       
       const fullStory = {
         id: Date.now().toString(),
         createdAt: Date.now(),
-        characters: [teacherAvatar, ...studentAvatars], // Todos são personagens
-        theme: lessonTheme, // Salva o tema exato digitado na lousa
+        characters: [teacherAvatar, ...studentAvatars], 
+        theme: `Aula: ${goal}`, // Salva o objetivo como tema
         isPremium: check.type === 'premium',
         isEducational: true,
         ...storyData
@@ -134,7 +142,6 @@ const SchoolRoom: React.FC = () => {
       authService.consumeStoryCredit(user.id, check.type || 'free');
       refreshUser();
 
-      // Salva no LocalStorage
       if (check.type === 'premium') {
           const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
           localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
@@ -151,13 +158,10 @@ const SchoolRoom: React.FC = () => {
     }
   };
 
-  const suggestedThemes = [
-    "Matemática: A importância de dividir",
-    "Ciências: Como as plantas crescem?",
-    "Ética: Por que não devemos mentir?",
-    "História: Quem descobriu o Brasil?",
-    "Segurança: Olhar para os dois lados da rua"
-  ];
+  const createAvatarFlow = () => {
+    // Redireciona para criação de avatar mas instrui a voltar para School
+    navigate('/avatars?returnTo=/school');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-cartoon-blue via-blue-200 to-cartoon-green relative overflow-x-hidden pb-20">
@@ -171,55 +175,56 @@ const SchoolRoom: React.FC = () => {
         
         {/* HEADER & LOUSA */}
         <div className="flex flex-col lg:flex-row justify-between items-start gap-8 mb-12">
-            <div>
+            <div className="lg:w-1/3">
                 <h1 className="font-comic text-6xl text-white text-stroke-black drop-shadow-lg mb-2">Escola da Vida 🏫</h1>
                 <p className="font-heading text-xl text-white font-bold bg-black/20 p-2 rounded-lg inline-block">
-                    Crie histórias educativas, gere áudios e baixe PDFs para sua turma!
+                    Transforme o dia a dia em aprendizado. Crie fábulas didáticas personalizadas.
                 </p>
                 <div className="mt-4 flex gap-2">
                      <LinkButton to="/library" className="bg-white text-black px-4 py-2 rounded-lg font-bold border-2 border-black hover:bg-gray-100 shadow-sm">
-                        📂 Ver Acervo Escolar
+                        📂 Acervo Escolar
                     </LinkButton>
                     <LinkButton to="/" className="bg-transparent text-white underline font-bold px-4 py-2">
-                        Voltar
+                        Sair da Sala
                     </LinkButton>
                 </div>
             </div>
 
-            {/* Lousa Mágica (Input de Tema) */}
-            <div className="relative group perspective-1000 w-full lg:w-[500px]">
+            {/* Lousa Pedagógica (Inputs Estruturados) */}
+            <div className="relative group perspective-1000 w-full lg:w-[600px]">
                 <div className="bg-[#1a3c28] border-[12px] border-[#8B4513] rounded-sm p-6 shadow-2xl transform rotate-1 transition-transform group-hover:rotate-0">
                     <div className="flex justify-between items-center border-b border-white/20 pb-2 mb-4">
-                        <span className="text-white/70 font-comic text-lg">Lousa Criativa (Tema Livre)</span>
+                        <span className="text-white/70 font-comic text-lg">Planejamento da Aula (IA Pedagógica)</span>
                         <div className="flex gap-1">
                            <div className="w-3 h-3 rounded-full bg-white opacity-50"></div>
                            <div className="w-10 h-3 rounded-sm bg-white opacity-30"></div>
                         </div>
                     </div>
                     
-                    <textarea 
-                        value={lessonTheme}
-                        onChange={(e) => setLessonTheme(e.target.value)}
-                        placeholder="Professor(a), use sua imaginação! &#10;Ex: A turma viaja para dentro de um formigueiro para aprender sobre trabalho em equipe..."
-                        className="w-full h-32 bg-transparent text-white font-hand text-2xl placeholder-white/40 outline-none resize-none leading-relaxed"
-                        style={{ fontFamily: '"Comic Neue", cursive' }}
-                    />
-                    
-                    {/* Sugestões (Opcional) */}
-                    <div className="flex flex-wrap gap-2 mb-4 mt-2">
-                        <span className="text-white/50 text-xs w-full">Ou clique para inspirar:</span>
-                        {suggestedThemes.map((theme, i) => (
-                            <button 
-                                key={i}
-                                onClick={() => setLessonTheme(theme)}
-                                className="text-xs bg-white/10 text-white border border-white/30 px-2 py-1 rounded hover:bg-white/20 transition-colors"
-                            >
-                                {theme.split(':')[0]}
-                            </button>
-                        ))}
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-white/60 text-xs font-bold uppercase block mb-1">1. Fato do Cotidiano (O que aconteceu?)</label>
+                            <input 
+                                value={situation}
+                                onChange={(e) => setSituation(e.target.value)}
+                                placeholder="Ex: O Pedro não quis dividir o brinquedo..."
+                                className="w-full bg-black/20 text-white font-hand text-xl placeholder-white/30 outline-none border-b border-white/10 p-2 focus:border-white/50 transition-colors"
+                                style={{ fontFamily: '"Comic Neue", cursive' }}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-white/60 text-xs font-bold uppercase block mb-1">2. Objetivo de Ensino (O que aprender?)</label>
+                            <input 
+                                value={goal}
+                                onChange={(e) => setGoal(e.target.value)}
+                                placeholder="Ex: A importância da generosidade e amizade."
+                                className="w-full bg-black/20 text-white font-hand text-xl placeholder-white/30 outline-none border-b border-white/10 p-2 focus:border-white/50 transition-colors"
+                                style={{ fontFamily: '"Comic Neue", cursive' }}
+                            />
+                        </div>
                     </div>
 
-                    <div className="border-t-4 border-[#5c3a21] pt-4 mt-2">
+                    <div className="border-t-4 border-[#5c3a21] pt-4 mt-6">
                         <div className="bg-[#a05a2c] h-3 w-full rounded-full opacity-50 mb-4 mx-auto"></div> {/* Calha de giz */}
                         <Button 
                             onClick={handleStartLesson}
@@ -228,14 +233,9 @@ const SchoolRoom: React.FC = () => {
                             variant="primary" 
                             className="w-full border-white text-white bg-green-700 hover:bg-green-600 shadow-none text-xl py-3"
                         >
-                            {loading ? 'Escrevendo a lição...' : '✨ CRIAR AULA + ÁUDIO + PDF'}
+                            {loading ? 'Gerando Material Didático...' : '✨ CRIAR FÁBULA EDUCATIVA'}
                         </Button>
                     </div>
-                </div>
-                
-                {/* Apagador decorativo */}
-                <div className="absolute -bottom-4 right-10 w-20 h-8 bg-gray-800 border-b-4 border-black rounded shadow-lg transform rotate-6">
-                    <div className="w-full h-2 bg-white/20 mt-1"></div>
                 </div>
             </div>
         </div>
@@ -264,7 +264,6 @@ const SchoolRoom: React.FC = () => {
             <div className="flex items-center justify-center gap-4 mb-6">
                  <span className="text-4xl">🍎</span>
                  <h2 className="text-center font-heading text-3xl text-white text-stroke-black">Corpo Docente</h2>
-                 <span className="text-4xl">📏</span>
             </div>
             
             <div className="flex flex-wrap justify-center gap-8">
@@ -292,7 +291,7 @@ const SchoolRoom: React.FC = () => {
             </div>
             <div className="text-center mt-6">
                  <p className="bg-white/80 inline-block px-4 py-1 rounded-full text-blue-900 font-bold border-2 border-blue-200">
-                    👆 1. Selecione o professor(a) responsável pela aula
+                    👆 1. Clique no professor para selecioná-lo como Guia da História
                  </p>
             </div>
         </div>
@@ -308,7 +307,7 @@ const SchoolRoom: React.FC = () => {
                 <h2 className="font-heading text-4xl text-white text-stroke-black inline-block transform -rotate-1">
                     Turma 2024 🎒
                 </h2>
-                <p className="text-white font-bold text-sm mt-1">2. Clique para selecionar os alunos participantes (Máx 5)</p>
+                <p className="text-white font-bold text-sm mt-1">2. Clique nos alunos para incluir na história (Máx 5)</p>
             </div>
             
             <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-10 gap-y-8 gap-x-4 relative z-10 pb-8">
@@ -362,21 +361,22 @@ const SchoolRoom: React.FC = () => {
                 </div>
                 
                 <div className="flex-grow overflow-y-auto grid grid-cols-2 sm:grid-cols-4 gap-4 p-2">
-                    {avatars.length === 0 && (
-                        <div className="col-span-full text-center py-8">
-                            <p>Você não tem avatares.</p>
-                            <LinkButton to="/avatars" className="text-blue-500 underline">Criar agora</LinkButton>
-                        </div>
-                    )}
+                    {/* Botão de Criar (Primeiro da lista) */}
+                    <button 
+                        onClick={createAvatarFlow}
+                        className="border-2 border-dashed border-gray-400 rounded-xl p-2 flex flex-col items-center justify-center gap-2 hover:bg-cartoon-blue hover:text-white hover:border-black transition-colors min-h-[120px]"
+                    >
+                        <span className="text-4xl">+</span>
+                        <span className="font-bold text-sm text-center">Criar Novo Aluno/Prof</span>
+                    </button>
 
                     {avatars.map(av => {
-                         // Check if avatar is already seated SOMEWHERE to visually disable?
                          const isSeated = schoolRoster.some(m => m.avatarId === av.id && m.slotId !== selectedSlotId);
                          return (
                             <button 
                                 key={av.id}
                                 onClick={() => assignAvatarToSlot(av.id)}
-                                disabled={isSeated} // Optional rule: can't be in two places
+                                disabled={isSeated}
                                 className={`border-2 rounded-xl p-2 transition-all flex flex-col items-center gap-2 group
                                     ${isSeated ? 'border-gray-200 opacity-50 bg-gray-50 cursor-not-allowed' : 'border-black hover:bg-cartoon-yellow cursor-pointer'}
                                 `}
@@ -393,7 +393,6 @@ const SchoolRoom: React.FC = () => {
                 <div className="p-4 bg-gray-50 border-t-2 border-gray-100 flex justify-between items-center">
                     <button 
                         onClick={() => {
-                             // "Esvaziar carteira"
                              const filteredRoster = schoolRoster.filter(m => m.slotId !== selectedSlotId);
                              saveRoster(filteredRoster);
                              setIsSelectorOpen(false);
@@ -402,9 +401,6 @@ const SchoolRoom: React.FC = () => {
                     >
                         Esvaziar Lugar
                     </button>
-                    <LinkButton to="/avatars" className="bg-black text-white px-4 py-2 rounded-lg font-bold hover:bg-gray-800 text-sm">
-                        + Criar Novo Avatar
-                    </LinkButton>
                 </div>
             </Card>
         </div>
@@ -414,13 +410,11 @@ const SchoolRoom: React.FC = () => {
   );
 };
 
-// Helper LinkButton to avoid circular deps or complexity
 const LinkButton: React.FC<any> = ({ to, children, className }) => {
     const navigate = useNavigate();
     return <button onClick={() => navigate(to)} className={className}>{children}</button>
 }
 
-// Subcomponent for Director/Teacher Seats
 const SchoolSeat: React.FC<{ 
     slotId: string, 
     label: string, 
@@ -444,7 +438,6 @@ const SchoolSeat: React.FC<{
                 <span className="text-4xl opacity-20">👤</span>
             )}
             
-            {/* Edit Button (small) */}
             {avatar && onEdit && (
                 <button 
                     onClick={(e) => { e.stopPropagation(); onEdit(); }}
@@ -455,7 +448,6 @@ const SchoolSeat: React.FC<{
                 </button>
             )}
 
-            {/* Selection Checkmark */}
             {isSelected && (
                 <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
                     <span className="text-4xl drop-shadow-md">✅</span>
@@ -470,7 +462,6 @@ const SchoolSeat: React.FC<{
             {avatar ? avatar.name : label}
         </div>
         
-        {/* Chair Legs Effect */}
         <div className="w-16 h-4 bg-black/20 rounded-full mt-1 blur-sm"></div>
     </div>
 );

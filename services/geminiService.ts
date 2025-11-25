@@ -131,31 +131,39 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
 
 /**
  * 4.1 Gera História PEDAGÓGICA (Modo Escola)
+ * Ajustado para Linha Editorial Didática
  */
-export const generatePedagogicalStory = async (theme: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
+export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
     try {
       const ai = getAiClient();
       
       const studentNames = students.map(c => c.name).join(", ");
-      const studentDescs = students.map(c => c.description).join("; ");
-  
+      
       const prompt = `
-        Você é um Professor Criativo e um Contador de Histórias.
-        Crie uma AVENTURA DIVERTIDA onde o professor e os alunos aprendem algo sobre: "${theme}".
+        Você é um Editor Sênior de Livros Didáticos Infantis (foco em Ensino Fundamental I).
         
-        Importante:
-        - NÃO faça parecer uma aula chata. Faça ser uma aventura mágica, uma viagem de campo ou um mistério.
-        - O Professor(a) ${teacher.name} é o guia sábio.
-        - Os alunos ${studentNames} devem interagir e aprender na prática.
+        Sua missão: Transformar uma situação do cotidiano escolar em uma Fábula Educativa Lúdica.
         
-        Estrutura Obrigatória (JSON puro):
-        1. Título Empolgante.
-        2. Exatamente 4 capítulos.
-        3. O Último capítulo deve consolidar o aprendizado (Moral da História ou Conceito aprendido).
-        4. Para cada capítulo:
-           - "title": Título.
-           - "text": Texto (aprox 60-70 palavras). Linguagem infantil e envolvente.
-           - "visualDescription": Descrição para ilustração (school trip, magical environment, educational context).
+        INPUTS:
+        - Situação Real (O que aconteceu): "${situation}"
+        - Objetivo de Ensino (O que aprender): "${goal}"
+        - Personagens: Professor(a) ${teacher.name} (Guia Sábio) e Alunos ${studentNames}.
+  
+        DIRETRIZES EDITORIAIS:
+        1. **Metaforização**: Não conte a história literal. Crie uma analogia mágica. 
+           (Ex: Se a criança não divide o lanche, a história é sobre um Reino onde os habitantes pararam de compartilhar luz e tudo ficou escuro).
+        2. **Estrutura Didática**:
+           - Cap 1: Apresentação do cenário mágico e do conflito (espelho da situação real).
+           - Cap 2: O desenvolvimento do problema e suas consequências ruins.
+           - Cap 3: A intervenção do Guia (${teacher.name}) ajudando os alunos a perceberem a solução.
+           - Cap 4: Resolução e Consolidação do Aprendizado (Moral da História clara).
+        3. **Tom de Voz**: Gentil, inspirador, sem ser punitivo. Estilo Disney/Pixar educativo.
+        
+        SAÍDA (JSON):
+        - "title": Título Metafórico Atraente.
+        - "chapters": 4 capítulos.
+          - "text": Narrativa (60-80 palavras).
+          - "visualDescription": Descrição da cena mágica para ilustração (em inglês).
   
         Responda APENAS com o JSON.
       `;
