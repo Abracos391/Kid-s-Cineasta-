@@ -11,6 +11,9 @@ export interface User {
   monthlyPremiumTrialUsed: number; // Limite: 1
   
   lastResetDate: number; // Para resetar o contador mensal
+
+  // MODO ESCOLA
+  isSchoolUser?: boolean; // Flag para identificar sessão de professor
 }
 
 export interface Avatar {
@@ -37,6 +40,10 @@ export interface Story {
   characters: Avatar[];
   isPremium?: boolean; // Flag para identificar se foi gerada como premium
   isEducational?: boolean; // Flag para modo escola
+  
+  // Metadados Pedagógicos
+  educationalGoal?: string;
+  bnccCode?: string;
 }
 
 export enum AppStatus {

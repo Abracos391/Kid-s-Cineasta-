@@ -6,6 +6,7 @@ import { authService } from '../services/authService';
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => void;
+  loginAsTeacher: (name: string, code: string) => void; // Novo método
   register: (name: string, email: string, password: string) => void;
   logout: () => void;
   refreshUser: () => void;
@@ -33,6 +34,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const user = authService.login(email, password);
     setUser(user);
   };
+  
+  const loginAsTeacher = (name: string, code: string) => {
+    const user = authService.loginAsTeacher(name, code);
+    setUser(user);
+  }
 
   const register = (name: string, email: string, password: string) => {
     const user = authService.register(name, email, password);
@@ -45,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, refreshUser, loading }}>
+    <AuthContext.Provider value={{ user, login, loginAsTeacher, register, logout, refreshUser, loading }}>
       {children}
     </AuthContext.Provider>
   );

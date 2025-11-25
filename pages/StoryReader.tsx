@@ -89,8 +89,6 @@ const StoryReader: React.FC = () => {
   const currentChapter = story.chapters[activeChapterIndex];
 
   const handleGenerateAudio = async () => {
-    // Regra M2: Usuários Premium ou Trial Premium podem gerar áudio
-    // Histórias educacionais são consideradas "Premium" em funcionalidade (criadas via SchoolRoom que checa cota)
     const isPremiumStory = story.isPremium === true || user?.plan === 'premium' || story.isEducational === true;
 
     if (!isPremiumStory && user?.plan === 'free') {
@@ -115,7 +113,6 @@ const StoryReader: React.FC = () => {
     }
   };
   
-  // --- GERADOR DE LIVRO PDF COMPLETO (C2 e Melhorias UX) ---
   const handleFullBookDownload = async () => {
       const isPremiumStory = story.isPremium === true || user?.plan === 'premium' || story.isEducational === true;
 
@@ -129,7 +126,6 @@ const StoryReader: React.FC = () => {
       setGeneratingPDF(true);
       setPdfProgress(10);
 
-      // Pequeno delay para garantir que o DOM oculto do livro renderizou imagens
       await new Promise(r => setTimeout(r, 2000));
 
       try {
@@ -143,9 +139,8 @@ const StoryReader: React.FC = () => {
             setPdfProgress(10 + Math.floor(((i + 1) / pages.length) * 80));
             const pageEl = pages[i] as HTMLElement;
 
-            // Renderiza cada página com alta qualidade
             const canvas = await html2canvas(pageEl, {
-                scale: 2, // Melhor resolução para impressão
+                scale: 2, 
                 useCORS: true, 
                 logging: false,
                 backgroundColor: null
@@ -186,15 +181,23 @@ const StoryReader: React.FC = () => {
       window.scrollTo(0, 0);
     }
   };
+  
+  // Navegação de Saída Inteligente
+  const handleExit = () => {
+    if (story.isEducational) {
+        navigate('/school-library');
+    } else {
+        navigate('/library');
+    }
+  }
 
   const progress = ((activeChapterIndex + 1) / story.chapters.length) * 100;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 pb-20">
+    <div className={`max-w-5xl mx-auto px-4 pb-20 ${story.isEducational ? 'font-sans' : ''}`}>
       
       {/* 
           === LAYOUT DE IMPRESSÃO (A4) === 
-          Modificado para suportar capa diferenciada em Modo Escola
       */}
       <div 
         ref={bookPrintRef} 
@@ -227,6 +230,11 @@ const StoryReader: React.FC = () => {
                     <div className="inline-block bg-yellow-600 text-black font-bold px-4 py-1 rounded transform -rotate-2 shadow-lg">
                         MATERIAL DIDÁTICO
                     </div>
+                    {story.educationalGoal && (
+                        <div className="mt-4 text-white/70 text-sm border border-white/30 p-2 rounded max-w-lg mx-auto">
+                            Obj. BNCC: {story.educationalGoal}
+                        </div>
+                    )}
                 </div>
 
                 <div className="z-10 w-[500px] h-[400px] bg-white border-[10px] border-white rounded-lg shadow-2xl rotate-1 transform hover:rotate-0 transition-transform overflow-hidden">
@@ -249,7 +257,7 @@ const StoryReader: React.FC = () => {
                 </div>
             </div>
         ) : (
-            // === CAPA PADRÃO (AMARELA/COLORIDA) ===
+            // === CAPA PADRÃO ===
             <div className="book-page relative w-[794px] h-[1123px] bg-cartoon-yellow overflow-hidden border-8 border-black flex flex-col items-center justify-between p-12">
                 <div className="absolute top-0 left-0 w-full h-full opacity-10" style={{backgroundImage: 'radial-gradient(circle, #000 2px, transparent 2.5px)', backgroundSize: '30px 30px'}}></div>
                 
@@ -278,14 +286,12 @@ const StoryReader: React.FC = () => {
             </div>
         )}
 
-        {/* PÁGINAS DOS CAPÍTULOS (Comum a ambos) */}
+        {/* PÁGINAS DOS CAPÍTULOS */}
         {story.chapters.map((chapter, idx) => (
             <div key={idx} className="book-page w-[794px] h-[1123px] bg-white border-8 border-black relative flex flex-col overflow-hidden">
-                {/* Cabeçalho Decorativo */}
                 <div className={`h-4 w-full border-b-4 border-black ${story.isEducational ? 'bg-green-600' : 'bg-cartoon-blue'}`}></div>
                 <div className={`h-4 w-full border-b-4 border-black ${story.isEducational ? 'bg-yellow-500' : 'bg-cartoon-pink'}`}></div>
 
-                {/* Área da Imagem */}
                 <div className="h-[550px] w-full bg-gray-100 border-b-8 border-black relative overflow-hidden flex items-center justify-center group">
                     {chapter.generatedImage ? (
                         <img 
@@ -302,9 +308,7 @@ const StoryReader: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Área do Texto */}
                 <div className="flex-grow p-12 flex flex-col justify-center bg-cartoon-cream relative">
-                    {/* Elementos decorativos */}
                     <div className="absolute top-4 left-4 text-6xl opacity-10 rotate-12">{story.isEducational ? '🎓' : '✨'}</div>
                     <div className="absolute bottom-4 right-4 text-6xl opacity-10 -rotate-12">{story.isEducational ? '📚' : '🌟'}</div>
 
@@ -359,9 +363,7 @@ const StoryReader: React.FC = () => {
                 {generatingPDF ? 'Processando...' : '📚 Baixar Livro Completo'} 
                 {(!story.isPremium && user?.plan === 'free' && !story.isEducational) && '🔒'}
             </Button>
-            <Link to="/library">
-             <Button size="sm" variant="danger" className="whitespace-nowrap">❌ Sair</Button>
-            </Link>
+             <Button size="sm" variant="danger" onClick={handleExit} className="whitespace-nowrap">❌ Sair</Button>
         </div>
       </div>
 
@@ -468,9 +470,7 @@ const StoryReader: React.FC = () => {
                 </Button>
 
                 {activeChapterIndex === story.chapters.length - 1 ? (
-                  <Link to="/library">
-                    <Button variant="success" pulse>FIM! 🎉</Button>
-                  </Link>
+                  <Button onClick={handleExit} variant="success" pulse>FIM! 🎉</Button>
                 ) : (
                   <Button onClick={nextChapter} variant="primary">
                     Próxima ➡️

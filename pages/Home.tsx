@@ -63,9 +63,6 @@ const Home: React.FC = () => {
                     <h3 className="font-comic text-2xl mb-2">1. Foto Maluca</h3>
                     <p className="font-sans text-lg font-bold">Tire uma foto fazendo careta. O computador vai te desenhar!</p>
                 </div>
-                {/* Bubbles connecting */}
-                <div className="hidden md:block absolute top-1/2 -right-8 w-4 h-4 bg-white border-2 border-black rounded-full"></div>
-                <div className="hidden md:block absolute top-1/2 -right-16 w-6 h-6 bg-white border-2 border-black rounded-full"></div>
             </div>
 
              {/* Step 2 */}
@@ -75,9 +72,6 @@ const Home: React.FC = () => {
                     <h3 className="font-comic text-2xl mb-2">2. Robô Artista</h3>
                     <p className="font-sans text-lg font-bold">Nossa IA transforma você em um personagem de desenho animado.</p>
                 </div>
-                {/* Bubbles connecting */}
-                <div className="hidden md:block absolute top-1/2 -right-8 w-4 h-4 bg-cartoon-cream border-2 border-black rounded-full"></div>
-                <div className="hidden md:block absolute top-1/2 -right-16 w-6 h-6 bg-cartoon-cream border-2 border-black rounded-full"></div>
             </div>
 
              {/* Step 3 */}
@@ -105,15 +99,13 @@ const Home: React.FC = () => {
             <div>
               <h2 className="font-comic text-4xl text-cartoon-purple mb-4">Modo Escola</h2>
               <p className="font-sans text-xl font-bold text-gray-800 leading-relaxed">
-                Professores, usem a imaginação da turma para criar histórias coletivas! 
-                Perfeito para aulas de redação e artes.
+                Ambiente exclusivo para educadores criarem sequências didáticas, fábulas baseadas na BNCC e material de apoio.
               </p>
               <div className="mt-6 flex gap-4">
-                <Link to="/pricing">
-                    <Button size="sm" variant="secondary" className="rotate-1">Ver Planos</Button>
-                </Link>
-                <Link to="/school">
-                    <Button size="sm" variant="success" className="-rotate-1">Entrar na Sala</Button>
+                <Link to="/school-login">
+                    <Button size="sm" variant="success" className="-rotate-1">
+                        🔐 Acesso do Educador
+                    </Button>
                 </Link>
               </div>
             </div>

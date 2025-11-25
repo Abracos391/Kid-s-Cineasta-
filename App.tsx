@@ -12,6 +12,8 @@ import StoryWizard from './pages/StoryWizard';
 import StoryReader from './pages/StoryReader';
 import Library from './pages/Library';
 import SchoolRoom from './pages/SchoolRoom';
+import SchoolLogin from './pages/SchoolLogin';
+import SchoolLibrary from './pages/SchoolLibrary';
 
 const App: React.FC = () => {
   return (
@@ -22,6 +24,9 @@ const App: React.FC = () => {
           <Routes>
             <Route path="/auth" element={<Auth />} />
             
+            {/* Rota Pública (Porteiro da Escola) */}
+            <Route path="/school-login" element={<SchoolLogin />} />
+
             {/* Página Inicial agora é protegida (redireciona para login se não logado) */}
             <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
             
@@ -39,9 +44,17 @@ const App: React.FC = () => {
               </ProtectedRoute>
             } />
             
+            {/* Rota Protegida (Modo Escola) */}
             <Route path="/school" element={
               <ProtectedRoute>
                 <SchoolRoom />
+              </ProtectedRoute>
+            } />
+            
+            {/* Rota Protegida (Biblioteca Escolar) */}
+            <Route path="/school-library" element={
+              <ProtectedRoute>
+                <SchoolLibrary />
               </ProtectedRoute>
             } />
             

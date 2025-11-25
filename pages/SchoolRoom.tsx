@@ -13,6 +13,13 @@ const SchoolRoom: React.FC = () => {
   const location = useLocation();
   const { user, refreshUser } = useAuth();
   
+  // Gatekeeper: Se não for usuário de escola, manda para o login da escola
+  useEffect(() => {
+    if (user && !user.isSchoolUser) {
+        navigate('/school-login');
+    }
+  }, [user, navigate]);
+
   // Data State
   const [avatars, setAvatars] = useState<Avatar[]>([]);
   const [schoolRoster, setSchoolRoster] = useState<SchoolMember[]>([]);
@@ -38,9 +45,6 @@ const SchoolRoom: React.FC = () => {
     // Carregar estrutura da escola
     const savedRoster = JSON.parse(localStorage.getItem('schoolRoster') || '[]');
     setSchoolRoster(savedRoster);
-
-    // Se retornou da criação de avatar, reabre o seletor se havia um slot pendente (opcional, ou apenas atualiza a lista)
-    // Na verdade, apenas recarregar a lista já permite que o usuário veja o novo avatar
   }, [location]);
 
   const saveRoster = (newRoster: SchoolMember[]) => {
@@ -114,12 +118,10 @@ const SchoolRoom: React.FC = () => {
     }
 
     if (!user) return;
+    
+    // Escolas têm acesso liberado (CanCreateStory já checa isSchoolUser)
     const check = authService.canCreateStory(user);
-    if (!check.allowed) {
-        if (confirm(`${check.reason}\n\nFazer upgrade para continuar o projeto pedagógico?`)) navigate('/pricing');
-        return;
-    }
-
+    
     setLoading(true);
 
     const teacherAvatar = avatars.find(a => a.id === selectedTeacherId)!;
@@ -133,19 +135,19 @@ const SchoolRoom: React.FC = () => {
         id: Date.now().toString(),
         createdAt: Date.now(),
         characters: [teacherAvatar, ...studentAvatars], 
-        theme: `Aula: ${goal}`, // Salva o objetivo como tema
-        isPremium: check.type === 'premium',
+        theme: `Aula: ${goal}`, 
+        isPremium: true, // Escolas são sempre Premium
         isEducational: true,
+        educationalGoal: goal, // Salva o objetivo técnico
         ...storyData
       };
 
-      authService.consumeStoryCredit(user.id, check.type || 'free');
+      authService.consumeStoryCredit(user.id, 'premium');
       refreshUser();
 
-      if (check.type === 'premium') {
-          const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
-          localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
-      }
+      // Salva na biblioteca (localStorage compartilhado, mas filtrado na SchoolLibrary)
+      const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
+      localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
       
       localStorage.setItem('currentStory', JSON.stringify(fullStory));
       navigate(`/story/${fullStory.id}`);
@@ -163,6 +165,9 @@ const SchoolRoom: React.FC = () => {
     navigate('/avatars?returnTo=/school');
   };
 
+  // Se não estiver autorizado (user comum), mostra loader enquanto redireciona no useEffect
+  if (!user?.isSchoolUser) return <div className="min-h-screen bg-[#1a3c28] flex items-center justify-center text-white font-bold">Verificando Credenciais...</div>;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-cartoon-blue via-blue-200 to-cartoon-green relative overflow-x-hidden pb-20">
       
@@ -177,16 +182,17 @@ const SchoolRoom: React.FC = () => {
         <div className="flex flex-col lg:flex-row justify-between items-start gap-8 mb-12">
             <div className="lg:w-1/3">
                 <h1 className="font-comic text-6xl text-white text-stroke-black drop-shadow-lg mb-2">Escola da Vida 🏫</h1>
-                <p className="font-heading text-xl text-white font-bold bg-black/20 p-2 rounded-lg inline-block">
-                    Transforme o dia a dia em aprendizado. Crie fábulas didáticas personalizadas.
-                </p>
-                <div className="mt-4 flex gap-2">
-                     <LinkButton to="/library" className="bg-white text-black px-4 py-2 rounded-lg font-bold border-2 border-black hover:bg-gray-100 shadow-sm">
-                        📂 Acervo Escolar
+                <div className="bg-[#1a3c28] text-white p-4 rounded-lg shadow-lg border border-[#8B4513]">
+                    <p className="font-bold text-lg mb-1">{user.name}</p>
+                    <p className="text-xs text-white/60 uppercase tracking-widest">Sessão Educador</p>
+                </div>
+                <div className="mt-4 flex flex-col gap-2">
+                     <LinkButton to="/school-library" className="bg-white text-black px-4 py-3 rounded-lg font-bold border-2 border-black hover:bg-gray-100 shadow-sm text-center">
+                        📂 Abrir Arquivo Escolar
                     </LinkButton>
-                    <LinkButton to="/" className="bg-transparent text-white underline font-bold px-4 py-2">
-                        Sair da Sala
-                    </LinkButton>
+                    <button onClick={() => navigate('/')} className="text-white/80 hover:text-white underline font-bold px-4 py-2 text-sm text-left">
+                        ← Voltar para Menu Principal
+                    </button>
                 </div>
             </div>
 
@@ -195,10 +201,6 @@ const SchoolRoom: React.FC = () => {
                 <div className="bg-[#1a3c28] border-[12px] border-[#8B4513] rounded-sm p-6 shadow-2xl transform rotate-1 transition-transform group-hover:rotate-0">
                     <div className="flex justify-between items-center border-b border-white/20 pb-2 mb-4">
                         <span className="text-white/70 font-comic text-lg">Planejamento da Aula (IA Pedagógica)</span>
-                        <div className="flex gap-1">
-                           <div className="w-3 h-3 rounded-full bg-white opacity-50"></div>
-                           <div className="w-10 h-3 rounded-sm bg-white opacity-30"></div>
-                        </div>
                     </div>
                     
                     <div className="space-y-4">
@@ -213,11 +215,11 @@ const SchoolRoom: React.FC = () => {
                             />
                         </div>
                         <div>
-                            <label className="text-white/60 text-xs font-bold uppercase block mb-1">2. Objetivo de Ensino (O que aprender?)</label>
+                            <label className="text-white/60 text-xs font-bold uppercase block mb-1">2. Objetivo de Ensino (BNCC)</label>
                             <input 
                                 value={goal}
                                 onChange={(e) => setGoal(e.target.value)}
-                                placeholder="Ex: A importância da generosidade e amizade."
+                                placeholder="Ex: (EI03EO03) Ampliar as relações interpessoais..."
                                 className="w-full bg-black/20 text-white font-hand text-xl placeholder-white/30 outline-none border-b border-white/10 p-2 focus:border-white/50 transition-colors"
                                 style={{ fontFamily: '"Comic Neue", cursive' }}
                             />
@@ -233,30 +235,11 @@ const SchoolRoom: React.FC = () => {
                             variant="primary" 
                             className="w-full border-white text-white bg-green-700 hover:bg-green-600 shadow-none text-xl py-3"
                         >
-                            {loading ? 'Gerando Material Didático...' : '✨ CRIAR FÁBULA EDUCATIVA'}
+                            {loading ? 'Elaborando Material Didático...' : '✨ CRIAR FÁBULA EDUCATIVA'}
                         </Button>
                     </div>
                 </div>
             </div>
-        </div>
-
-        {/* --- DIRETORIA (TOPO) --- */}
-        <div className="flex justify-center gap-16 mb-16 relative">
-             <div className="absolute top-1/2 left-0 w-full h-1 bg-white/30 -z-10 border-t-2 border-dashed border-white/50"></div>
-            <SchoolSeat 
-                slotId="dir" 
-                label="Diretor(a)" 
-                avatar={getAvatarInSlot('dir')} 
-                onClick={() => handleSlotClick('dir', 'director')}
-                color="bg-purple-200"
-            />
-            <SchoolSeat 
-                slotId="vice" 
-                label="Vice-Diretor(a)" 
-                avatar={getAvatarInSlot('vice')} 
-                onClick={() => handleSlotClick('vice', 'vice_director')}
-                color="bg-purple-100"
-            />
         </div>
 
         {/* --- SALA DOS PROFESSORES (MEIO) --- */}
@@ -291,7 +274,7 @@ const SchoolRoom: React.FC = () => {
             </div>
             <div className="text-center mt-6">
                  <p className="bg-white/80 inline-block px-4 py-1 rounded-full text-blue-900 font-bold border-2 border-blue-200">
-                    👆 1. Clique no professor para selecioná-lo como Guia da História
+                    👆 1. Clique no professor para selecioná-lo como Mediador
                  </p>
             </div>
         </div>
@@ -461,8 +444,6 @@ const SchoolSeat: React.FC<{
         `}>
             {avatar ? avatar.name : label}
         </div>
-        
-        <div className="w-16 h-4 bg-black/20 rounded-full mt-1 blur-sm"></div>
     </div>
 );
 

@@ -54,11 +54,9 @@ export const generateCaricatureImage = async (description: string): Promise<stri
 
 /**
  * 3. Gera URL para ilustração de um capítulo específico
- * Inclui a descrição dos personagens para manter consistência visual.
  */
 export const generateChapterIllustration = (visualDescription: string, charactersDescription: string = ''): string => {
   const seed = Math.floor(Math.random() * 10000);
-  // Mescla a cena com a descrição dos personagens
   const fullPrompt = `children book illustration, vector art, colorful, cute, flat style, ${visualDescription}, featuring ${charactersDescription}, --no text`;
   const encodedPrompt = encodeURIComponent(fullPrompt);
   
@@ -66,7 +64,7 @@ export const generateChapterIllustration = (visualDescription: string, character
 };
 
 /**
- * 4. Gera a História (Texto e Estrutura)
+ * 4. Gera a História (Lazer/Padrão)
  */
 export const generateStory = async (theme: string, characters: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
   try {
@@ -130,40 +128,40 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
 };
 
 /**
- * 4.1 Gera História PEDAGÓGICA (Modo Escola)
- * Ajustado para Linha Editorial Didática
+ * 4.1 Gera História PEDAGÓGICA (Modo Escola - BNCC)
+ * Segue estritamente diretrizes educacionais brasileiras.
  */
-export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
+export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, educationalGoal: string, chapters: StoryChapter[] }> => {
     try {
       const ai = getAiClient();
       
       const studentNames = students.map(c => c.name).join(", ");
       
       const prompt = `
-        Você é um Editor Sênior de Livros Didáticos Infantis (foco em Ensino Fundamental I).
+        ATUE COMO: Especialista em Educação Infantil e Fundamental I no Brasil, seguindo a BNCC (Base Nacional Comum Curricular).
         
-        Sua missão: Transformar uma situação do cotidiano escolar em uma Fábula Educativa Lúdica.
+        TAREFA: Criar uma Sequência Didática Narrativa (Fábula).
         
-        INPUTS:
-        - Situação Real (O que aconteceu): "${situation}"
-        - Objetivo de Ensino (O que aprender): "${goal}"
-        - Personagens: Professor(a) ${teacher.name} (Guia Sábio) e Alunos ${studentNames}.
+        CONTEXTO:
+        - Fato do Cotidiano (Problema): "${situation}"
+        - Objetivo de Aprendizagem (BNCC): "${goal}"
+        - Personagens: Professor(a) ${teacher.name} (Mediador do conhecimento) e Alunos ${studentNames}.
   
-        DIRETRIZES EDITORIAIS:
-        1. **Metaforização**: Não conte a história literal. Crie uma analogia mágica. 
-           (Ex: Se a criança não divide o lanche, a história é sobre um Reino onde os habitantes pararam de compartilhar luz e tudo ficou escuro).
-        2. **Estrutura Didática**:
-           - Cap 1: Apresentação do cenário mágico e do conflito (espelho da situação real).
-           - Cap 2: O desenvolvimento do problema e suas consequências ruins.
-           - Cap 3: A intervenção do Guia (${teacher.name}) ajudando os alunos a perceberem a solução.
-           - Cap 4: Resolução e Consolidação do Aprendizado (Moral da História clara).
-        3. **Tom de Voz**: Gentil, inspirador, sem ser punitivo. Estilo Disney/Pixar educativo.
+        DIRETRIZES PEDAGÓGICAS:
+        1. **Metodologia Ativa**: Os alunos da história devem descobrir a solução, com mediação do professor, e não apenas receber uma lição pronta.
+        2. **Campos de Experiência**: A história deve transitar por "O eu, o outro e o nós" e "Escuta, fala, pensamento e imaginação".
+        3. **Estrutura da Narrativa**:
+           - Cap 1: Contextualização (O conflito surge de forma metafórica ou real).
+           - Cap 2: Problematização (As consequências negativas da atitude).
+           - Cap 3: Intervenção Mediada (O Prof. ${teacher.name} propõe uma reflexão/dinâmica).
+           - Cap 4: Sistematização (Resolução e aprendizado consolidado).
         
-        SAÍDA (JSON):
-        - "title": Título Metafórico Atraente.
+        SAÍDA OBRIGATÓRIA (JSON):
+        - "title": Título Sugestivo.
+        - "educationalGoal": Uma frase técnica curta resumindo a habilidade BNCC trabalhada.
         - "chapters": 4 capítulos.
-          - "text": Narrativa (60-80 palavras).
-          - "visualDescription": Descrição da cena mágica para ilustração (em inglês).
+          - "text": Narrativa adequada para crianças (60-80 palavras).
+          - "visualDescription": Descrição da cena para ilustração (em inglês).
   
         Responda APENAS com o JSON.
       `;
@@ -177,6 +175,7 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
             type: Type.OBJECT,
             properties: {
               title: { type: Type.STRING },
+              educationalGoal: { type: Type.STRING },
               chapters: {
                 type: Type.ARRAY,
                 items: {

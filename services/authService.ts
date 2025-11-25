@@ -42,7 +42,7 @@ export const authService = {
     return newUser;
   },
 
-  // Login (Fix C1: Case insensitive check)
+  // Login Padrão (Família/Criança)
   login: (email: string, password: string): User => {
     const users = getUsers();
     const cleanEmail = email.toLowerCase().trim();
@@ -51,18 +51,20 @@ export const authService = {
     if (!user) {
       throw new Error('Usuário não encontrado. Verifique o e-mail.');
     }
+    
+    // Se tentar logar com credencial de escola no login comum, remove a flag ou avisa
+    // Aqui assumimos que é um login pessoal.
+    user.isSchoolUser = false;
 
     // Reset mensal automático para plano FREE
     const now = new Date();
     const lastReset = new Date(user.lastResetDate);
     
-    // Se mudou o mês ou ano desde o último reset
     if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
       user.monthlyFreeUsed = 0;
       user.monthlyPremiumTrialUsed = 0;
       user.lastResetDate = Date.now();
       
-      // Atualiza na lista geral
       const userIndex = users.findIndex(u => u.id === user.id);
       users[userIndex] = user;
       saveUsers(users);
@@ -70,6 +72,33 @@ export const authService = {
 
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
     return user;
+  },
+
+  // --- LOGIN EXCLUSIVO MODO ESCOLA ---
+  loginAsTeacher: (teacherName: string, accessCode: string): User => {
+    // Código fixo para demonstração. Em produção, viria do backend.
+    const SCHOOL_CODE = "PROFESSOR123";
+
+    if (accessCode !== SCHOOL_CODE) {
+        throw new Error("Código de Acesso Escolar Inválido.");
+    }
+
+    // Cria uma sessão temporária de Professor
+    // Professores têm acesso PREMIUM liberado para fins didáticos nesta sessão
+    const teacherUser: User = {
+        id: `school_${Date.now()}`,
+        name: `Prof. ${teacherName}`,
+        email: 'school_mode@cineastakids.edu',
+        plan: 'premium', // Escola tem recursos liberados
+        credits: 9999,
+        monthlyFreeUsed: 0,
+        monthlyPremiumTrialUsed: 0,
+        lastResetDate: Date.now(),
+        isSchoolUser: true // Flag crucial
+    };
+
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(teacherUser));
+    return teacherUser;
   },
 
   logout: () => {
@@ -82,20 +111,20 @@ export const authService = {
   },
 
   // Regras de Negócio: Verificar Permissão
-  // Retorna o tipo de história que pode ser criada ('premium' ou 'free') ou null
   canCreateStory: (user: User): { allowed: boolean; type?: 'premium' | 'free'; reason?: string } => {
+    // Escolas têm acesso liberado
+    if (user.isSchoolUser) return { allowed: true, type: 'premium' };
+
     if (user.plan === 'premium') {
       if (user.credits > 0) return { allowed: true, type: 'premium' };
       return { allowed: false, reason: 'Seus créditos de história acabaram. Adquira mais na loja!' };
     } 
     
-    // Plano FREE (Nova Regra M1)
-    // 1. Tenta usar o Premium Trial mensal
+    // Plano FREE
     if (user.monthlyPremiumTrialUsed < 1) {
-        return { allowed: true, type: 'premium' }; // Usa cota de degustação premium
+        return { allowed: true, type: 'premium' }; 
     }
     
-    // 2. Se acabou o premium trial, usa o free (sem salvar/sem audio)
     if (user.monthlyFreeUsed < 2) {
         return { allowed: true, type: 'free' };
     }
@@ -106,6 +135,13 @@ export const authService = {
   // Consumir Cota
   consumeStoryCredit: (userId: string, type: 'premium' | 'free'): User => {
     const users = getUsers();
+    
+    // Se for user de escola (ID começa com school_), não persistimos consumo em banco, apenas retornamos
+    if (userId.startsWith('school_')) {
+        const currentUser = JSON.parse(localStorage.getItem(CURRENT_USER_KEY) || '{}');
+        return currentUser;
+    }
+
     const userIndex = users.findIndex(u => u.id === userId);
     
     if (userIndex === -1) throw new Error("Usuário não encontrado");
@@ -115,7 +151,6 @@ export const authService = {
     if (user.plan === 'premium') {
       user.credits = Math.max(0, user.credits - 1);
     } else {
-      // Consumo Plano FREE
       if (type === 'premium') {
          user.monthlyPremiumTrialUsed = (user.monthlyPremiumTrialUsed || 0) + 1;
       } else {
@@ -129,7 +164,6 @@ export const authService = {
     return user;
   },
 
-  // Simula Compra de Pacote
   buyPack: (userId: string): User => {
     const users = getUsers();
     const userIndex = users.findIndex(u => u.id === userId);
@@ -137,7 +171,7 @@ export const authService = {
     if (userIndex === -1) throw new Error("Usuário não encontrado");
     
     const user = users[userIndex];
-    user.plan = 'premium'; // Garante upgrade para Premium
+    user.plan = 'premium';
     user.credits = (user.credits || 0) + 5;
 
     users[userIndex] = user;
