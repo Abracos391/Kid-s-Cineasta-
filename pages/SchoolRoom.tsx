@@ -13,7 +13,7 @@ const SchoolRoom: React.FC = () => {
   const location = useLocation();
   const { user, refreshUser } = useAuth();
   
-  // Gatekeeper: Se não for usuário de escola, manda para o login da escola
+  // Gatekeeper
   useEffect(() => {
     if (user && !user.isSchoolUser) {
         navigate('/school-login');
@@ -29,20 +29,18 @@ const SchoolRoom: React.FC = () => {
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   
-  // Pedagogical Inputs
+  // Inputs
   const [situation, setSituation] = useState('');
   const [goal, setGoal] = useState('');
   
-  // Lesson Participants
+  // Participants
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
-  const [participatingStudents, setParticipatingStudents] = useState<string[]>([]); // avatar IDs
+  const [participatingStudents, setParticipatingStudents] = useState<string[]>([]);
 
   useEffect(() => {
-    // Carregar avatares
     const savedAvatars = JSON.parse(localStorage.getItem('avatars') || '[]');
     setAvatars(savedAvatars);
 
-    // Carregar estrutura da escola
     const savedRoster = JSON.parse(localStorage.getItem('schoolRoster') || '[]');
     setSchoolRoster(savedRoster);
   }, [location]);
@@ -60,18 +58,9 @@ const SchoolRoom: React.FC = () => {
 
   const assignAvatarToSlot = (avatarId: string) => {
     if (!selectedSlotId) return;
-    
-    // Remove avatar se já estiver em outro lugar
     const filteredRoster = schoolRoster.filter(m => m.slotId !== selectedSlotId);
-
     const role = getRoleFromSlotId(selectedSlotId);
-    
-    const newMember: SchoolMember = {
-      slotId: selectedSlotId,
-      avatarId,
-      role
-    };
-
+    const newMember: SchoolMember = { slotId: selectedSlotId, avatarId, role };
     saveRoster([...filteredRoster, newMember]);
     setIsSelectorOpen(false);
     setSelectedSlotId(null);
@@ -90,7 +79,6 @@ const SchoolRoom: React.FC = () => {
     return avatars.find(a => a.id === member.avatarId);
   };
 
-  // --- Lesson Generation ---
   const toggleStudentParticipation = (avatarId: string) => {
     if (participatingStudents.includes(avatarId)) {
       setParticipatingStudents(prev => prev.filter(id => id !== avatarId));
@@ -103,24 +91,21 @@ const SchoolRoom: React.FC = () => {
     }
   };
 
+  // --- Lesson Generation Logic (CORRIGIDO) ---
   const handleStartLesson = async () => {
     if (!situation.trim() || !goal.trim()) {
-      alert("Professor(a), preencha a situação e o objetivo na lousa para guiar a IA!");
+      alert("Preencha a situação e o objetivo na lousa!");
       return;
     }
     if (!selectedTeacherId) {
-      alert("Selecione um professor para guiar a aula (clique no avatar do professor).");
+      alert("Selecione um professor (clique no avatar do professor).");
       return;
     }
     if (participatingStudents.length === 0) {
-      alert("Selecione pelo menos um aluno para participar.");
+      alert("Selecione pelo menos um aluno.");
       return;
     }
-
     if (!user) return;
-    
-    // Escolas têm acesso liberado (CanCreateStory já checa isSchoolUser)
-    const check = authService.canCreateStory(user);
     
     setLoading(true);
 
@@ -128,50 +113,51 @@ const SchoolRoom: React.FC = () => {
     const studentAvatars = avatars.filter(a => participatingStudents.includes(a.id));
 
     try {
-      // Usar a nova função pedagógica com inputs separados
+      console.log("Iniciando geração da aula...");
       const storyData = await generatePedagogicalStory(situation, goal, teacherAvatar, studentAvatars);
       
+      if (!storyData || !storyData.chapters || storyData.chapters.length === 0) {
+        throw new Error("A história gerada veio incompleta. Tente novamente.");
+      }
+
       const fullStory = {
         id: Date.now().toString(),
         createdAt: Date.now(),
         characters: [teacherAvatar, ...studentAvatars], 
         theme: `Aula: ${goal}`, 
-        isPremium: true, // Escolas são sempre Premium
+        isPremium: true,
         isEducational: true,
-        educationalGoal: goal, // Salva o objetivo técnico
+        educationalGoal: goal,
         ...storyData
       };
 
       authService.consumeStoryCredit(user.id, 'premium');
       refreshUser();
 
-      // Salva na biblioteca (localStorage compartilhado, mas filtrado na SchoolLibrary)
-      const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
-      localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
+      // SALVAMENTO ROBUSTO
+      const savedStoriesRaw = localStorage.getItem('savedStories');
+      const existingStories = savedStoriesRaw ? JSON.parse(savedStoriesRaw) : [];
       
+      const newSavedStories = [fullStory, ...existingStories];
+      localStorage.setItem('savedStories', JSON.stringify(newSavedStories));
+      
+      // Salva Current para leitura imediata
       localStorage.setItem('currentStory', JSON.stringify(fullStory));
+      
+      console.log("Aula salva com sucesso. Redirecionando...");
       navigate(`/story/${fullStory.id}`);
 
-    } catch (e) {
-      console.error(e);
-      alert("Ocorreu um erro ao preparar a aula. Tente novamente.");
+    } catch (e: any) {
+      console.error("Erro na geração:", e);
+      alert(`Erro ao criar aula: ${e.message || "Tente simplificar o objetivo."}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const createAvatarFlow = () => {
-    // Redireciona para criação de avatar mas instrui a voltar para School
-    navigate('/avatars?returnTo=/school');
-  };
-
-  // Se não estiver autorizado (user comum), mostra loader enquanto redireciona no useEffect
-  if (!user?.isSchoolUser) return <div className="min-h-screen bg-[#1a3c28] flex items-center justify-center text-white font-bold">Verificando Credenciais...</div>;
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-cartoon-blue via-blue-200 to-cartoon-green relative overflow-x-hidden pb-20">
       
-      {/* Decorative Sky Elements */}
       <div className="absolute top-10 left-10 text-8xl opacity-80 animate-float">☁️</div>
       <div className="absolute top-20 right-20 text-8xl opacity-60 animate-float" style={{animationDelay: '2s'}}>☁️</div>
       <div className="absolute top-5 right-1/2 text-9xl animate-spin-slow text-cartoon-yellow origin-center">☀️</div>
@@ -183,51 +169,49 @@ const SchoolRoom: React.FC = () => {
             <div className="lg:w-1/3">
                 <h1 className="font-comic text-6xl text-white text-stroke-black drop-shadow-lg mb-2">Escola da Vida 🏫</h1>
                 <div className="bg-[#1a3c28] text-white p-4 rounded-lg shadow-lg border border-[#8B4513]">
-                    <p className="font-bold text-lg mb-1">{user.name}</p>
+                    <p className="font-bold text-lg mb-1">{user?.name}</p>
                     <p className="text-xs text-white/60 uppercase tracking-widest">Sessão Educador</p>
                 </div>
                 <div className="mt-4 flex flex-col gap-2">
-                     <LinkButton to="/school-library" className="bg-white text-black px-4 py-3 rounded-lg font-bold border-2 border-black hover:bg-gray-100 shadow-sm text-center">
+                     <button onClick={() => navigate('/school-library')} className="bg-white text-black px-4 py-3 rounded-lg font-bold border-2 border-black hover:bg-gray-100 shadow-sm text-center">
                         📂 Abrir Arquivo Escolar
-                    </LinkButton>
+                    </button>
                     <button onClick={() => navigate('/')} className="text-white/80 hover:text-white underline font-bold px-4 py-2 text-sm text-left">
                         ← Voltar para Menu Principal
                     </button>
                 </div>
             </div>
 
-            {/* Lousa Pedagógica (Inputs Estruturados) */}
+            {/* Lousa Pedagógica */}
             <div className="relative group perspective-1000 w-full lg:w-[600px]">
                 <div className="bg-[#1a3c28] border-[12px] border-[#8B4513] rounded-sm p-6 shadow-2xl transform rotate-1 transition-transform group-hover:rotate-0">
                     <div className="flex justify-between items-center border-b border-white/20 pb-2 mb-4">
-                        <span className="text-white/70 font-comic text-lg">Planejamento da Aula (IA Pedagógica)</span>
+                        <span className="text-white/70 font-comic text-lg">Planejamento da Aula (IA)</span>
                     </div>
                     
                     <div className="space-y-4">
                         <div>
-                            <label className="text-white/60 text-xs font-bold uppercase block mb-1">1. Fato do Cotidiano (O que aconteceu?)</label>
+                            <label className="text-white/60 text-xs font-bold uppercase block mb-1">1. Fato do Cotidiano</label>
                             <input 
                                 value={situation}
                                 onChange={(e) => setSituation(e.target.value)}
-                                placeholder="Ex: O Pedro não quis dividir o brinquedo..."
+                                placeholder="Ex: Briga no recreio..."
                                 className="w-full bg-black/20 text-white font-hand text-xl placeholder-white/30 outline-none border-b border-white/10 p-2 focus:border-white/50 transition-colors"
-                                style={{ fontFamily: '"Comic Neue", cursive' }}
                             />
                         </div>
                         <div>
-                            <label className="text-white/60 text-xs font-bold uppercase block mb-1">2. Objetivo de Ensino (BNCC)</label>
+                            <label className="text-white/60 text-xs font-bold uppercase block mb-1">2. Objetivo BNCC</label>
                             <input 
                                 value={goal}
                                 onChange={(e) => setGoal(e.target.value)}
-                                placeholder="Ex: (EI03EO03) Ampliar as relações interpessoais..."
+                                placeholder="Ex: Resolver conflitos..."
                                 className="w-full bg-black/20 text-white font-hand text-xl placeholder-white/30 outline-none border-b border-white/10 p-2 focus:border-white/50 transition-colors"
-                                style={{ fontFamily: '"Comic Neue", cursive' }}
                             />
                         </div>
                     </div>
 
                     <div className="border-t-4 border-[#5c3a21] pt-4 mt-6">
-                        <div className="bg-[#a05a2c] h-3 w-full rounded-full opacity-50 mb-4 mx-auto"></div> {/* Calha de giz */}
+                        <div className="bg-[#a05a2c] h-3 w-full rounded-full opacity-50 mb-4 mx-auto"></div>
                         <Button 
                             onClick={handleStartLesson}
                             loading={loading}
@@ -235,14 +219,14 @@ const SchoolRoom: React.FC = () => {
                             variant="primary" 
                             className="w-full border-white text-white bg-green-700 hover:bg-green-600 shadow-none text-xl py-3"
                         >
-                            {loading ? 'Elaborando Material Didático...' : '✨ CRIAR FÁBULA EDUCATIVA'}
+                            {loading ? 'Gerando Material...' : '✨ CRIAR FÁBULA EDUCATIVA'}
                         </Button>
                     </div>
                 </div>
             </div>
         </div>
 
-        {/* --- SALA DOS PROFESSORES (MEIO) --- */}
+        {/* SALA DOS PROFESSORES */}
         <div className="bg-white/30 backdrop-blur-sm rounded-hand p-8 border-4 border-white/50 mb-12 shadow-lg">
             <div className="flex items-center justify-center gap-4 mb-6">
                  <span className="text-4xl">🍎</span>
@@ -267,30 +251,20 @@ const SchoolRoom: React.FC = () => {
                             onEdit={() => handleSlotClick(slotId, 'teacher')}
                             color="bg-yellow-100"
                             isSelected={isSelected}
-                            isSelectable={true}
                         />
                     );
                 })}
             </div>
-            <div className="text-center mt-6">
-                 <p className="bg-white/80 inline-block px-4 py-1 rounded-full text-blue-900 font-bold border-2 border-blue-200">
-                    👆 1. Clique no professor para selecioná-lo como Mediador
-                 </p>
-            </div>
         </div>
 
-        {/* --- ALUNOS (GRAMADO) --- */}
+        {/* ALUNOS */}
         <div className="bg-cartoon-green/90 rounded-[50px] p-8 border-t-[10px] border-green-800 shadow-2xl relative overflow-hidden">
-             {/* Textura de grama */}
             <div className="absolute top-0 left-0 w-full h-full opacity-30 pointer-events-none" 
                  style={{backgroundImage: 'radial-gradient(#1a421a 15%, transparent 16%)', backgroundSize: '16px 16px'}}>
             </div>
             
             <div className="relative z-10 text-center mb-8">
-                <h2 className="font-heading text-4xl text-white text-stroke-black inline-block transform -rotate-1">
-                    Turma 2024 🎒
-                </h2>
-                <p className="text-white font-bold text-sm mt-1">2. Clique nos alunos para incluir na história (Máx 5)</p>
+                <h2 className="font-heading text-4xl text-white text-stroke-black inline-block transform -rotate-1">Turma 2024 🎒</h2>
             </div>
             
             <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-10 gap-y-8 gap-x-4 relative z-10 pb-8">
@@ -334,7 +308,7 @@ const SchoolRoom: React.FC = () => {
 
       </div>
 
-      {/* AVATAR SELECTOR MODAL */}
+      {/* MODAL SELETOR */}
       {isSelectorOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
             <Card color="white" className="w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
@@ -344,13 +318,12 @@ const SchoolRoom: React.FC = () => {
                 </div>
                 
                 <div className="flex-grow overflow-y-auto grid grid-cols-2 sm:grid-cols-4 gap-4 p-2">
-                    {/* Botão de Criar (Primeiro da lista) */}
                     <button 
-                        onClick={createAvatarFlow}
+                        onClick={() => navigate('/avatars?returnTo=/school')}
                         className="border-2 border-dashed border-gray-400 rounded-xl p-2 flex flex-col items-center justify-center gap-2 hover:bg-cartoon-blue hover:text-white hover:border-black transition-colors min-h-[120px]"
                     >
                         <span className="text-4xl">+</span>
-                        <span className="font-bold text-sm text-center">Criar Novo Aluno/Prof</span>
+                        <span className="font-bold text-sm text-center">Criar Novo</span>
                     </button>
 
                     {avatars.map(av => {
@@ -364,16 +337,13 @@ const SchoolRoom: React.FC = () => {
                                     ${isSeated ? 'border-gray-200 opacity-50 bg-gray-50 cursor-not-allowed' : 'border-black hover:bg-cartoon-yellow cursor-pointer'}
                                 `}
                             >
-                                <div className="relative">
-                                    <img src={av.imageUrl} className="w-16 h-16 rounded-full border border-black bg-white group-hover:scale-105 transition-transform" />
-                                    {isSeated && <div className="absolute inset-0 bg-gray-500/50 rounded-full flex items-center justify-center text-xs text-white font-bold">Ocupado</div>}
-                                </div>
+                                <img src={av.imageUrl} className="w-16 h-16 rounded-full border border-black bg-white" />
                                 <span className="font-bold text-sm truncate w-full text-center">{av.name}</span>
                             </button>
                          );
                     })}
                 </div>
-                <div className="p-4 bg-gray-50 border-t-2 border-gray-100 flex justify-between items-center">
+                <div className="p-4 bg-gray-50 border-t-2 border-gray-100">
                     <button 
                         onClick={() => {
                              const filteredRoster = schoolRoster.filter(m => m.slotId !== selectedSlotId);
@@ -388,60 +358,26 @@ const SchoolRoom: React.FC = () => {
             </Card>
         </div>
       )}
-
     </div>
   );
 };
 
-const LinkButton: React.FC<any> = ({ to, children, className }) => {
-    const navigate = useNavigate();
-    return <button onClick={() => navigate(to)} className={className}>{children}</button>
-}
-
-const SchoolSeat: React.FC<{ 
-    slotId: string, 
-    label: string, 
-    avatar?: Avatar | null, 
-    onClick: () => void, 
-    onEdit?: () => void,
-    color: string,
-    isSelected?: boolean,
-    isSelectable?: boolean
-}> = ({ label, avatar, onClick, onEdit, color, isSelected, isSelectable }) => (
+const SchoolSeat: React.FC<any> = ({ label, avatar, onClick, onEdit, color, isSelected }) => (
     <div className="flex flex-col items-center group relative">
         <div className={`
             w-24 h-24 md:w-32 md:h-32 rounded-hand border-4 border-black shadow-doodle flex items-center justify-center relative overflow-hidden transition-transform cursor-pointer
             ${color} ${isSelected ? 'ring-4 ring-cartoon-pink scale-110 z-20' : 'hover:scale-105'}
-        `}
-        onClick={onClick}
-        >
-            {avatar ? (
-                <img src={avatar.imageUrl} alt={avatar.name} className="w-full h-full object-cover" />
-            ) : (
-                <span className="text-4xl opacity-20">👤</span>
-            )}
-            
+        `} onClick={onClick}>
+            {avatar ? <img src={avatar.imageUrl} className="w-full h-full object-cover" /> : <span className="text-4xl opacity-20">👤</span>}
             {avatar && onEdit && (
                 <button 
                     onClick={(e) => { e.stopPropagation(); onEdit(); }}
                     className="absolute top-1 right-1 bg-white border border-black rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-gray-200 z-10 shadow-sm"
-                    title="Trocar pessoa"
-                >
-                    ✏️
-                </button>
+                >✏️</button>
             )}
-
-            {isSelected && (
-                <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
-                    <span className="text-4xl drop-shadow-md">✅</span>
-                </div>
-            )}
+            {isSelected && <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center"><span className="text-4xl">✅</span></div>}
         </div>
-        
-        <div className={`
-            px-3 py-1 rounded-full text-sm font-comic mt-2 border-2 shadow-sm z-10 transition-colors
-            ${isSelected ? 'bg-cartoon-pink text-white border-black font-bold' : 'bg-black text-white border-white'}
-        `}>
+        <div className={`px-3 py-1 rounded-full text-sm font-comic mt-2 border-2 shadow-sm z-10 transition-colors ${isSelected ? 'bg-cartoon-pink text-white border-black font-bold' : 'bg-black text-white border-white'}`}>
             {avatar ? avatar.name : label}
         </div>
     </div>

@@ -13,6 +13,32 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+// --- HELPER: Extrator de JSON Robusto ---
+const extractJSON = (text: string): any => {
+  try {
+    // 1. Tenta parse direto
+    return JSON.parse(text);
+  } catch (e) {
+    // 2. Remove blocos de código markdown
+    let clean = text.replace(/```json/g, '').replace(/```/g, '');
+    
+    // 3. Encontra o primeiro '{' e o último '}'
+    const start = clean.indexOf('{');
+    const end = clean.lastIndexOf('}');
+    
+    if (start !== -1 && end !== -1) {
+      clean = clean.substring(start, end + 1);
+      try {
+        return JSON.parse(clean);
+      } catch (e2) {
+        console.error("Falha ao extrair JSON:", text);
+        throw new Error("A IA gerou um formato inválido.");
+      }
+    }
+    throw new Error("Nenhum JSON encontrado na resposta da IA.");
+  }
+};
+
 /**
  * 1. Analisa a foto para criar uma descrição textual (Prompt)
  */
@@ -58,7 +84,7 @@ export const generateCaricatureImage = async (description: string): Promise<stri
 export const generateChapterIllustration = (visualDescription: string, charactersDescription: string = ''): string => {
   const seed = Math.floor(Math.random() * 10000);
   // Fallback se a descrição vier vazia
-  const safeDesc = visualDescription || "happy children playing in a school environment";
+  const safeDesc = visualDescription && visualDescription.length > 5 ? visualDescription : "happy children learning and playing together in a colorful environment";
   
   const fullPrompt = `children book illustration, vector art, colorful, cute, flat style, ${safeDesc}, featuring ${charactersDescription}, --no text`;
   const encodedPrompt = encodeURIComponent(fullPrompt);
@@ -90,7 +116,7 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
          - "text": O texto da história (aprox 60 palavras por capítulo).
          - "visualDescription": Uma descrição curta da cena para o ilustrador desenhar (em inglês).
 
-      Responda APENAS com o JSON.
+      IMPORTANTE: Retorne APENAS o JSON válido, sem markdown.
     `;
 
     const response = await ai.models.generateContent({
@@ -118,11 +144,10 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
       }
     });
 
-    let jsonText = response.text;
+    const jsonText = response.text;
     if (!jsonText) throw new Error("A IA retornou um texto vazio.");
 
-    jsonText = jsonText.replace(/```json|```/g, '').trim();
-    return JSON.parse(jsonText);
+    return extractJSON(jsonText);
 
   } catch (error) {
     console.error("Erro ao gerar história:", error);
@@ -139,37 +164,37 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
       const ai = getAiClient();
       
       // Cria uma string rica com Nome + Descrição Física para garantir consistência visual
-      const studentDetails = students.map(c => `${c.name} (Appearance: ${c.description})`).join("; ");
+      const studentDetails = students.map(c => `${c.name} (Visual: ${c.description})`).join("; ");
       
       const prompt = `
-        ATUE COMO: Especialista em Educação Infantil e Fundamental I no Brasil, seguindo a BNCC (Base Nacional Comum Curricular).
-        
-        TAREFA: Criar uma Sequência Didática Narrativa (Fábula).
+        ATUE COMO: Especialista em Educação Infantil e Fundamental I no Brasil (BNCC).
         
         CONTEXTO:
-        - Fato do Cotidiano (Problema): "${situation}"
-        - Objetivo de Aprendizagem (BNCC): "${goal}"
-        - Personagens: Professor(a) ${teacher.name} e Alunos: ${studentDetails}.
+        - Situação Problema: "${situation}"
+        - Objetivo Pedagógico: "${goal}"
+        - Mediador: Prof. ${teacher.name}
+        - Alunos: ${studentDetails}.
   
-        DIRETRIZES PEDAGÓGICAS:
-        1. **Metodologia Ativa**: Os alunos da história devem descobrir a solução, com mediação do professor, e não apenas receber uma lição pronta.
-        2. **Campos de Experiência**: A história deve transitar por "O eu, o outro e o nós" e "Escuta, fala, pensamento e imaginação".
-        3. **Consistência Visual**: Nos campos 'visualDescription', mencione explicitamente as características físicas dos alunos participantes (ex: glasses, curly hair) para que a ilustração seja fiel.
+        TAREFA: Criar uma história didática em 4 partes.
         
-        ESTRUTURA DA NARRATIVA:
-           - Cap 1: Contextualização (O conflito surge de forma metafórica ou real).
-           - Cap 2: Problematização (As consequências negativas da atitude).
-           - Cap 3: Intervenção Mediada (O Prof. ${teacher.name} propõe uma reflexão/dinâmica).
-           - Cap 4: Sistematização (Resolução e aprendizado consolidado).
+        ESTRUTURA (JSON):
+           - Cap 1: O Conflito (A situação acontece).
+           - Cap 2: A Consequência (Sentimentos e efeitos).
+           - Cap 3: A Mediação (Prof. ${teacher.name} intervém).
+           - Cap 4: A Resolução (Aprendizado).
         
-        SAÍDA OBRIGATÓRIA (JSON):
-        - "title": Título Sugestivo.
-        - "educationalGoal": Uma frase técnica curta resumindo a habilidade BNCC trabalhada.
-        - "chapters": 4 capítulos.
-          - "text": Narrativa adequada para crianças (60-80 palavras).
-          - "visualDescription": Descrição DETALHADA da cena para ilustração em inglês, citando características dos personagens.
-  
-        Responda APENAS com o JSON.
+        SAÍDA OBRIGATÓRIA (JSON VÁLIDO):
+        {
+          "title": "Título da História",
+          "educationalGoal": "Habilidade BNCC trabalhada",
+          "chapters": [
+            {
+              "title": "...",
+              "text": "Texto da história (pt-BR)...",
+              "visualDescription": "Prompt detalhado em INGLÊS para gerar a imagem. Descreva quem está na cena e o que fazem. Ex: 'Teacher Maria talking to a boy with glasses in a park'."
+            }
+          ]
+        }
       `;
   
       const response = await ai.models.generateContent({
@@ -198,11 +223,10 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
         }
       });
   
-      let jsonText = response.text;
+      const jsonText = response.text;
       if (!jsonText) throw new Error("A IA retornou um texto vazio.");
   
-      jsonText = jsonText.replace(/```json|```/g, '').trim();
-      return JSON.parse(jsonText);
+      return extractJSON(jsonText);
   
     } catch (error) {
       console.error("Erro ao gerar aula:", error);
