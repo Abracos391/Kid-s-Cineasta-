@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
@@ -15,8 +15,15 @@ const SchoolLogin: React.FC = () => {
   
   const [error, setError] = useState('');
   
-  const { loginAsTeacher, registerSchool } = useAuth();
+  const { loginAsTeacher, registerSchool, user, loading } = useAuth();
   const navigate = useNavigate();
+
+  // Verifica se o professor já está logado
+  useEffect(() => {
+    if (!loading && user?.isSchoolUser) {
+        navigate('/school');
+    }
+  }, [user, loading, navigate]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,6 +48,8 @@ const SchoolLogin: React.FC = () => {
       setError(err.message || "Acesso negado.");
     }
   };
+
+  if (loading) return <div className="min-h-screen bg-[#1a3c28] flex items-center justify-center text-white font-bold">Carregando Escola...</div>;
 
   return (
     <div className="min-h-screen bg-[#1a3c28] flex items-center justify-center p-4 relative overflow-hidden">

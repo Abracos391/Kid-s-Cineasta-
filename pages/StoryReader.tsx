@@ -23,6 +23,7 @@ const StoryReader: React.FC = () => {
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [pdfProgress, setPdfProgress] = useState(0); // 0 a 100
+  const [loadError, setLoadError] = useState(false);
 
   // Função para atualizar a história no armazenamento (Persistência)
   const updateStoryInStorage = (updatedStory: Story) => {
@@ -51,30 +52,38 @@ const StoryReader: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!id) return;
+
     // 1. Tenta carregar da biblioteca permanente
     const allStories: Story[] = JSON.parse(localStorage.getItem('savedStories') || '[]');
-    let found = allStories.find(s => s.id === id);
+    // Comparação frouxa (==) para garantir que string '123' encontre number 123 se houver discrepância
+    let found = allStories.find(s => String(s.id) === String(id));
     
     // 2. Se não achar, tenta carregar do cache temporário
     if (!found) {
       const current = localStorage.getItem('currentStory');
       if (current) {
         const parsed = JSON.parse(current);
-        if (parsed.id === id) found = parsed;
+        if (String(parsed.id) === String(id)) found = parsed;
       }
     }
     
-    if (found) setStory(found);
+    if (found) {
+        setStory(found);
+        setLoadError(false);
+    } else {
+        setLoadError(true);
+    }
   }, [id]);
 
   useEffect(() => {
-    // Gerar imagem automaticamente se não existir
-    if (story) {
+    // Gerar imagem automaticamente se não existir e se a história estiver carregada
+    if (story && story.chapters && story.chapters[activeChapterIndex]) {
       const chapter = story.chapters[activeChapterIndex];
       
       if (!chapter.generatedImage) {
         // Cria descrição combinada dos personagens se a visualDescription não for suficiente
-        const charsDesc = story.characters.map(c => `${c.name} (${c.description})`).join(', ');
+        const charsDesc = story.characters ? story.characters.map(c => `${c.name} (${c.description})`).join(', ') : '';
         
         const imageUrl = generateChapterIllustration(chapter.visualDescription, charsDesc);
         
@@ -87,14 +96,33 @@ const StoryReader: React.FC = () => {
     }
   }, [activeChapterIndex, story]);
 
+  if (loadError) return (
+      <div className="min-h-[60vh] flex items-center justify-center flex-col gap-6 text-center">
+          <div className="text-8xl">🕵️‍♀️</div>
+          <h1 className="font-heading text-4xl text-white text-stroke-black">História não encontrada!</h1>
+          <p className="font-bold text-gray-700 bg-white p-4 rounded-xl border-2 border-black">
+              Parece que essa história sumiu da estante ou não foi salva corretamente.
+          </p>
+          <Button variant="primary" onClick={() => navigate('/')}>Voltar para o Início</Button>
+      </div>
+  );
+
   if (!story) return (
     <div className="min-h-[60vh] flex items-center justify-center flex-col gap-4">
         <div className="animate-spin text-6xl">⏳</div>
-        <div className="font-heading text-3xl text-white text-stroke-black">Procurando o livro...</div>
+        <div className="font-heading text-3xl text-white text-stroke-black">Abrindo o livro...</div>
     </div>
   );
 
-  const currentChapter = story.chapters[activeChapterIndex];
+  const currentChapter = story.chapters ? story.chapters[activeChapterIndex] : null;
+
+  if (!currentChapter) return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+          <p className="bg-white p-4 rounded border-2 border-black font-bold text-red-500">
+              Erro: O capítulo {activeChapterIndex + 1} não existe nesta história.
+          </p>
+      </div>
+  );
 
   const handleGenerateAudio = async () => {
     const isPremiumStory = story.isPremium === true || user?.plan === 'premium' || story.isEducational === true;

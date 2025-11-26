@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
@@ -12,8 +12,20 @@ const Auth: React.FC = () => {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   
-  const { login, register } = useAuth();
+  const { login, register, user, loading } = useAuth(); // Adicionado user e loading
   const navigate = useNavigate();
+
+  // Redirecionamento Automático se já estiver logado
+  useEffect(() => {
+    if (!loading && user) {
+        // Se for usuário de escola tentando acessar login comum, manda pra escola
+        if (user.isSchoolUser) {
+            navigate('/school');
+        } else {
+            navigate('/');
+        }
+    }
+  }, [user, loading, navigate]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +43,8 @@ const Auth: React.FC = () => {
       setError(err.message || "Ocorreu um erro.");
     }
   };
+
+  if (loading) return null; // Evita piscar a tela de login enquanto verifica
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-white/50">
