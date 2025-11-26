@@ -28,12 +28,20 @@ const StoryReader: React.FC = () => {
   const updateStoryInStorage = (updatedStory: Story) => {
     setStory(updatedStory);
     
-    // Se for premium, atualiza na lista savedStories
-    if (user?.plan === 'premium') {
+    // Critério de salvamento: Ser Premium OU Ser Educacional
+    const shouldSave = user?.plan === 'premium' || updatedStory.isEducational;
+
+    if (shouldSave) {
         const savedStories: Story[] = JSON.parse(localStorage.getItem('savedStories') || '[]');
         const index = savedStories.findIndex(s => s.id === updatedStory.id);
+        
         if (index !== -1) {
+            // Atualiza existente
             savedStories[index] = updatedStory;
+            localStorage.setItem('savedStories', JSON.stringify(savedStories));
+        } else {
+            // Caso raro onde não estava salvo ainda (mas deveria)
+            savedStories.unshift(updatedStory);
             localStorage.setItem('savedStories', JSON.stringify(savedStories));
         }
     }
@@ -65,7 +73,7 @@ const StoryReader: React.FC = () => {
       const chapter = story.chapters[activeChapterIndex];
       
       if (!chapter.generatedImage) {
-        // Cria descrição combinada dos personagens
+        // Cria descrição combinada dos personagens se a visualDescription não for suficiente
         const charsDesc = story.characters.map(c => `${c.name} (${c.description})`).join(', ');
         
         const imageUrl = generateChapterIllustration(chapter.visualDescription, charsDesc);
@@ -126,7 +134,7 @@ const StoryReader: React.FC = () => {
       setGeneratingPDF(true);
       setPdfProgress(10);
 
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1000));
 
       try {
         const bookContainer = bookPrintRef.current;
@@ -143,16 +151,15 @@ const StoryReader: React.FC = () => {
                 scale: 2, 
                 useCORS: true, 
                 logging: false,
-                backgroundColor: null
+                backgroundColor: null,
+                allowTaint: true
             });
 
             const imgData = canvas.toDataURL('image/jpeg', 0.95);
-            
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
 
             if (i > 0) pdf.addPage();
-            
             pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
         }
 
@@ -182,7 +189,6 @@ const StoryReader: React.FC = () => {
     }
   };
   
-  // Navegação de Saída Inteligente
   const handleExit = () => {
     if (story.isEducational) {
         navigate('/school-library');
@@ -215,7 +221,6 @@ const StoryReader: React.FC = () => {
             <div className="book-page relative w-[794px] h-[1123px] bg-[#1a3c28] overflow-hidden border-8 border-[#8B4513] flex flex-col items-center justify-between p-12">
                 <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none" style={{backgroundImage: 'radial-gradient(circle, #fff 2px, transparent 2.5px)', backgroundSize: '40px 40px'}}></div>
                 
-                {/* Cabeçalho de Lousa */}
                 <div className="z-10 w-full border-b-2 border-white/30 pb-4 mb-4">
                     <div className="flex justify-between items-center text-white/80 font-comic text-xl">
                         <span>ESCOLA CINEASTA KIDS</span>

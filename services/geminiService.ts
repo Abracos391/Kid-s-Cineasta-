@@ -57,7 +57,10 @@ export const generateCaricatureImage = async (description: string): Promise<stri
  */
 export const generateChapterIllustration = (visualDescription: string, charactersDescription: string = ''): string => {
   const seed = Math.floor(Math.random() * 10000);
-  const fullPrompt = `children book illustration, vector art, colorful, cute, flat style, ${visualDescription}, featuring ${charactersDescription}, --no text`;
+  // Fallback se a descrição vier vazia
+  const safeDesc = visualDescription || "happy children playing in a school environment";
+  
+  const fullPrompt = `children book illustration, vector art, colorful, cute, flat style, ${safeDesc}, featuring ${charactersDescription}, --no text`;
   const encodedPrompt = encodeURIComponent(fullPrompt);
   
   return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
@@ -135,7 +138,8 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
     try {
       const ai = getAiClient();
       
-      const studentNames = students.map(c => c.name).join(", ");
+      // Cria uma string rica com Nome + Descrição Física para garantir consistência visual
+      const studentDetails = students.map(c => `${c.name} (Appearance: ${c.description})`).join("; ");
       
       const prompt = `
         ATUE COMO: Especialista em Educação Infantil e Fundamental I no Brasil, seguindo a BNCC (Base Nacional Comum Curricular).
@@ -145,12 +149,14 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
         CONTEXTO:
         - Fato do Cotidiano (Problema): "${situation}"
         - Objetivo de Aprendizagem (BNCC): "${goal}"
-        - Personagens: Professor(a) ${teacher.name} (Mediador do conhecimento) e Alunos ${studentNames}.
+        - Personagens: Professor(a) ${teacher.name} e Alunos: ${studentDetails}.
   
         DIRETRIZES PEDAGÓGICAS:
         1. **Metodologia Ativa**: Os alunos da história devem descobrir a solução, com mediação do professor, e não apenas receber uma lição pronta.
         2. **Campos de Experiência**: A história deve transitar por "O eu, o outro e o nós" e "Escuta, fala, pensamento e imaginação".
-        3. **Estrutura da Narrativa**:
+        3. **Consistência Visual**: Nos campos 'visualDescription', mencione explicitamente as características físicas dos alunos participantes (ex: glasses, curly hair) para que a ilustração seja fiel.
+        
+        ESTRUTURA DA NARRATIVA:
            - Cap 1: Contextualização (O conflito surge de forma metafórica ou real).
            - Cap 2: Problematização (As consequências negativas da atitude).
            - Cap 3: Intervenção Mediada (O Prof. ${teacher.name} propõe uma reflexão/dinâmica).
@@ -161,7 +167,7 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
         - "educationalGoal": Uma frase técnica curta resumindo a habilidade BNCC trabalhada.
         - "chapters": 4 capítulos.
           - "text": Narrativa adequada para crianças (60-80 palavras).
-          - "visualDescription": Descrição da cena para ilustração (em inglês).
+          - "visualDescription": Descrição DETALHADA da cena para ilustração em inglês, citando características dos personagens.
   
         Responda APENAS com o JSON.
       `;
