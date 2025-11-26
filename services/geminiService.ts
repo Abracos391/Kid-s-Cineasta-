@@ -37,7 +37,8 @@ const extractJSON = (text: string): any => {
             clean = clean.replace(/[\u0000-\u001F]+/g, "");
             return JSON.parse(clean);
         } catch (e3) {
-            throw new Error("A IA gerou um formato inválido.");
+             // Última tentativa: as vezes a IA esquece aspas nas chaves
+             throw new Error("Formato inválido.");
         }
       }
     }
@@ -79,7 +80,6 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
  */
 export const generateCaricatureImage = async (description: string): Promise<string> => {
   const seed = Math.floor(Math.random() * 10000);
-  // Proteção contra descrição vazia
   const safeDesc = description && description.trim().length > 0 ? description : "cute 3d character";
   const prompt = `cute 3d disney pixar character, ${safeDesc}, white background, soft studio lighting, 4k render, vibrant colors, --no text`;
   const encodedPrompt = encodeURIComponent(prompt);
@@ -91,7 +91,6 @@ export const generateCaricatureImage = async (description: string): Promise<stri
  */
 export const generateChapterIllustration = (visualDescription: string, charactersDescription: string = ''): string => {
   const seed = Math.floor(Math.random() * 10000);
-  // Fallback se a descrição vier vazia
   const safeDesc = visualDescription && visualDescription.length > 5 ? visualDescription : "happy children learning and playing together in a colorful environment";
   
   const fullPrompt = `children book illustration, vector art, colorful, cute, flat style, ${safeDesc}, featuring ${charactersDescription}, --no text`;
@@ -101,15 +100,15 @@ export const generateChapterIllustration = (visualDescription: string, character
 };
 
 /**
- * 4. Gera a História (Lazer/Padrão)
+ * 4. Gera a História (Lazer/Padrão) - COM FALLBACK ROBUSTO
  */
 export const generateStory = async (theme: string, characters: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
-  try {
-    const ai = getAiClient();
-    
-    const charNames = characters.map(c => c.name).join(", ");
-    const charDescs = characters.map(c => c.description).join("; ");
+  const ai = getAiClient();
+  const charNames = characters.map(c => c.name).join(", ");
+  const charDescs = characters.map(c => c.description).join("; ");
 
+  // TENTATIVA 1: Prompt Estruturado
+  try {
     const prompt = `
       Você é um autor de livros infantis premiado. Escreva uma história curta e envolvente para crianças de 5-8 anos.
       
@@ -124,48 +123,57 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
          - "text": O texto da história (aprox 60 palavras por capítulo).
          - "visualDescription": Uma descrição curta da cena para o ilustrador desenhar (em inglês).
 
-      IMPORTANTE: Retorne APENAS o JSON válido, sem markdown.
+      IMPORTANTE: Retorne APENAS o JSON válido.
     `;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            chapters: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  text: { type: Type.STRING },
-                  visualDescription: { type: Type.STRING }
-                }
-              }
-            }
-          }
-        }
-      }
+      config: { responseMimeType: "application/json" }
     });
 
-    const jsonText = response.text;
-    if (!jsonText) throw new Error("A IA retornou um texto vazio.");
-
-    return extractJSON(jsonText);
+    if (response.text) return extractJSON(response.text);
+    throw new Error("Resposta vazia.");
 
   } catch (error) {
-    console.error("Erro ao gerar história:", error);
-    throw error;
+    console.warn("Falha na geração padrão, tentando modo simplificado...", error);
+    
+    // TENTATIVA 2: Fallback Simplificado
+    try {
+        const promptSimple = `
+            Crie uma história infantil simples de 4 partes sobre: ${theme}.
+            Personagens: ${charNames}.
+            
+            Retorne APENAS este JSON:
+            {
+                "title": "Título da História",
+                "chapters": [
+                    { "title": "Parte 1", "text": "...", "visualDescription": "Scene description in English" },
+                    { "title": "Parte 2", "text": "...", "visualDescription": "Scene description in English" },
+                    { "title": "Parte 3", "text": "...", "visualDescription": "Scene description in English" },
+                    { "title": "Parte 4", "text": "...", "visualDescription": "Scene description in English" }
+                ]
+            }
+        `;
+        
+        const responseSimple = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: promptSimple,
+            config: { responseMimeType: "application/json" }
+        });
+        
+        if (responseSimple.text) return extractJSON(responseSimple.text);
+
+    } catch (finalError) {
+        console.error("Erro fatal:", finalError);
+        throw new Error("Não foi possível criar a história. Tente um tema mais simples.");
+    }
   }
+  throw new Error("Erro desconhecido na geração.");
 };
 
 /**
- * 4.1 Gera História PEDAGÓGICA (Modo Escola)
- * Com Fallback para garantir geração
+ * 4.1 Gera História PEDAGÓGICA (Modo Escola) - COM FALLBACK ROBUSTO
  */
 export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, educationalGoal: string, chapters: StoryChapter[] }> => {
     const ai = getAiClient();
@@ -173,10 +181,8 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
 
     // 1. TENTATIVA COMPLEXA (BNCC)
     try {
-      console.log("Tentando gerar aula padrão BNCC...");
       const promptComplex = `
         ATUE COMO: Pedagogo Criativo.
-        
         SITUAÇÃO: "${situation}"
         OBJETIVO: Ensinar "${goal}"
         PERSONAGENS: Prof. ${teacher.name} e alunos: ${studentDetails}.
@@ -203,16 +209,13 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
         config: { responseMimeType: "application/json" }
       });
   
-      if (response.text) {
-        return extractJSON(response.text);
-      }
+      if (response.text) return extractJSON(response.text);
       throw new Error("Resposta vazia no modo complexo");
 
     } catch (error) {
       console.warn("Falha no modo estrito, tentando modo flexível...", error);
       
       // 2. TENTATIVA FLEXÍVEL (FALLBACK)
-      // Remove restrições e pede uma história simples, garantindo que o usuário não fique sem resposta.
       try {
         const promptSimple = `
             Escreva uma história infantil simples de 4 capítulos sobre "${situation}" onde o objetivo é aprender sobre "${goal}".
@@ -237,13 +240,11 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
             config: { responseMimeType: "application/json" }
         });
 
-        if (responseSimple.text) {
-            return extractJSON(responseSimple.text);
-        }
+        if (responseSimple.text) return extractJSON(responseSimple.text);
         
       } catch (finalError) {
           console.error("Erro fatal na geração:", finalError);
-          throw new Error("O sistema está sobrecarregado. Tente um tema mais simples.");
+          throw new Error("O sistema está sobrecarregado. Tente simplificar o objetivo da aula.");
       }
     }
     

@@ -23,31 +23,42 @@ const StoryReader: React.FC = () => {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [pdfProgress, setPdfProgress] = useState(0); 
   const [loadError, setLoadError] = useState(false);
+  const [storageWarning, setStorageWarning] = useState(false);
 
-  // --- Função de Persistência Aprimorada ---
+  // --- Função de Persistência Aprimorada e Segura ---
   const updateStoryInStorage = (updatedStory: Story) => {
     setStory(updatedStory);
     
-    // Atualiza Cache Imediato
-    localStorage.setItem('currentStory', JSON.stringify(updatedStory));
+    try {
+        // Atualiza Cache Imediato
+        localStorage.setItem('currentStory', JSON.stringify(updatedStory));
 
-    // Atualiza Biblioteca Permanente
-    const shouldSave = user?.plan === 'premium' || updatedStory.isEducational;
-    
-    if (shouldSave) {
-        const savedStoriesRaw = localStorage.getItem('savedStories');
-        if (savedStoriesRaw) {
-            const savedStories: Story[] = JSON.parse(savedStoriesRaw);
-            const index = savedStories.findIndex(s => String(s.id) === String(updatedStory.id));
-            
-            if (index !== -1) {
-                savedStories[index] = updatedStory;
-                localStorage.setItem('savedStories', JSON.stringify(savedStories));
-            } else {
-                // Se deveria estar salvo mas não está, adiciona
-                savedStories.unshift(updatedStory);
-                localStorage.setItem('savedStories', JSON.stringify(savedStories));
+        // Atualiza Biblioteca Permanente
+        const shouldSave = user?.plan === 'premium' || updatedStory.isEducational;
+        
+        if (shouldSave) {
+            const savedStoriesRaw = localStorage.getItem('savedStories');
+            if (savedStoriesRaw) {
+                const savedStories: Story[] = JSON.parse(savedStoriesRaw);
+                const index = savedStories.findIndex(s => String(s.id) === String(updatedStory.id));
+                
+                if (index !== -1) {
+                    savedStories[index] = updatedStory;
+                    localStorage.setItem('savedStories', JSON.stringify(savedStories));
+                } else {
+                    savedStories.unshift(updatedStory);
+                    localStorage.setItem('savedStories', JSON.stringify(savedStories));
+                }
             }
+        }
+    } catch (e: any) {
+        // Trata erro de memória cheia (comum com base64)
+        if (e.name === 'QuotaExceededError' || e.code === 22) {
+            console.error("LocalStorage cheio!");
+            setStorageWarning(true);
+            alert("⚠️ Atenção: A memória do seu navegador está cheia! Imagens e áudios novos podem não ser salvos. Recomendamos apagar histórias antigas da biblioteca.");
+        } else {
+            console.error("Erro ao salvar história:", e);
         }
     }
   };
@@ -63,15 +74,16 @@ const StoryReader: React.FC = () => {
     if (!found) {
       const current = localStorage.getItem('currentStory');
       if (current) {
-        const parsed = JSON.parse(current);
-        if (String(parsed.id) === String(id)) found = parsed;
+        try {
+            const parsed = JSON.parse(current);
+            if (String(parsed.id) === String(id)) found = parsed;
+        } catch(e) { console.error("Cache inválido"); }
       }
     }
     
     if (found) {
-        // Validação de Integridade
         if (!found.chapters || found.chapters.length === 0) {
-            console.error("História encontrada mas corrompida (sem capítulos).");
+            console.error("História encontrada mas corrompida.");
             setLoadError(true);
         } else {
             setStory(found);
@@ -99,13 +111,12 @@ const StoryReader: React.FC = () => {
     }
   }, [activeChapterIndex, story]);
 
-  // --- Handlers de Erro e Loading ---
   if (loadError) return (
       <div className="min-h-[60vh] flex items-center justify-center flex-col gap-6 text-center">
           <div className="text-8xl">⚠️</div>
           <h1 className="font-heading text-4xl text-white text-stroke-black">História Indisponível</h1>
           <p className="font-bold text-gray-700 bg-white p-4 rounded-xl border-2 border-black max-w-md">
-              Não conseguimos carregar o conteúdo desta história. Ela pode ter sido apagada ou houve um erro na geração.
+              Não conseguimos carregar o conteúdo. Tente criar uma nova história.
           </p>
           <Button variant="primary" onClick={() => navigate(story?.isEducational ? '/school' : '/')}>Voltar</Button>
       </div>
@@ -118,10 +129,8 @@ const StoryReader: React.FC = () => {
     </div>
   );
 
-  // Garante que o índice é válido
   const currentChapter = story.chapters[activeChapterIndex];
   if (!currentChapter) {
-      // Auto-correção: volta para o 0 se o índice estourou
       setActiveChapterIndex(0);
       return null; 
   }
@@ -143,7 +152,7 @@ const StoryReader: React.FC = () => {
       updatedChapters[activeChapterIndex] = { ...currentChapter, generatedAudio: audioBase64 };
       updateStoryInStorage({ ...story, chapters: updatedChapters });
     } catch (error) {
-      alert("Erro ao gerar áudio. Tente novamente.");
+      alert("Erro ao gerar áudio. Verifique sua conexão ou tente novamente mais tarde.");
     } finally {
       setGeneratingAudio(false);
     }
@@ -158,7 +167,7 @@ const StoryReader: React.FC = () => {
 
       setGeneratingPDF(true);
       setPdfProgress(10);
-      await new Promise(r => setTimeout(r, 500)); // Pequeno delay para render
+      await new Promise(r => setTimeout(r, 500)); 
 
       try {
         const bookContainer = bookPrintRef.current;
@@ -196,11 +205,17 @@ const StoryReader: React.FC = () => {
   return (
     <div className={`max-w-5xl mx-auto px-4 pb-20 ${story.isEducational ? 'font-sans' : ''}`}>
       
+      {/* Aviso de Memória Cheia */}
+      {storageWarning && (
+          <div className="fixed top-0 left-0 w-full bg-red-500 text-white text-center p-2 z-[100] font-bold">
+              ⚠️ Memória cheia! Apague histórias antigas para salvar novos áudios.
+          </div>
+      )}
+
       {/* --- LAYOUT A4 OCULTO (Para PDF) --- */}
       <div ref={bookPrintRef} style={{ position: 'fixed', top: 0, left: generatingPDF ? '0' : '-10000px', zIndex: -10, width: '794px' }}>
         {/* CAPA */}
         <div className={`book-page relative w-[794px] h-[1123px] overflow-hidden border-8 border-black flex flex-col items-center justify-between p-12 ${story.isEducational ? 'bg-[#1a3c28]' : 'bg-cartoon-yellow'}`}>
-             {/* Conteúdo da Capa (Simplificado para o código não ficar gigante, mas mantém estilo) */}
              <div className="z-10 text-center w-full mt-10">
                 <h1 className={`font-comic text-7xl drop-shadow-lg mb-4 ${story.isEducational ? 'text-white' : 'text-cartoon-blue text-stroke-3'}`}>{story.title}</h1>
              </div>
@@ -209,6 +224,7 @@ const StoryReader: React.FC = () => {
              </div>
              <div className="z-10 text-center w-full mb-10 bg-white border-4 border-black p-4 rounded-xl transform -rotate-1">
                  <p className="font-comic text-4xl text-black">Autor: {user?.name}</p>
+                 {story.isEducational && <p className="font-sans text-xl mt-2 text-gray-600">Material Didático - {story.educationalGoal}</p>}
              </div>
         </div>
         {/* PÁGINAS */}
@@ -227,7 +243,6 @@ const StoryReader: React.FC = () => {
 
       {/* --- UI PRINCIPAL DE LEITURA --- */}
       
-      {/* Loading Overlay do PDF */}
       {generatingPDF && (
           <div className="fixed inset-0 bg-black/80 z-[100] flex flex-col items-center justify-center text-white">
               <h2 className="font-comic text-4xl mb-4">Gerando Livro ({pdfProgress}%)...</h2>
