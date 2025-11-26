@@ -16,7 +16,6 @@ const StoryWizard: React.FC = () => {
   const [theme, setTheme] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // A3: Recarregar avatares sempre que montar o componente
   useEffect(() => {
     const saved = localStorage.getItem('avatars');
     if (saved) {
@@ -37,7 +36,6 @@ const StoryWizard: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    // Validação A1
     if (!theme.trim()) {
         alert("Por favor, digite sobre o que será a história!");
         return;
@@ -48,7 +46,6 @@ const StoryWizard: React.FC = () => {
     }
     if (!user) return;
 
-    // 1. Verificar Permissão do Plano (Regra M1)
     const check = authService.canCreateStory(user);
     if (!check.allowed) {
         if (confirm(`${check.reason}\n\n✨ Deseja fazer o upgrade para o plano Premium e desbloquear mais histórias?`)) {
@@ -57,7 +54,7 @@ const StoryWizard: React.FC = () => {
         return;
     }
 
-    setLoading(true); // Feedback C3
+    setLoading(true);
     const selectedChars = avatars.filter(a => selectedAvatarIds.includes(a.id));
 
     try {
@@ -68,25 +65,31 @@ const StoryWizard: React.FC = () => {
         createdAt: Date.now(),
         characters: selectedChars,
         theme,
-        isPremium: check.type === 'premium', // Marca se a história é "premium" (tem audio, salva, etc)
+        isPremium: check.type === 'premium', 
         ...storyData
       };
 
-      // 2. Consumir Crédito/Cota com base no tipo retornado
       authService.consumeStoryCredit(user.id, check.type || 'free');
       refreshUser();
 
-      // 3. Regra de Salvamento na Biblioteca
-      // Se foi gerada como Premium (seja por plano pago ou pela degustação mensal), salva.
       if (check.type === 'premium') {
-          const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
-          localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
+          try {
+            const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
+            localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
+          } catch(e: any) {
+             if (e.name === 'QuotaExceededError') {
+                 alert("⚠️ Memória cheia. A história será exibida, mas talvez não fique salva na biblioteca.");
+             }
+          }
       }
       
-      // Salvar como atual (Cache temporário para leitura imediata)
-      localStorage.setItem('currentStory', JSON.stringify(fullStory));
+      try {
+        localStorage.setItem('currentStory', JSON.stringify(fullStory));
+        navigate(`/story/${fullStory.id}`);
+      } catch (e) {
+          alert("Erro crítico de memória. Limpe seu navegador.");
+      }
 
-      navigate(`/story/${fullStory.id}`);
     } catch (error) {
       console.error(error);
       alert("Ops! Tivemos um bloqueio criativo. Tente mudar o tema ou tente novamente!");
@@ -121,8 +124,6 @@ const StoryWizard: React.FC = () => {
       </div>
 
       <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-start">
-        
-        {/* Step 1: Choose Characters */}
         <div className="transform -rotate-1">
             <Card title="1. Quem vai participar?" color="green">
             {avatars.length === 0 ? (
@@ -157,7 +158,6 @@ const StoryWizard: React.FC = () => {
             </Card>
         </div>
 
-        {/* Step 2: Theme */}
         <div className="space-y-8">
           <div className="transform rotate-1">
             <Card title="2. O que vai acontecer?" color="orange">

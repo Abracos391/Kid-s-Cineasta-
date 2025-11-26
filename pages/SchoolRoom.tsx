@@ -13,27 +13,19 @@ const SchoolRoom: React.FC = () => {
   const location = useLocation();
   const { user, refreshUser } = useAuth();
   
-  // Gatekeeper
   useEffect(() => {
     if (user && !user.isSchoolUser) {
         navigate('/school-login');
     }
   }, [user, navigate]);
 
-  // Data State
   const [avatars, setAvatars] = useState<Avatar[]>([]);
   const [schoolRoster, setSchoolRoster] = useState<SchoolMember[]>([]);
-  
-  // UI State
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  
-  // Inputs
   const [situation, setSituation] = useState('');
   const [goal, setGoal] = useState('');
-  
-  // Participants
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
   const [participatingStudents, setParticipatingStudents] = useState<string[]>([]);
 
@@ -50,7 +42,6 @@ const SchoolRoom: React.FC = () => {
     localStorage.setItem('schoolRoster', JSON.stringify(newRoster));
   };
 
-  // --- Slot Management ---
   const handleSlotClick = (slotId: string, role: SchoolRole) => {
     setSelectedSlotId(slotId);
     setIsSelectorOpen(true);
@@ -91,7 +82,6 @@ const SchoolRoom: React.FC = () => {
     }
   };
 
-  // --- Lesson Generation Logic (CORRIGIDO) ---
   const handleStartLesson = async () => {
     if (!situation.trim() || !goal.trim()) {
       alert("Preencha a situação e o objetivo na lousa!");
@@ -113,13 +103,9 @@ const SchoolRoom: React.FC = () => {
     const studentAvatars = avatars.filter(a => participatingStudents.includes(a.id));
 
     try {
-      console.log("Iniciando geração da aula...");
+      console.log("Gerando aula...");
       const storyData = await generatePedagogicalStory(situation, goal, teacherAvatar, studentAvatars);
       
-      if (!storyData || !storyData.chapters || storyData.chapters.length === 0) {
-        throw new Error("A história gerada veio incompleta. Tente novamente.");
-      }
-
       const fullStory = {
         id: Date.now().toString(),
         createdAt: Date.now(),
@@ -131,25 +117,36 @@ const SchoolRoom: React.FC = () => {
         ...storyData
       };
 
+      // Consome Crédito
       authService.consumeStoryCredit(user.id, 'premium');
       refreshUser();
 
-      // SALVAMENTO ROBUSTO
-      const savedStoriesRaw = localStorage.getItem('savedStories');
-      const existingStories = savedStoriesRaw ? JSON.parse(savedStoriesRaw) : [];
-      
-      const newSavedStories = [fullStory, ...existingStories];
-      localStorage.setItem('savedStories', JSON.stringify(newSavedStories));
-      
-      // Salva Current para leitura imediata
-      localStorage.setItem('currentStory', JSON.stringify(fullStory));
-      
-      console.log("Aula salva com sucesso. Redirecionando...");
+      // SALVAMENTO SEGURO (Resiliente a QuotaExceeded)
+      try {
+        const savedStoriesRaw = localStorage.getItem('savedStories');
+        const existingStories = savedStoriesRaw ? JSON.parse(savedStoriesRaw) : [];
+        const newSavedStories = [fullStory, ...existingStories];
+        localStorage.setItem('savedStories', JSON.stringify(newSavedStories));
+        localStorage.setItem('currentStory', JSON.stringify(fullStory));
+      } catch (storageError: any) {
+        console.warn("Memória cheia, tentando salvar sem cache pesado...");
+        // Se falhar (memória cheia), tenta salvar mas avisa o usuário
+        if (storageError.name === 'QuotaExceededError') {
+             alert("⚠️ Atenção: A memória do navegador está cheia. Esta história será salva, mas áudios antigos podem ser perdidos. Recomendamos limpar o cache nas configurações do navegador.");
+             // Tenta salvar APENAS a história atual no current para não perder o trabalho agora
+             try {
+                localStorage.setItem('currentStory', JSON.stringify(fullStory));
+             } catch (e) {
+                 alert("Erro crítico de memória. Não foi possível salvar.");
+             }
+        }
+      }
+
       navigate(`/story/${fullStory.id}`);
 
     } catch (e: any) {
       console.error("Erro na geração:", e);
-      alert(`Erro ao criar aula: ${e.message || "Tente simplificar o objetivo."}`);
+      alert(`Erro ao criar aula: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -157,14 +154,11 @@ const SchoolRoom: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-cartoon-blue via-blue-200 to-cartoon-green relative overflow-x-hidden pb-20">
-      
       <div className="absolute top-10 left-10 text-8xl opacity-80 animate-float">☁️</div>
       <div className="absolute top-20 right-20 text-8xl opacity-60 animate-float" style={{animationDelay: '2s'}}>☁️</div>
       <div className="absolute top-5 right-1/2 text-9xl animate-spin-slow text-cartoon-yellow origin-center">☀️</div>
 
       <div className="max-w-7xl mx-auto px-4 py-8 relative z-10">
-        
-        {/* HEADER & LOUSA */}
         <div className="flex flex-col lg:flex-row justify-between items-start gap-8 mb-12">
             <div className="lg:w-1/3">
                 <h1 className="font-comic text-6xl text-white text-stroke-black drop-shadow-lg mb-2">Escola da Vida 🏫</h1>
@@ -182,13 +176,11 @@ const SchoolRoom: React.FC = () => {
                 </div>
             </div>
 
-            {/* Lousa Pedagógica */}
             <div className="relative group perspective-1000 w-full lg:w-[600px]">
                 <div className="bg-[#1a3c28] border-[12px] border-[#8B4513] rounded-sm p-6 shadow-2xl transform rotate-1 transition-transform group-hover:rotate-0">
                     <div className="flex justify-between items-center border-b border-white/20 pb-2 mb-4">
                         <span className="text-white/70 font-comic text-lg">Planejamento da Aula (IA)</span>
                     </div>
-                    
                     <div className="space-y-4">
                         <div>
                             <label className="text-white/60 text-xs font-bold uppercase block mb-1">1. Fato do Cotidiano</label>
@@ -209,7 +201,6 @@ const SchoolRoom: React.FC = () => {
                             />
                         </div>
                     </div>
-
                     <div className="border-t-4 border-[#5c3a21] pt-4 mt-6">
                         <div className="bg-[#a05a2c] h-3 w-full rounded-full opacity-50 mb-4 mx-auto"></div>
                         <Button 
@@ -226,13 +217,11 @@ const SchoolRoom: React.FC = () => {
             </div>
         </div>
 
-        {/* SALA DOS PROFESSORES */}
         <div className="bg-white/30 backdrop-blur-sm rounded-hand p-8 border-4 border-white/50 mb-12 shadow-lg">
             <div className="flex items-center justify-center gap-4 mb-6">
                  <span className="text-4xl">🍎</span>
                  <h2 className="text-center font-heading text-3xl text-white text-stroke-black">Corpo Docente</h2>
             </div>
-            
             <div className="flex flex-wrap justify-center gap-8">
                 {[1, 2, 3, 4, 5].map(num => {
                     const slotId = `prof_${num}`;
@@ -257,16 +246,10 @@ const SchoolRoom: React.FC = () => {
             </div>
         </div>
 
-        {/* ALUNOS */}
         <div className="bg-cartoon-green/90 rounded-[50px] p-8 border-t-[10px] border-green-800 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-full opacity-30 pointer-events-none" 
-                 style={{backgroundImage: 'radial-gradient(#1a421a 15%, transparent 16%)', backgroundSize: '16px 16px'}}>
-            </div>
-            
             <div className="relative z-10 text-center mb-8">
                 <h2 className="font-heading text-4xl text-white text-stroke-black inline-block transform -rotate-1">Turma 2024 🎒</h2>
             </div>
-            
             <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-10 gap-y-8 gap-x-4 relative z-10 pb-8">
                 {Array.from({ length: 30 }).map((_, idx) => {
                     const num = idx + 1;
@@ -305,10 +288,8 @@ const SchoolRoom: React.FC = () => {
                 })}
             </div>
         </div>
-
       </div>
 
-      {/* MODAL SELETOR */}
       {isSelectorOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
             <Card color="white" className="w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
@@ -316,7 +297,6 @@ const SchoolRoom: React.FC = () => {
                     <h3 className="font-heading text-2xl">Chamada Escolar</h3>
                     <button onClick={() => setIsSelectorOpen(false)} className="text-2xl font-bold bg-gray-100 w-10 h-10 rounded-full hover:bg-red-100 hover:text-red-500">✕</button>
                 </div>
-                
                 <div className="flex-grow overflow-y-auto grid grid-cols-2 sm:grid-cols-4 gap-4 p-2">
                     <button 
                         onClick={() => navigate('/avatars?returnTo=/school')}
@@ -325,7 +305,6 @@ const SchoolRoom: React.FC = () => {
                         <span className="text-4xl">+</span>
                         <span className="font-bold text-sm text-center">Criar Novo</span>
                     </button>
-
                     {avatars.map(av => {
                          const isSeated = schoolRoster.some(m => m.avatarId === av.id && m.slotId !== selectedSlotId);
                          return (

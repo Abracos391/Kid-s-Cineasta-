@@ -30,12 +30,9 @@ const StoryReader: React.FC = () => {
     setStory(updatedStory);
     
     try {
-        // Atualiza Cache Imediato
         localStorage.setItem('currentStory', JSON.stringify(updatedStory));
 
-        // Atualiza Biblioteca Permanente
         const shouldSave = user?.plan === 'premium' || updatedStory.isEducational;
-        
         if (shouldSave) {
             const savedStoriesRaw = localStorage.getItem('savedStories');
             if (savedStoriesRaw) {
@@ -44,19 +41,18 @@ const StoryReader: React.FC = () => {
                 
                 if (index !== -1) {
                     savedStories[index] = updatedStory;
-                    localStorage.setItem('savedStories', JSON.stringify(savedStories));
                 } else {
                     savedStories.unshift(updatedStory);
-                    localStorage.setItem('savedStories', JSON.stringify(savedStories));
                 }
+                localStorage.setItem('savedStories', JSON.stringify(savedStories));
             }
         }
     } catch (e: any) {
-        // Trata erro de memória cheia (comum com base64)
         if (e.name === 'QuotaExceededError' || e.code === 22) {
             console.error("LocalStorage cheio!");
             setStorageWarning(true);
-            alert("⚠️ Atenção: A memória do seu navegador está cheia! Imagens e áudios novos podem não ser salvos. Recomendamos apagar histórias antigas da biblioteca.");
+            // Fallback: Se não der para salvar o estado atual (com áudio/img), não faz nada crítico
+            // O usuário foi avisado pelo warning
         } else {
             console.error("Erro ao salvar história:", e);
         }
@@ -65,12 +61,9 @@ const StoryReader: React.FC = () => {
 
   useEffect(() => {
     if (!id) return;
-
-    // Busca na biblioteca
     const allStories: Story[] = JSON.parse(localStorage.getItem('savedStories') || '[]');
     let found = allStories.find(s => String(s.id) === String(id));
     
-    // Fallback: Cache
     if (!found) {
       const current = localStorage.getItem('currentStory');
       if (current) {
@@ -95,10 +88,8 @@ const StoryReader: React.FC = () => {
   }, [id]);
 
   useEffect(() => {
-    // Gerar imagem automaticamente ao abrir o capítulo
     if (story && story.chapters && story.chapters[activeChapterIndex]) {
       const chapter = story.chapters[activeChapterIndex];
-      
       if (!chapter.generatedImage) {
         const charsDesc = story.characters ? story.characters.map(c => `${c.name} (${c.description})`).join(', ') : '';
         const imageUrl = generateChapterIllustration(chapter.visualDescription, charsDesc);
@@ -106,10 +97,17 @@ const StoryReader: React.FC = () => {
         const updatedChapters = [...story.chapters];
         updatedChapters[activeChapterIndex] = { ...chapter, generatedImage: imageUrl };
         
-        updateStoryInStorage({ ...story, chapters: updatedChapters });
+        // Use functional update to ensure we have latest state
+        setStory(prev => {
+            if (!prev) return null;
+            const newStory = { ...prev, chapters: updatedChapters };
+            // Trigger storage update (side effect handled carefully)
+            setTimeout(() => updateStoryInStorage(newStory), 0);
+            return newStory;
+        });
       }
     }
-  }, [activeChapterIndex, story]);
+  }, [activeChapterIndex, story?.id]); // Depend only on Index and Story ID to avoid loops
 
   if (loadError) return (
       <div className="min-h-[60vh] flex items-center justify-center flex-col gap-6 text-center">
@@ -130,19 +128,29 @@ const StoryReader: React.FC = () => {
   );
 
   const currentChapter = story.chapters[activeChapterIndex];
+
+  // CORREÇÃO CRÍTICA: Se não houver capítulo (Fim da história), mostra tela de conclusão, não NULL (tela vazia)
   if (!currentChapter) {
-      setActiveChapterIndex(0);
-      return null; 
+      return (
+          <div className="min-h-[60vh] flex items-center justify-center flex-col gap-6">
+               <Card color="green" className="text-center p-12">
+                   <h1 className="font-heading text-4xl mb-4">Fim da Aventura! 🎉</h1>
+                   <p className="font-bold text-lg mb-8">O que você gostaria de fazer agora?</p>
+                   <div className="flex gap-4 justify-center">
+                       <Button variant="primary" onClick={() => setActiveChapterIndex(0)}>Ler Novamente 📖</Button>
+                       <Button variant="danger" onClick={() => navigate(story.isEducational ? '/school-library' : '/library')}>Sair 🚪</Button>
+                   </div>
+               </Card>
+          </div>
+      );
   }
 
-  // --- Actions ---
   const handleGenerateAudio = async () => {
     const isAllowed = story.isPremium === true || user?.plan === 'premium' || story.isEducational === true;
     if (!isAllowed && user?.plan === 'free') {
         if(confirm("🔒 Narração exclusiva Premium. Deseja conhecer os planos?")) navigate('/pricing');
         return;
     }
-
     if (currentChapter.generatedAudio) return;
     
     setGeneratingAudio(true);
@@ -205,9 +213,8 @@ const StoryReader: React.FC = () => {
   return (
     <div className={`max-w-5xl mx-auto px-4 pb-20 ${story.isEducational ? 'font-sans' : ''}`}>
       
-      {/* Aviso de Memória Cheia */}
       {storageWarning && (
-          <div className="fixed top-0 left-0 w-full bg-red-500 text-white text-center p-2 z-[100] font-bold">
+          <div className="fixed top-0 left-0 w-full bg-red-500 text-white text-center p-2 z-[100] font-bold animate-pulse">
               ⚠️ Memória cheia! Apague histórias antigas para salvar novos áudios.
           </div>
       )}
@@ -241,8 +248,6 @@ const StoryReader: React.FC = () => {
         ))}
       </div>
 
-      {/* --- UI PRINCIPAL DE LEITURA --- */}
-      
       {generatingPDF && (
           <div className="fixed inset-0 bg-black/80 z-[100] flex flex-col items-center justify-center text-white">
               <h2 className="font-comic text-4xl mb-4">Gerando Livro ({pdfProgress}%)...</h2>
@@ -250,7 +255,6 @@ const StoryReader: React.FC = () => {
           </div>
       )}
 
-      {/* Header */}
       <div className="mb-6 bg-white rounded-2xl border-4 border-black p-4 shadow-cartoon flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
             <h1 className="font-heading text-3xl text-cartoon-purple">{story.title}</h1>
@@ -262,7 +266,6 @@ const StoryReader: React.FC = () => {
         </div>
       </div>
 
-      {/* Conteúdo */}
       <div className="grid md:grid-cols-12 gap-8">
         <div className="md:col-span-12">
           <Card className="min-h-[500px] flex flex-col bg-white" color="white">
@@ -297,7 +300,7 @@ const StoryReader: React.FC = () => {
                  {activeChapterIndex < story.chapters.length - 1 ? (
                      <Button onClick={() => setActiveChapterIndex(p => p + 1)} variant="primary">➡️</Button>
                  ) : (
-                     <Button onClick={handleExit} variant="success">FIM 🎉</Button>
+                     <Button onClick={() => setActiveChapterIndex(p => p + 1)} variant="success">FIM 🎉</Button>
                  )}
                </div>
             </div>

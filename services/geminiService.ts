@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Avatar, StoryChapter } from "../types";
 
@@ -16,13 +15,9 @@ const getAiClient = () => {
 // --- HELPER: Extrator de JSON Robusto ---
 const extractJSON = (text: string): any => {
   try {
-    // 1. Tenta parse direto
     return JSON.parse(text);
   } catch (e) {
-    // 2. Remove blocos de código markdown
     let clean = text.replace(/```json/g, '').replace(/```/g, '');
-    
-    // 3. Encontra o primeiro '{' e o último '}'
     const start = clean.indexOf('{');
     const end = clean.lastIndexOf('}');
     
@@ -31,19 +26,43 @@ const extractJSON = (text: string): any => {
       try {
         return JSON.parse(clean);
       } catch (e2) {
-        console.error("Falha ao extrair JSON:", text);
-        // Tenta limpar caracteres de controle comuns
         try {
             clean = clean.replace(/[\u0000-\u001F]+/g, "");
             return JSON.parse(clean);
         } catch (e3) {
-             // Última tentativa: as vezes a IA esquece aspas nas chaves
              throw new Error("Formato inválido.");
         }
       }
     }
     throw new Error("Nenhum JSON encontrado na resposta da IA.");
   }
+};
+
+// --- HELPER: Sanitizador de História ---
+// Garante que o objeto retornado tenha a estrutura exata que o App espera, evitando erros de "undefined"
+const sanitizeStoryData = (rawData: any): { title: string, chapters: StoryChapter[], educationalGoal: string } => {
+  const title = rawData.title || rawData.storyTitle || "Sem Título";
+  const educationalGoal = rawData.educationalGoal || "";
+  
+  let chapters: any[] = [];
+  
+  // Tenta encontrar o array de capítulos em várias chaves comuns que a IA pode confundir
+  if (Array.isArray(rawData.chapters)) chapters = rawData.chapters;
+  else if (Array.isArray(rawData.parts)) chapters = rawData.parts;
+  else if (Array.isArray(rawData.story)) chapters = rawData.story;
+  
+  // Mapeia para o formato estrito do App
+  const cleanChapters: StoryChapter[] = chapters.map((c: any, index: number) => ({
+    title: c.title || c.chapterTitle || `Capítulo ${index + 1}`,
+    text: c.text || c.content || c.storyText || "Texto indisponível.",
+    visualDescription: c.visualDescription || c.imagePrompt || c.description || "Scene from a children's story"
+  }));
+
+  if (cleanChapters.length === 0) {
+      throw new Error("A IA gerou uma história sem capítulos válidos.");
+  }
+
+  return { title, chapters: cleanChapters, educationalGoal };
 };
 
 /**
@@ -100,30 +119,26 @@ export const generateChapterIllustration = (visualDescription: string, character
 };
 
 /**
- * 4. Gera a História (Lazer/Padrão) - COM FALLBACK ROBUSTO
+ * 4. Gera a História (Lazer/Padrão)
  */
 export const generateStory = async (theme: string, characters: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
   const ai = getAiClient();
   const charNames = characters.map(c => c.name).join(", ");
   const charDescs = characters.map(c => c.description).join("; ");
 
-  // TENTATIVA 1: Prompt Estruturado
   try {
+    // TENTATIVA 1
     const prompt = `
-      Você é um autor de livros infantis premiado. Escreva uma história curta e envolvente para crianças de 5-8 anos.
+      Você é um autor de livros infantis. Escreva uma história curta (4 partes) sobre "${theme}".
+      Personagens: ${charNames} (${charDescs}).
       
-      Tema: "${theme}".
-      Personagens Principais: ${charNames} (${charDescs}).
-      
-      Estrutura Obrigatória (JSON puro):
-      1. Título Criativo.
-      2. Exatamente 4 capítulos curtos.
-      3. Para cada capítulo, inclua:
-         - "title": Título do capítulo.
-         - "text": O texto da história (aprox 60 palavras por capítulo).
-         - "visualDescription": Uma descrição curta da cena para o ilustrador desenhar (em inglês).
-
-      IMPORTANTE: Retorne APENAS o JSON válido.
+      RETORNE APENAS JSON:
+      {
+         "title": "Título",
+         "chapters": [
+            { "title": "Cap 1", "text": "...", "visualDescription": "English scene description" }
+         ]
+      }
     `;
 
     const response = await ai.models.generateContent({
@@ -132,72 +147,55 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
       config: { responseMimeType: "application/json" }
     });
 
-    if (response.text) return extractJSON(response.text);
+    if (response.text) return sanitizeStoryData(extractJSON(response.text));
     throw new Error("Resposta vazia.");
 
   } catch (error) {
-    console.warn("Falha na geração padrão, tentando modo simplificado...", error);
-    
-    // TENTATIVA 2: Fallback Simplificado
+    console.warn("Tentando fallback simplificado...", error);
     try {
+        // TENTATIVA 2
         const promptSimple = `
-            Crie uma história infantil simples de 4 partes sobre: ${theme}.
-            Personagens: ${charNames}.
-            
-            Retorne APENAS este JSON:
-            {
-                "title": "Título da História",
-                "chapters": [
-                    { "title": "Parte 1", "text": "...", "visualDescription": "Scene description in English" },
-                    { "title": "Parte 2", "text": "...", "visualDescription": "Scene description in English" },
-                    { "title": "Parte 3", "text": "...", "visualDescription": "Scene description in English" },
-                    { "title": "Parte 4", "text": "...", "visualDescription": "Scene description in English" }
-                ]
-            }
+            Crie uma história de 4 parágrafos sobre: ${theme}. Personagens: ${charNames}.
+            Formato JSON: {"title": "X", "chapters": [{"title": "P1", "text": "...", "visualDescription": "English desc"}]}
         `;
-        
         const responseSimple = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: promptSimple,
             config: { responseMimeType: "application/json" }
         });
-        
-        if (responseSimple.text) return extractJSON(responseSimple.text);
-
+        if (responseSimple.text) return sanitizeStoryData(extractJSON(responseSimple.text));
     } catch (finalError) {
-        console.error("Erro fatal:", finalError);
-        throw new Error("Não foi possível criar a história. Tente um tema mais simples.");
+        throw new Error("Falha na geração da história.");
     }
   }
-  throw new Error("Erro desconhecido na geração.");
+  throw new Error("Erro desconhecido.");
 };
 
 /**
- * 4.1 Gera História PEDAGÓGICA (Modo Escola) - COM FALLBACK ROBUSTO
+ * 4.1 Gera História PEDAGÓGICA (Modo Escola)
  */
 export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, educationalGoal: string, chapters: StoryChapter[] }> => {
     const ai = getAiClient();
     const studentDetails = students.map(c => `${c.name} (Visual: ${c.description})`).join("; ");
 
-    // 1. TENTATIVA COMPLEXA (BNCC)
     try {
+      // TENTATIVA 1 (BNCC)
       const promptComplex = `
-        ATUE COMO: Pedagogo Criativo.
-        SITUAÇÃO: "${situation}"
-        OBJETIVO: Ensinar "${goal}"
+        ATUE COMO: Pedagogo/Autor Infantil.
+        CONTEXTO: Aula sobre "${goal}" baseada na situação "${situation}".
         PERSONAGENS: Prof. ${teacher.name} e alunos: ${studentDetails}.
   
-        Crie uma história infantil em 4 capítulos que resolva essa situação de forma lúdica.
+        Crie uma história de 4 partes com lição de moral clara.
         
-        SAÍDA JSON OBRIGATÓRIA:
+        JSON OBRIGATÓRIO:
         {
           "title": "Título da Aula",
           "educationalGoal": "${goal}",
           "chapters": [
             {
-              "title": "Título do Cap",
+              "title": "Título da Parte",
               "text": "Texto da história...",
-              "visualDescription": "Descrição da cena em INGLÊS para imagem."
+              "visualDescription": "Descrição da cena em INGLÊS."
             }
           ]
         }
@@ -209,29 +207,17 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
         config: { responseMimeType: "application/json" }
       });
   
-      if (response.text) return extractJSON(response.text);
-      throw new Error("Resposta vazia no modo complexo");
+      if (response.text) return sanitizeStoryData(extractJSON(response.text));
+      throw new Error("Resposta vazia");
 
     } catch (error) {
-      console.warn("Falha no modo estrito, tentando modo flexível...", error);
-      
-      // 2. TENTATIVA FLEXÍVEL (FALLBACK)
+      console.warn("Tentando fallback pedagógico...", error);
       try {
+        // TENTATIVA 2 (Simples)
         const promptSimple = `
-            Escreva uma história infantil simples de 4 capítulos sobre "${situation}" onde o objetivo é aprender sobre "${goal}".
-            Personagens: Professor ${teacher.name} e alunos ${studentDetails}.
-            
-            Retorne APENAS este JSON:
-            {
-                "title": "Título",
-                "educationalGoal": "${goal}",
-                "chapters": [
-                    { "title": "Capítulo 1", "text": "...", "visualDescription": "Scene description in English" },
-                    { "title": "Capítulo 2", "text": "...", "visualDescription": "Scene description in English" },
-                    { "title": "Capítulo 3", "text": "...", "visualDescription": "Scene description in English" },
-                    { "title": "Capítulo 4", "text": "...", "visualDescription": "Scene description in English" }
-                ]
-            }
+            Escreva uma história educativa curta (4 partes) sobre "${situation}" ensinando "${goal}".
+            Personagens: Prof ${teacher.name} e alunos ${studentDetails}.
+            JSON: {"title": "X", "educationalGoal": "${goal}", "chapters": [{"title": "1", "text": "...", "visualDescription": "English desc"}]}
         `;
 
         const responseSimple = await ai.models.generateContent({
@@ -240,15 +226,13 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
             config: { responseMimeType: "application/json" }
         });
 
-        if (responseSimple.text) return extractJSON(responseSimple.text);
+        if (responseSimple.text) return sanitizeStoryData(extractJSON(responseSimple.text));
         
       } catch (finalError) {
-          console.error("Erro fatal na geração:", finalError);
-          throw new Error("O sistema está sobrecarregado. Tente simplificar o objetivo da aula.");
+          throw new Error("Não foi possível gerar a aula. Tente simplificar o objetivo.");
       }
     }
-    
-    throw new Error("Falha desconhecida na geração.");
+    throw new Error("Falha desconhecida.");
   };
 
 /**
@@ -257,7 +241,6 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
 export const generateSpeech = async (text: string): Promise<string> => {
   try {
     const ai = getAiClient();
-    
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text }] }],
@@ -273,7 +256,6 @@ export const generateSpeech = async (text: string): Promise<string> => {
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (!base64Audio) throw new Error("Falha na geração de áudio");
-    
     return base64Audio;
 
   } catch (error) {
