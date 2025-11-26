@@ -9,13 +9,14 @@ const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
+  // Não exibe navbar nas telas de login
   if (location.pathname === '/auth' || location.pathname === '/school-login') return null;
 
   const isActive = (path: string) => location.pathname === path;
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
   const closeMenu = () => setIsMenuOpen(false);
 
-  // Define Links com base no tipo de usuário
+  // Lógica corrigida: Se é usuário de escola, ativa modo escola. Caso contrário, modo padrão.
   const isSchoolMode = user?.isSchoolUser;
 
   return (
@@ -24,7 +25,7 @@ const Navbar: React.FC = () => {
       <div className={`bg-white rounded-full border-[3px] border-black shadow-doodle px-4 py-2 relative z-50 transition-all hover:shadow-doodle-hover ${isSchoolMode ? 'bg-[#f0f4f1]' : ''}`}>
         <div className="flex items-center justify-between">
           
-          {/* Logo */}
+          {/* Logo - Redireciona para o lugar certo dependendo do usuário */}
           <Link to={isSchoolMode ? "/school" : "/"} className="flex items-center gap-3 group" onClick={closeMenu}>
             <div className="relative">
                 <div className={`w-12 h-12 rounded-full border-[3px] border-black flex items-center justify-center shadow-sm group-hover:rotate-12 transition-transform z-10 relative ${isSchoolMode ? 'bg-green-700' : 'bg-cartoon-yellow'}`}>
@@ -45,6 +46,7 @@ const Navbar: React.FC = () => {
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center gap-2">
             {!isSchoolMode ? (
+                // MENU PADRÃO (Cineasta Kids)
                 <>
                     <NavLink to="/" active={isActive('/')} color="bg-cartoon-yellow">🏠 Início</NavLink>
                     <NavLink to="/avatars" active={isActive('/avatars')} color="bg-cartoon-green">👾 Avatares</NavLink>
@@ -52,6 +54,7 @@ const Navbar: React.FC = () => {
                     <NavLink to="/library" active={isActive('/library')} color="bg-cartoon-purple">🏰 Biblioteca</NavLink>
                 </>
             ) : (
+                // MENU ESCOLA
                 <>
                     <NavLink to="/school" active={isActive('/school')} color="bg-green-300">🏫 Sala de Aula</NavLink>
                     <NavLink to="/school-library" active={isActive('/school-library')} color="bg-yellow-300">📂 Arquivo</NavLink>
@@ -163,7 +166,7 @@ const UserSection: React.FC<{ user: any, logout: () => void, isMobile?: boolean,
             onClick={() => { logout(); if(onClick) onClick(); }} 
             className="w-full bg-red-400 text-white px-3 py-1.5 rounded-lg border-2 border-black font-bold hover:bg-red-500 hover:shadow-sm transition-colors text-sm flex items-center justify-center gap-1"
           >
-            🚪 <span className="hidden md:inline">Sair</span>
+            {user.isSchoolUser ? 'Sair da Escola' : 'Sair'}
           </button>
       </div>
     </div>

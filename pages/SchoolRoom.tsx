@@ -121,27 +121,41 @@ const SchoolRoom: React.FC = () => {
       authService.consumeStoryCredit(user.id, 'premium');
       refreshUser();
 
-      // SALVAMENTO SEGURO (Resiliente a QuotaExceeded)
+      // --- SALVAMENTO SEGURO (Resiliente a QuotaExceeded) ---
       try {
         const savedStoriesRaw = localStorage.getItem('savedStories');
         const existingStories = savedStoriesRaw ? JSON.parse(savedStoriesRaw) : [];
         const newSavedStories = [fullStory, ...existingStories];
         localStorage.setItem('savedStories', JSON.stringify(newSavedStories));
-        localStorage.setItem('currentStory', JSON.stringify(fullStory));
       } catch (storageError: any) {
-        console.warn("Memória cheia, tentando salvar sem cache pesado...");
-        // Se falhar (memória cheia), tenta salvar mas avisa o usuário
-        if (storageError.name === 'QuotaExceededError') {
-             alert("⚠️ Atenção: A memória do navegador está cheia. Esta história será salva, mas áudios antigos podem ser perdidos. Recomendamos limpar o cache nas configurações do navegador.");
-             // Tenta salvar APENAS a história atual no current para não perder o trabalho agora
+        console.warn("Memória cheia, tentando salvar sem assets antigos...");
+        if (storageError.name === 'QuotaExceededError' || storageError.code === 22) {
+             // Fallback: Tenta salvar a nova história, mas limpa áudios de histórias antigas para abrir espaço
              try {
-                localStorage.setItem('currentStory', JSON.stringify(fullStory));
-             } catch (e) {
-                 alert("Erro crítico de memória. Não foi possível salvar.");
+                const savedStoriesRaw = localStorage.getItem('savedStories');
+                const existingStories = savedStoriesRaw ? JSON.parse(savedStoriesRaw) : [];
+                
+                // Limpa assets de histórias antigas
+                const compactedStories = existingStories.map((s: any) => ({
+                    ...s,
+                    chapters: s.chapters.map((c: any) => ({
+                        ...c,
+                        generatedAudio: undefined, // Remove áudio antigo
+                        generatedImage: undefined  // Remove imagem antiga
+                    }))
+                }));
+                
+                const newSavedStories = [fullStory, ...compactedStories];
+                localStorage.setItem('savedStories', JSON.stringify(newSavedStories));
+                alert("⚠️ Atenção: A memória do navegador estava cheia. Histórias antigas tiveram o áudio removido para salvar esta nova aula.");
+             } catch (finalError) {
+                 alert("Erro crítico: Memória totalmente cheia. Limpe seus dados de navegação.");
              }
         }
       }
 
+      // Salva no current para leitura imediata
+      localStorage.setItem('currentStory', JSON.stringify(fullStory));
       navigate(`/story/${fullStory.id}`);
 
     } catch (e: any) {
