@@ -32,7 +32,13 @@ const extractJSON = (text: string): any => {
         return JSON.parse(clean);
       } catch (e2) {
         console.error("Falha ao extrair JSON:", text);
-        throw new Error("A IA gerou um formato inválido.");
+        // Tenta limpar caracteres de controle comuns
+        try {
+            clean = clean.replace(/[\u0000-\u001F]+/g, "");
+            return JSON.parse(clean);
+        } catch (e3) {
+            throw new Error("A IA gerou um formato inválido.");
+        }
       }
     }
     throw new Error("Nenhum JSON encontrado na resposta da IA.");
@@ -73,7 +79,9 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
  */
 export const generateCaricatureImage = async (description: string): Promise<string> => {
   const seed = Math.floor(Math.random() * 10000);
-  const prompt = `cute 3d disney pixar character, ${description}, white background, soft studio lighting, 4k render, vibrant colors, --no text`;
+  // Proteção contra descrição vazia
+  const safeDesc = description && description.trim().length > 0 ? description : "cute 3d character";
+  const prompt = `cute 3d disney pixar character, ${safeDesc}, white background, soft studio lighting, 4k render, vibrant colors, --no text`;
   const encodedPrompt = encodeURIComponent(prompt);
   return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=800&seed=${seed}&nologo=true&model=flux`;
 };
@@ -156,42 +164,34 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
 };
 
 /**
- * 4.1 Gera História PEDAGÓGICA (Modo Escola - BNCC)
- * Segue estritamente diretrizes educacionais brasileiras.
+ * 4.1 Gera História PEDAGÓGICA (Modo Escola)
+ * Com Fallback para garantir geração
  */
 export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, educationalGoal: string, chapters: StoryChapter[] }> => {
+    const ai = getAiClient();
+    const studentDetails = students.map(c => `${c.name} (Visual: ${c.description})`).join("; ");
+
+    // 1. TENTATIVA COMPLEXA (BNCC)
     try {
-      const ai = getAiClient();
-      
-      // Cria uma string rica com Nome + Descrição Física para garantir consistência visual
-      const studentDetails = students.map(c => `${c.name} (Visual: ${c.description})`).join("; ");
-      
-      const prompt = `
-        ATUE COMO: Especialista em Educação Infantil e Fundamental I no Brasil (BNCC).
+      console.log("Tentando gerar aula padrão BNCC...");
+      const promptComplex = `
+        ATUE COMO: Pedagogo Criativo.
         
-        CONTEXTO:
-        - Situação Problema: "${situation}"
-        - Objetivo Pedagógico: "${goal}"
-        - Mediador: Prof. ${teacher.name}
-        - Alunos: ${studentDetails}.
+        SITUAÇÃO: "${situation}"
+        OBJETIVO: Ensinar "${goal}"
+        PERSONAGENS: Prof. ${teacher.name} e alunos: ${studentDetails}.
   
-        TAREFA: Criar uma história didática em 4 partes.
+        Crie uma história infantil em 4 capítulos que resolva essa situação de forma lúdica.
         
-        ESTRUTURA (JSON):
-           - Cap 1: O Conflito (A situação acontece).
-           - Cap 2: A Consequência (Sentimentos e efeitos).
-           - Cap 3: A Mediação (Prof. ${teacher.name} intervém).
-           - Cap 4: A Resolução (Aprendizado).
-        
-        SAÍDA OBRIGATÓRIA (JSON VÁLIDO):
+        SAÍDA JSON OBRIGATÓRIA:
         {
-          "title": "Título da História",
-          "educationalGoal": "Habilidade BNCC trabalhada",
+          "title": "Título da Aula",
+          "educationalGoal": "${goal}",
           "chapters": [
             {
-              "title": "...",
-              "text": "Texto da história (pt-BR)...",
-              "visualDescription": "Prompt detalhado em INGLÊS para gerar a imagem. Descreva quem está na cena e o que fazem. Ex: 'Teacher Maria talking to a boy with glasses in a park'."
+              "title": "Título do Cap",
+              "text": "Texto da história...",
+              "visualDescription": "Descrição da cena em INGLÊS para imagem."
             }
           ]
         }
@@ -199,39 +199,55 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
   
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              educationalGoal: { type: Type.STRING },
-              chapters: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    title: { type: Type.STRING },
-                    text: { type: Type.STRING },
-                    visualDescription: { type: Type.STRING }
-                  }
-                }
-              }
-            }
-          }
-        }
+        contents: promptComplex,
+        config: { responseMimeType: "application/json" }
       });
   
-      const jsonText = response.text;
-      if (!jsonText) throw new Error("A IA retornou um texto vazio.");
-  
-      return extractJSON(jsonText);
-  
+      if (response.text) {
+        return extractJSON(response.text);
+      }
+      throw new Error("Resposta vazia no modo complexo");
+
     } catch (error) {
-      console.error("Erro ao gerar aula:", error);
-      throw error;
+      console.warn("Falha no modo estrito, tentando modo flexível...", error);
+      
+      // 2. TENTATIVA FLEXÍVEL (FALLBACK)
+      // Remove restrições e pede uma história simples, garantindo que o usuário não fique sem resposta.
+      try {
+        const promptSimple = `
+            Escreva uma história infantil simples de 4 capítulos sobre "${situation}" onde o objetivo é aprender sobre "${goal}".
+            Personagens: Professor ${teacher.name} e alunos ${studentDetails}.
+            
+            Retorne APENAS este JSON:
+            {
+                "title": "Título",
+                "educationalGoal": "${goal}",
+                "chapters": [
+                    { "title": "Capítulo 1", "text": "...", "visualDescription": "Scene description in English" },
+                    { "title": "Capítulo 2", "text": "...", "visualDescription": "Scene description in English" },
+                    { "title": "Capítulo 3", "text": "...", "visualDescription": "Scene description in English" },
+                    { "title": "Capítulo 4", "text": "...", "visualDescription": "Scene description in English" }
+                ]
+            }
+        `;
+
+        const responseSimple = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: promptSimple,
+            config: { responseMimeType: "application/json" }
+        });
+
+        if (responseSimple.text) {
+            return extractJSON(responseSimple.text);
+        }
+        
+      } catch (finalError) {
+          console.error("Erro fatal na geração:", finalError);
+          throw new Error("O sistema está sobrecarregado. Tente um tema mais simples.");
+      }
     }
+    
+    throw new Error("Falha desconhecida na geração.");
   };
 
 /**
