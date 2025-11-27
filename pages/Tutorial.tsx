@@ -39,7 +39,7 @@ const Tutorial: React.FC = () => {
                 <li>Digite um e-mail válido.</li>
                 <li>Crie uma senha secreta!</li>
             </ul>
-            <ImagePlaceholder label="Print da Tela de Cadastro (Auth.tsx)" />
+            <TutorialImage src="/print_cadastro.png" label="Salve o print como: public/print_cadastro.png" />
         </Section>
 
         {/* PASSO 2: AVATARES */}
@@ -62,7 +62,7 @@ const Tutorial: React.FC = () => {
             <p className="mt-4 text-sm bg-yellow-100 p-2 rounded border border-yellow-500">
                 💡 <strong>Dica:</strong> O robô vai transformar sua foto em desenho 3D automaticamente!
             </p>
-            <ImagePlaceholder label="Print da Tela de Criação de Avatar (AvatarCreator.tsx)" />
+            <TutorialImage src="/print_avatar.png" label="Salve o print como: public/print_avatar.png" />
         </Section>
 
         {/* PASSO 3: CRIAR HISTÓRIA */}
@@ -78,7 +78,7 @@ const Tutorial: React.FC = () => {
                 <li>Escreva sua ideia na caixa de texto. Pode ser qualquer coisa! <br/><em>Ex: "Uma viagem para a lua feita de queijo".</em></li>
                 <li>Clique no botão gigante <strong>CRIAR HISTÓRIA</strong>.</li>
             </ol>
-            <ImagePlaceholder label="Print da Tela StoryWizard com avatares selecionados" />
+            <TutorialImage src="/print_historia.png" label="Salve o print como: public/print_historia.png" />
         </Section>
 
         {/* PASSO 4: LENDO E OUVINDO */}
@@ -94,7 +94,7 @@ const Tutorial: React.FC = () => {
                 <li>Clicar em <strong>"🔊 Narrar"</strong> para o computador ler para você.</li>
                 <li>No final, clicar em <strong>"📚 Baixar PDF"</strong> para imprimir seu livro!</li>
             </ul>
-            <ImagePlaceholder label="Print da Tela de Leitura (StoryReader) mostrando a imagem e texto" />
+            <TutorialImage src="/print_leitura.png" label="Salve o print como: public/print_leitura.png" />
         </Section>
 
         {/* EXTRA: MODO ESCOLA */}
@@ -113,7 +113,7 @@ const Tutorial: React.FC = () => {
                     <li>Na <strong>Sala de Aula</strong>, organize os alunos nas cadeiras.</li>
                     <li>Use a <strong>Lousa Mágica</strong> para criar fábulas educativas baseadas na BNCC.</li>
                 </ol>
-                <ImagePlaceholder label="Print da Sala de Aula (SchoolRoom.tsx)" />
+                <TutorialImage src="/print_escola.png" label="Salve o print como: public/print_escola.png" />
             </Section>
         </div>
 
@@ -132,7 +132,7 @@ const Tutorial: React.FC = () => {
   );
 };
 
-// Componentes Auxiliares para o Tutorial
+// Componentes Auxiliares
 
 const Section: React.FC<{number: string, title: string, color: any, emoji: string, children: React.ReactNode}> = ({ number, title, color, emoji, children }) => (
     <Card color={color} className="relative overflow-visible">
@@ -150,12 +150,30 @@ const Section: React.FC<{number: string, title: string, color: any, emoji: strin
     </Card>
 );
 
-const ImagePlaceholder: React.FC<{label: string}> = ({ label }) => (
-    <div className="mt-6 w-full h-64 border-4 border-dashed border-black/30 rounded-xl bg-gray-50 flex flex-col items-center justify-center text-center p-4 group hover:bg-gray-100 transition-colors cursor-help">
-        <div className="text-6xl opacity-20 mb-2 group-hover:scale-110 transition-transform">📷</div>
-        <p className="font-bold text-gray-400 uppercase tracking-widest text-sm">{label}</p>
-        <p className="text-xs text-gray-400 mt-2">(Substitua esta área por um print real do app)</p>
-    </div>
-);
+// Componente inteligente de imagem
+const TutorialImage: React.FC<{src: string, label: string}> = ({ src, label }) => {
+    const [error, setError] = React.useState(false);
+
+    if (error) {
+        return (
+            <div className="mt-6 w-full h-64 border-4 border-dashed border-black/30 rounded-xl bg-gray-50 flex flex-col items-center justify-center text-center p-4 group hover:bg-gray-100 transition-colors cursor-help">
+                <div className="text-6xl opacity-20 mb-2 group-hover:scale-110 transition-transform">📷</div>
+                <p className="font-bold text-gray-500 text-sm">Imagem não encontrada</p>
+                <p className="text-xs text-blue-600 font-mono mt-2 bg-blue-50 p-2 rounded select-all">{label}</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="mt-6 rounded-xl border-4 border-black overflow-hidden shadow-lg transform rotate-1 hover:rotate-0 transition-transform bg-white">
+            <img 
+                src={src} 
+                alt="Tutorial" 
+                className="w-full h-auto object-cover"
+                onError={() => setError(true)}
+            />
+        </div>
+    );
+};
 
 export default Tutorial;
