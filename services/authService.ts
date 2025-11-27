@@ -53,16 +53,19 @@ export const authService = {
     }
     
     // Se tentar logar com credencial de escola no login comum, remove a flag ou avisa
-    // Aqui assumimos que é um login pessoal.
     user.isSchoolUser = false;
 
-    // Reset mensal automático para plano FREE
+    // Reset mensal automático para plano FREE e PREMIUM (simulado)
     const now = new Date();
     const lastReset = new Date(user.lastResetDate);
     
     if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
       user.monthlyFreeUsed = 0;
       user.monthlyPremiumTrialUsed = 0;
+      
+      // Se for Premium recorrente, renovaria os créditos aqui. 
+      // Como é pacote avulso no modelo atual, mantemos os créditos existentes.
+      
       user.lastResetDate = Date.now();
       
       const userIndex = users.findIndex(u => u.id === user.id);
@@ -76,19 +79,9 @@ export const authService = {
 
   // --- LOGIN EXCLUSIVO MODO ESCOLA ---
   
-  // Login existente (Professor)
   loginAsTeacher: (teacherName: string, accessCode: string): User => {
-    // Código fixo para demonstração. Em produção, viria do backend.
     const SCHOOL_CODE = "PROFESSOR123";
 
-    // Simulação: Aceita o código padrão OU qualquer código se o usuário estiver "simulando" persistência neste MVP
-    // Para simplificar: Se não for o código padrão, rejeita (a menos que tenhamos implementado persistência real de escolas, que faremos no register abaixo)
-    if (accessCode !== SCHOOL_CODE && accessCode !== 'TESTE') {
-         // Verifica se existe uma "sessão salva" (mock) ou rejeita
-         // throw new Error("Código de Acesso Escolar Inválido.");
-    }
-    
-    // Para manter compatibilidade com usuários antigos do teste
     if (accessCode !== SCHOOL_CODE) {
          throw new Error("Código de Acesso Escolar Inválido.");
     }
@@ -98,34 +91,35 @@ export const authService = {
         name: `Prof. ${teacherName}`,
         email: 'school_mode@cineastakids.edu',
         plan: 'premium',
-        credits: 9999,
+        credits: 10, // Pacote Escola: 10 histórias
+        schoolStoriesUsed: 0,
         monthlyFreeUsed: 0,
         monthlyPremiumTrialUsed: 0,
         lastResetDate: Date.now(),
         isSchoolUser: true,
-        schoolName: 'Escola Cineasta Kids'
+        schoolName: 'Escola Cineasta Kids',
+        maxStudents: 40
     };
 
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(teacherUser));
     return teacherUser;
   },
 
-  // Novo: Cadastro de Escola
+  // Cadastro de Escola
   registerSchool: (schoolName: string, teacherName: string, accessCode: string): User => {
-      // Cria uma sessão nova com os dados fornecidos
-      // Como não temos backend real, o "Cadastro" efetivamente loga o usuário com as configurações personalizadas
-      
       const newSchoolUser: User = {
         id: `school_${Date.now()}`,
         name: `Prof. ${teacherName}`,
         email: `${teacherName.toLowerCase().replace(/\s/g, '.')}@${schoolName.toLowerCase().replace(/\s/g, '')}.edu`,
-        plan: 'premium', // Escolas tem acesso full
-        credits: 9999,
+        plan: 'premium',
+        credits: 10, // Pacote inicial Escola: 10 histórias
+        schoolStoriesUsed: 0,
         monthlyFreeUsed: 0,
         monthlyPremiumTrialUsed: 0,
         lastResetDate: Date.now(),
         isSchoolUser: true,
-        schoolName: schoolName
+        schoolName: schoolName,
+        maxStudents: 40
     };
 
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(newSchoolUser));
@@ -141,42 +135,52 @@ export const authService = {
     return stored ? JSON.parse(stored) : null;
   },
 
-  // Regras de Negócio: Verificar Permissão
+  // REGRAS DE NEGÓCIO (PERMISSÕES)
   canCreateStory: (user: User): { allowed: boolean; type?: 'premium' | 'free'; reason?: string } => {
-    // Escolas têm acesso liberado
-    if (user.isSchoolUser) return { allowed: true, type: 'premium' };
+    // 1. MODO ESCOLA
+    if (user.isSchoolUser) {
+        const used = user.schoolStoriesUsed || 0;
+        // Limite: 10 histórias no pacote
+        if (used < 10) return { allowed: true, type: 'premium' };
+        return { allowed: false, reason: 'O pacote de 10 aulas da escola acabou. Contrate um novo pacote por R$ 99,00.' };
+    }
 
+    // 2. PLANO PREMIUM (Individual)
     if (user.plan === 'premium') {
       if (user.credits > 0) return { allowed: true, type: 'premium' };
-      return { allowed: false, reason: 'Seus créditos de história acabaram. Adquira mais na loja!' };
+      return { allowed: false, reason: 'Seus créditos Premium acabaram. Adquira mais na loja!' };
     } 
     
-    // Plano FREE
+    // 3. PLANO FREE
+    // Regra: 1 História Premium (Full) + 3 Histórias Standard (Texto)
+    
+    // Prioridade 1: Tenta usar a cota Premium gratuita do mês
     if (user.monthlyPremiumTrialUsed < 1) {
         return { allowed: true, type: 'premium' }; 
     }
     
-    if (user.monthlyFreeUsed < 2) {
+    // Prioridade 2: Tenta usar a cota Standard gratuita (sem áudio/save)
+    if (user.monthlyFreeUsed < 3) {
         return { allowed: true, type: 'free' };
     }
 
-    return { allowed: false, reason: 'Você atingiu o limite mensal (1 Premium + 2 Free). Volte mês que vem ou faça upgrade!' };
+    return { allowed: false, reason: 'Você atingiu o limite mensal (1 Completa + 3 Texto). Volte mês que vem ou faça upgrade!' };
   },
 
   // Consumir Cota
   consumeStoryCredit: (userId: string, type: 'premium' | 'free'): User => {
     const users = getUsers();
     
-    // Se for user de escola (ID começa com school_), não persistimos consumo em banco, apenas retornamos
+    // Tratamento para Escola (não persiste em 'users' principal, mas no currentUser mockado para este frontend)
     if (userId.startsWith('school_')) {
         const currentUser = JSON.parse(localStorage.getItem(CURRENT_USER_KEY) || '{}');
+        currentUser.schoolStoriesUsed = (currentUser.schoolStoriesUsed || 0) + 1;
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
         return currentUser;
     }
 
     const userIndex = users.findIndex(u => u.id === userId);
-    
     if (userIndex === -1) throw new Error("Usuário não encontrado");
-    
     const user = users[userIndex];
 
     if (user.plan === 'premium') {
@@ -195,15 +199,35 @@ export const authService = {
     return user;
   },
 
-  buyPack: (userId: string): User => {
+  // Comprar Pacotes
+  buyPack: (userId: string, packType: 'premium_5' | 'school_10' | 'enterprise_100'): User => {
     const users = getUsers();
+    
+    // Mock de compra para escola (usuário não listado em 'users')
+    if (userId.startsWith('school_')) {
+        const currentUser = JSON.parse(localStorage.getItem(CURRENT_USER_KEY) || '{}');
+        if (packType === 'school_10') {
+            currentUser.schoolStoriesUsed = Math.max(0, (currentUser.schoolStoriesUsed || 0) - 10); // Reseta uso ou add creditos
+            // Simplificação: Reseta o contador de uso para 0 (novo ciclo)
+            currentUser.schoolStoriesUsed = 0; 
+        }
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
+        return currentUser;
+    }
+
     const userIndex = users.findIndex(u => u.id === userId);
-    
     if (userIndex === -1) throw new Error("Usuário não encontrado");
-    
     const user = users[userIndex];
-    user.plan = 'premium';
-    user.credits = (user.credits || 0) + 5;
+    
+    if (packType === 'premium_5') {
+        user.plan = 'premium';
+        user.credits = (user.credits || 0) + 5;
+    }
+    
+    if (packType === 'enterprise_100') {
+        user.plan = 'enterprise';
+        user.credits = (user.credits || 0) + 100;
+    }
 
     users[userIndex] = user;
     saveUsers(users);

@@ -3,18 +3,20 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  plan: 'free' | 'premium';
-  credits: number; // Para plano premium (pacotes comprados)
+  plan: 'free' | 'premium' | 'enterprise';
+  credits: number; // Créditos avulsos ou mensais do plano Premium
   
   // Controle do plano FREE (Mensal)
-  monthlyFreeUsed: number; // Limite: 2
-  monthlyPremiumTrialUsed: number; // Limite: 1
+  monthlyFreeUsed: number; // Limite Novo: 3 (Apenas texto/avatar)
+  monthlyPremiumTrialUsed: number; // Limite Novo: 1 (Completa)
   
   lastResetDate: number; // Para resetar o contador mensal
 
   // MODO ESCOLA
   isSchoolUser?: boolean; // Flag para identificar sessão de professor
   schoolName?: string; // Nome da instituição
+  schoolStoriesUsed?: number; // Limite Novo: 10 por pacote
+  maxStudents?: number; // Limite Novo: 40
 }
 
 export interface Avatar {

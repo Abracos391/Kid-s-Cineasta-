@@ -48,7 +48,7 @@ const StoryWizard: React.FC = () => {
 
     const check = authService.canCreateStory(user);
     if (!check.allowed) {
-        if (confirm(`${check.reason}\n\n✨ Deseja fazer o upgrade para o plano Premium e desbloquear mais histórias?`)) {
+        if (confirm(`${check.reason}\n\n✨ Deseja ir para a Loja ver os planos?`)) {
             navigate('/pricing');
         }
         return;
@@ -72,6 +72,7 @@ const StoryWizard: React.FC = () => {
       authService.consumeStoryCredit(user.id, check.type || 'free');
       refreshUser();
 
+      // Só salva na biblioteca se for Premium (seja pago ou a cota gratuita premium)
       if (check.type === 'premium') {
           try {
             const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
@@ -105,20 +106,26 @@ const StoryWizard: React.FC = () => {
             Montando a Aventura 🗺️
         </h1>
         {user?.plan === 'free' && (
-            <div className="bg-white border-2 border-black px-4 py-2 rounded-lg text-sm font-bold shadow-doodle flex flex-col items-end gap-1">
-                <div className="flex items-center gap-2">
-                    <span>👑 Premium Trial:</span>
-                    <span className={user.monthlyPremiumTrialUsed < 1 ? "text-green-600" : "text-gray-400"}>
-                        {1 - (user.monthlyPremiumTrialUsed || 0)}/1
-                    </span>
+            <div className="bg-white border-2 border-black px-4 py-2 rounded-lg text-sm font-bold shadow-doodle flex flex-col items-end gap-1 transform rotate-1">
+                <div className="text-xs text-gray-500 mb-1 uppercase tracking-wide">Seus Créditos (Mês)</div>
+                <div className="flex items-center gap-3">
+                    <div className="text-right">
+                        <span className="block text-xs">🌟 Completa</span>
+                        <span className={`text-lg font-comic ${user.monthlyPremiumTrialUsed < 1 ? "text-green-600" : "text-gray-400"}`}>
+                            {1 - (user.monthlyPremiumTrialUsed || 0)}/1
+                        </span>
+                    </div>
+                    <div className="w-px h-8 bg-gray-300"></div>
+                     <div className="text-right">
+                        <span className="block text-xs">📝 Texto</span>
+                        <span className={`text-lg font-comic ${user.monthlyFreeUsed < 3 ? "text-blue-600" : "text-gray-400"}`}>
+                            {3 - (user.monthlyFreeUsed || 0)}/3
+                        </span>
+                    </div>
                 </div>
-                 <div className="flex items-center gap-2 text-xs">
-                    <span>🆓 Free Simples:</span>
-                    <span className={user.monthlyFreeUsed < 2 ? "text-blue-600" : "text-gray-400"}>
-                        {2 - (user.monthlyFreeUsed || 0)}/2
-                    </span>
-                </div>
-                <Button size="sm" variant="success" onClick={() => navigate('/pricing')} className="mt-1">Upgrade</Button>
+                <Button size="sm" variant="success" onClick={() => navigate('/pricing')} className="mt-1 w-full text-xs py-1 h-auto">
+                    + Créditos
+                </Button>
             </div>
         )}
       </div>
@@ -195,10 +202,10 @@ const StoryWizard: React.FC = () => {
             >
                 {loading ? 'Escrevendo a história... 🪄' : 'CRIAR HISTÓRIA! 🎬'}
             </Button>
-            {user?.plan === 'free' && (
-                <p className="text-center text-xs font-bold mt-2 bg-yellow-100 p-2 border border-black rounded mx-auto max-w-xs">
-                    🔒 Histórias "Free Simples" não salvam na biblioteca e não têm áudio. <br/>
-                    <span className="text-red-600">Use seu crédito Premium mensal com sabedoria!</span>
+            {user?.plan === 'free' && user.monthlyPremiumTrialUsed >= 1 && (
+                <p className="text-center text-xs font-bold mt-2 bg-blue-50 p-2 border border-blue-200 rounded mx-auto max-w-xs text-blue-800">
+                    ℹ️ Você está usando o crédito "Texto Simples". <br/>
+                    A história não terá áudio nem será salva na biblioteca.
                 </p>
             )}
           </div>
