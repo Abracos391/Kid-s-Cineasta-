@@ -11,8 +11,9 @@ const Auth: React.FC = () => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false); // Novo estado local
   
-  const { login, register, user, loading } = useAuth(); // Adicionado user e loading
+  const { login, register, user, loading } = useAuth(); 
   const navigate = useNavigate();
 
   // Redirecionamento Automático se já estiver logado
@@ -27,29 +28,31 @@ const Auth: React.FC = () => {
     }
   }, [user, loading, navigate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSubmitting(true);
     
     try {
       if (isLogin) {
-        login(email, password);
+        await login(email, password);
       } else {
         if (!name) throw new Error("Nome é obrigatório");
-        register(name, email, password);
+        await register(name, email, password);
       }
-      navigate('/');
+      // O useEffect acima vai lidar com o redirecionamento assim que o 'user' mudar
     } catch (err: any) {
       setError(err.message || "Ocorreu um erro.");
+      setSubmitting(false);
     }
   };
 
-  if (loading) return null; // Evita piscar a tela de login enquanto verifica
+  if (loading) return null; 
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-white/50 relative">
       
-      {/* Botão de Ajuda Flutuante (Visível para novos usuários) */}
+      {/* Botão de Ajuda Flutuante */}
       <div className="absolute top-4 right-4 md:top-8 md:right-8 z-50">
           <Link to="/tutorial">
              <button className="bg-cartoon-blue text-white font-comic font-bold px-4 py-2 rounded-full border-2 border-black shadow-doodle hover:scale-105 transition-transform animate-bounce-slow flex items-center gap-2">
@@ -60,7 +63,6 @@ const Auth: React.FC = () => {
 
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-            {/* CK Logo Large */}
             <div className="w-32 h-32 mx-auto mb-6 bg-cartoon-yellow rounded-full border-4 border-black flex items-center justify-center shadow-cartoon animate-bounce-slow transform -rotate-3">
                 <span className="font-comic text-7xl text-cartoon-pink text-stroke-black tracking-tighter mt-2">CK</span>
             </div>
@@ -112,15 +114,16 @@ const Auth: React.FC = () => {
 
                 {error && <p className="text-red-500 font-bold text-center bg-red-100 p-2 rounded-lg border-2 border-red-500 animate-pulse">{error}</p>}
 
-                <Button variant="primary" size="lg" className="w-full">
+                <Button variant="primary" size="lg" className="w-full" loading={submitting}>
                     {isLogin ? '🚀 DECOLAR!' : '✨ CADASTRAR'}
                 </Button>
             </form>
 
             <div className="mt-6 text-center border-t-2 border-gray-100 pt-4">
                 <button 
-                    onClick={() => setIsLogin(!isLogin)}
+                    onClick={() => { setIsLogin(!isLogin); setError(''); }}
                     className="text-blue-600 font-bold hover:underline font-sans"
+                    type="button"
                 >
                     {isLogin ? 'Não tem conta? Crie grátis!' : 'Já tem conta? Entre aqui.'}
                 </button>

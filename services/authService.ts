@@ -32,11 +32,14 @@ export const authService = {
     const cleanEmail = email.toLowerCase().trim();
     
     // Verifica se já existe
-    const { data: existing } = await supabase
+    // CORREÇÃO: Usar maybeSingle() em vez de single(). 
+    // single() lança erro se não encontrar nada (o que trava o cadastro). 
+    // maybeSingle() retorna null (o que permite continuar).
+    const { data: existing, error: checkError } = await supabase
       .from(TABLE_USERS)
       .select('id')
       .eq('email', cleanEmail)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       throw new Error('Este e-mail já está cadastrado.');
@@ -108,7 +111,7 @@ export const authService = {
      const fakeEmail = `school_${teacherName.toLowerCase().replace(/\s/g, '')}@cineastakids.edu`;
      
      // Tenta buscar
-     const { data } = await supabase.from(TABLE_USERS).select('*').eq('email', fakeEmail).single();
+     const { data } = await supabase.from(TABLE_USERS).select('*').eq('email', fakeEmail).maybeSingle();
      
      if (data) {
          localStorage.setItem('ck_current_user_id', data.id);

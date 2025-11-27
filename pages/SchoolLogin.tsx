@@ -6,46 +6,44 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 
 const SchoolLogin: React.FC = () => {
-  // Estado para alternar entre Login e Cadastro
   const [isRegistering, setIsRegistering] = useState(false);
   
-  const [name, setName] = useState(''); // Nome do Professor
-  const [schoolName, setSchoolName] = useState(''); // Nome da Escola (Novo)
-  const [code, setCode] = useState(''); // Código
+  const [name, setName] = useState(''); 
+  const [schoolName, setSchoolName] = useState(''); 
+  const [code, setCode] = useState(''); 
   
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false); // Novo estado local
   
   const { loginAsTeacher, registerSchool, user, loading } = useAuth();
   const navigate = useNavigate();
 
-  // Verifica se o professor já está logado
   useEffect(() => {
     if (!loading && user?.isSchoolUser) {
         navigate('/school');
     }
   }, [user, loading, navigate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSubmitting(true);
     
     try {
       if (isRegistering) {
-          // FLUXO CADASTRO
           if (!schoolName.trim()) throw new Error("O nome da escola é obrigatório.");
           if (!name.trim()) throw new Error("O nome do educador é obrigatório.");
           if (code.length < 4) throw new Error("Crie um código com pelo menos 4 caracteres.");
           
-          registerSchool(schoolName, name, code);
+          await registerSchool(schoolName, name, code);
       } else {
-          // FLUXO LOGIN
           if (!name.trim()) throw new Error("Por favor, identifique-se Professor(a).");
-          loginAsTeacher(name, code);
+          await loginAsTeacher(name, code);
       }
-      
-      navigate('/school'); // Sucesso -> Sala de Aula
+      // O useEffect cuidará da navegação
     } catch (err: any) {
       setError(err.message || "Acesso negado.");
+      setSubmitting(false);
     }
   };
 
@@ -74,7 +72,6 @@ const SchoolLogin: React.FC = () => {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     
-                    {/* Campo Extra para Cadastro: Nome da Escola */}
                     {isRegistering && (
                         <div className="animate-fade-in">
                             <label className="block text-white font-bold mb-1 font-heading uppercase text-xs tracking-wider">Nome da Instituição</label>
@@ -121,7 +118,7 @@ const SchoolLogin: React.FC = () => {
                         </div>
                     )}
 
-                    <Button variant="success" size="lg" className="w-full border-white shadow-none mt-4">
+                    <Button variant="success" size="lg" className="w-full border-white shadow-none mt-4" loading={submitting}>
                         {isRegistering ? 'CADASTRAR ESCOLA ✨' : 'ACESSAR SALA DE AULA 🎓'}
                     </Button>
                 </form>
@@ -135,6 +132,7 @@ const SchoolLogin: React.FC = () => {
                             setCode('');
                         }}
                         className="text-yellow-300 hover:text-yellow-100 underline text-sm font-bold"
+                        type="button"
                     >
                         {isRegistering 
                             ? 'Já possui cadastro? Faça Login.' 
