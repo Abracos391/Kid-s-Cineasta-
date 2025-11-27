@@ -16,7 +16,7 @@ const SchoolLibrary: React.FC = () => {
   }, []);
 
   const deleteStory = (id: string) => {
-    if(confirm('Professor(a), deseja remover este material didático do acervo?')) {
+    if(confirm('Professor(a), deseja remover este material didático da biblioteca?')) {
       const allStories: Story[] = JSON.parse(localStorage.getItem('savedStories') || '[]');
       const updated = allStories.filter(s => s.id !== id);
       localStorage.setItem('savedStories', JSON.stringify(updated));
@@ -27,9 +27,9 @@ const SchoolLibrary: React.FC = () => {
   };
 
   const getStoryStatus = (story: Story) => {
-      const totalChapters = story.chapters.length;
-      const audioCount = story.chapters.filter(c => !!c.generatedAudio).length;
-      const imageCount = story.chapters.filter(c => !!c.generatedImage).length;
+      const totalChapters = story.chapters?.length || 0;
+      const audioCount = story.chapters?.filter(c => !!c.generatedAudio).length || 0;
+      const imageCount = story.chapters?.filter(c => !!c.generatedImage).length || 0;
       
       return {
           hasAudio: audioCount > 0,
@@ -44,9 +44,9 @@ const SchoolLibrary: React.FC = () => {
         <div className="flex justify-between items-center mb-12 border-b-2 border-gray-300 pb-4">
             <div>
                 <h1 className="text-4xl font-bold text-[#1a3c28] flex items-center gap-3">
-                    <span className="text-5xl">📚</span> Acervo Pedagógico
+                    <span className="text-5xl">📚</span> Biblioteca Escolar
                 </h1>
-                <p className="text-gray-600 mt-2">Biblioteca de recursos didáticos gerados pela Escola.</p>
+                <p className="text-gray-600 mt-2">Repositório de fábulas e sequências didáticas da Escola.</p>
             </div>
             <div className="flex gap-4">
                 <Link to="/school">
@@ -60,7 +60,7 @@ const SchoolLibrary: React.FC = () => {
         {stories.length === 0 ? (
            <div className="text-center py-20 bg-white border-4 border-dashed border-gray-300 rounded-lg">
              <div className="text-6xl mb-4 opacity-30">🗂️</div>
-             <p className="text-2xl text-gray-400 font-bold">O acervo está vazio.</p>
+             <p className="text-2xl text-gray-400 font-bold">A biblioteca está vazia.</p>
              <p className="text-gray-500 mt-2">Crie sua primeira fábula educativa na Sala de Aula.</p>
            </div>
         ) : (
@@ -99,13 +99,13 @@ const SchoolLibrary: React.FC = () => {
                             <div className="flex gap-2">
                                 <Link to={`/story/${story.id}`}>
                                     <button className="text-[#1a3c28] font-bold hover:underline text-sm flex items-center gap-1">
-                                        📖 Acessar Material
+                                        📖 Abrir Livro
                                     </button>
                                 </Link>
                                 <button 
                                     onClick={() => deleteStory(story.id)}
                                     className="text-red-400 hover:text-red-600 ml-2"
-                                    title="Arquivar"
+                                    title="Remover da Biblioteca"
                                 >
                                     🗑️
                                 </button>

@@ -25,10 +25,10 @@ const StoryReader: React.FC = () => {
   const [loadError, setLoadError] = useState(false);
   const [storageWarning, setStorageWarning] = useState(false);
 
-  // --- FUNÇÕES DE AÇÃO (Definidas no topo para evitar ReferenceError) ---
+  // --- FUNÇÕES DE AÇÃO (Definidas antes de qualquer return) ---
 
   const handleExit = () => {
-    // Redirecionamento inteligente
+    // Redirecionamento inteligente: Se for usuário escolar OU a história for educacional, vai pra biblioteca escolar
     if (user?.isSchoolUser || story?.isEducational) {
         navigate('/school-library');
     } else {
@@ -91,19 +91,19 @@ const StoryReader: React.FC = () => {
               console.warn("Memória cheia. Tentando salvar versão compacta...");
               
               if (Array.isArray(data)) {
+                  // Tenta compactar: remove assets de TODAS as histórias
                   const compacted = data.map((s: Story) => ({
                       ...s,
                       chapters: s.chapters.map(c => ({
                           ...c,
-                          // Remove assets pesados de histórias antigas
-                          generatedAudio: s.id === (story?.id) ? c.generatedAudio : undefined,
-                          generatedImage: s.id === (story?.id) ? c.generatedImage : undefined
+                          generatedAudio: undefined,
+                          generatedImage: undefined
                       }))
                   }));
                   
                   try {
                       localStorage.setItem(key, JSON.stringify(compacted));
-                      setStorageWarning(true);
+                      setStorageWarning(true); // Avisa o usuário mas salva o texto
                       return;
                   } catch (e2) {
                        console.error("Falha crítica no salvamento compacto.");
@@ -211,7 +211,7 @@ const StoryReader: React.FC = () => {
       updatedChapters[activeChapterIndex] = { ...currentChapter, generatedAudio: audioBase64 };
       updateStoryInStorage({ ...story, chapters: updatedChapters });
     } catch (error) {
-      alert("Erro ao gerar áudio. Verifique sua conexão.");
+      alert("Erro ao gerar áudio. Verifique sua conexão ou limpe o espaço do navegador.");
     } finally {
       setGeneratingAudio(false);
     }
@@ -225,7 +225,7 @@ const StoryReader: React.FC = () => {
           <div className="text-8xl">⚠️</div>
           <h1 className="font-heading text-4xl text-white text-stroke-black">História não encontrada</h1>
           <p className="text-gray-700 font-bold bg-white p-2 rounded">O arquivo pode ter sido removido ou não foi salvo corretamente.</p>
-          <Button variant="primary" onClick={handleExit}>Voltar ao Menu</Button>
+          <Button variant="primary" onClick={handleExit}>Voltar à Biblioteca</Button>
       </div>
   );
 
@@ -259,13 +259,13 @@ const StoryReader: React.FC = () => {
                            {generatingPDF ? 'Imprimindo...' : '📚 Baixar PDF Completo'}
                        </Button>
                        <Button variant="danger" onClick={handleExit}>
-                           🚪 Sair e Voltar
+                           {story.isEducational ? '🚪 Voltar para Biblioteca' : '🚪 Sair'}
                        </Button>
                    </div>
                    
                    {storageWarning && (
                        <p className="mt-6 text-red-600 text-xs font-bold bg-red-100 p-2 rounded border border-red-400">
-                           Aviso: Memória cheia. O áudio pode não ter sido salvo, mas o texto da história está seguro no acervo.
+                           Aviso: Memória cheia. O áudio pode não ter sido salvo, mas o texto da história está seguro na biblioteca.
                        </p>
                    )}
                </Card>
@@ -276,7 +276,7 @@ const StoryReader: React.FC = () => {
   // --- RENDERIZAÇÃO DO CAPÍTULO ATUAL ---
   const currentChapter = story.chapters[activeChapterIndex];
 
-  // Proteção extra: Se o índice for válido mas o capítulo for undefined
+  // Proteção extra
   if (!currentChapter) {
       return (
         <div className="flex flex-col items-center justify-center h-screen">
@@ -291,7 +291,7 @@ const StoryReader: React.FC = () => {
       
       {storageWarning && (
           <div className="fixed top-0 left-0 w-full bg-red-500 text-white text-center p-2 z-[100] font-bold animate-pulse shadow-md">
-              ⚠️ Memória cheia! Limpe histórias antigas para salvar novos áudios.
+              ⚠️ Memória cheia! Os áudios não serão salvos permanentemente. Limpe histórias antigas.
           </div>
       )}
 

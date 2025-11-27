@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
-import { Avatar, SchoolMember, SchoolRole } from '../types';
+import { Avatar, SchoolMember, SchoolRole, Story } from '../types';
 import { generatePedagogicalStory } from '../services/geminiService';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
@@ -106,7 +106,7 @@ const SchoolRoom: React.FC = () => {
       console.log("Gerando aula...");
       const storyData = await generatePedagogicalStory(situation, goal, teacherAvatar, studentAvatars);
       
-      const fullStory = {
+      const fullStory: Story = {
         id: Date.now().toString(),
         createdAt: Date.now(),
         characters: [teacherAvatar, ...studentAvatars], 
@@ -122,51 +122,58 @@ const SchoolRoom: React.FC = () => {
       refreshUser();
 
       // --- SALVAMENTO CRÍTICO ---
-      // 1. Salva no currentStory para leitura IMEDIATA (prioridade máxima)
+      // Tenta salvar primeiro no cache de leitura
       try {
         localStorage.setItem('currentStory', JSON.stringify(fullStory));
       } catch (e) {
-          alert("Erro crítico: Não há memória para abrir a história. Limpe o navegador.");
-          setLoading(false);
-          return;
+          console.warn("Falha no cache imediato (currentStory)");
       }
 
-      // 2. Tenta salvar no Arquivo Permanente (savedStories)
+      // Tenta salvar no Arquivo Permanente (Biblioteca)
       try {
         const savedStoriesRaw = localStorage.getItem('savedStories');
         const existingStories = savedStoriesRaw ? JSON.parse(savedStoriesRaw) : [];
         const newSavedStories = [fullStory, ...existingStories];
         localStorage.setItem('savedStories', JSON.stringify(newSavedStories));
       } catch (storageError: any) {
-        console.warn("Memória cheia ao arquivar, tentando compressão...");
+        console.warn("Memória cheia (QuotaExceededError). Tentando salvamento seguro (Safe Save)...");
         
-        if (storageError.name === 'QuotaExceededError' || storageError.code === 22) {
-             // Fallback: Tenta salvar apenas o TEXTO da nova história e das antigas
-             // Remove áudios e imagens base64 para caber no LocalStorage
-             try {
-                const savedStoriesRaw = localStorage.getItem('savedStories');
-                const existingStories = savedStoriesRaw ? JSON.parse(savedStoriesRaw) : [];
-                
-                const compactedStories = existingStories.map((s: any) => ({
-                    ...s,
-                    chapters: s.chapters.map((c: any) => ({
-                        ...c,
-                        generatedAudio: undefined, 
-                        generatedImage: undefined  
-                    }))
-                }));
-                
-                // Salva a nova também sem assets se necessário, mas tenta manter
-                const newSavedStories = [fullStory, ...compactedStories];
-                localStorage.setItem('savedStories', JSON.stringify(newSavedStories));
-                // O usuário verá um aviso na próxima tela, mas o arquivo está salvo
-             } catch (finalError) {
-                 console.error("Falha total no arquivamento.");
-             }
+        // SAFE SAVE: Se falhar por memória cheia, remove áudios e imagens das histórias antigas E da nova
+        // para garantir que pelo menos o TEXTO da nova história seja salvo na biblioteca.
+        try {
+            const savedStoriesRaw = localStorage.getItem('savedStories');
+            const existingStories = savedStoriesRaw ? JSON.parse(savedStoriesRaw) : [];
+            
+            // Compacta as existentes
+            const compactedExisting = existingStories.map((s: any) => ({
+                ...s,
+                chapters: s.chapters.map((c: any) => ({
+                    ...c,
+                    generatedAudio: undefined, 
+                    generatedImage: undefined 
+                }))
+            }));
+            
+            // Compacta a nova (remove imagem/audio se tiver vindo da geração, embora geralmente venha só texto aqui)
+            const compactedNew = {
+                ...fullStory,
+                 chapters: fullStory.chapters.map(c => ({
+                    ...c,
+                    generatedAudio: undefined, 
+                    generatedImage: undefined 
+                }))
+            };
+            
+            const newSavedStories = [compactedNew, ...compactedExisting];
+            localStorage.setItem('savedStories', JSON.stringify(newSavedStories));
+            console.log("Salvamento seguro realizado com sucesso.");
+        } catch (finalError) {
+             console.error("Falha crítica no arquivamento. O navegador está completamente cheio.");
+             alert("Atenção: Seu navegador está sem espaço. Limpe dados de navegação para arquivar novas histórias.");
         }
       }
 
-      // Redireciona
+      // Redireciona para Leitura
       navigate(`/story/${fullStory.id}`);
 
     } catch (e: any) {
@@ -193,7 +200,7 @@ const SchoolRoom: React.FC = () => {
                 </div>
                 <div className="mt-4 flex flex-col gap-2">
                      <button onClick={() => navigate('/school-library')} className="bg-white text-black px-4 py-3 rounded-lg font-bold border-2 border-black hover:bg-gray-100 shadow-sm text-center">
-                        📂 Abrir Arquivo Escolar
+                        📚 Abrir Biblioteca Escolar
                     </button>
                     <button onClick={() => navigate('/')} className="text-white/80 hover:text-white underline font-bold px-4 py-2 text-sm text-left">
                         ← Voltar para Menu Principal
@@ -235,7 +242,7 @@ const SchoolRoom: React.FC = () => {
                             variant="primary" 
                             className="w-full border-white text-white bg-green-700 hover:bg-green-600 shadow-none text-xl py-3"
                         >
-                            {loading ? 'Gerando Material...' : '✨ CRIAR FÁBULA EDUCATIVA'}
+                            {loading ? 'Escrevendo na Lousa...' : '✨ CRIAR FÁBULA EDUCATIVA'}
                         </Button>
                     </div>
                 </div>

@@ -57,7 +57,7 @@ const Navbar: React.FC = () => {
                 // MENU ESCOLA
                 <>
                     <NavLink to="/school" active={isActive('/school')} color="bg-green-300">🏫 Sala de Aula</NavLink>
-                    <NavLink to="/school-library" active={isActive('/school-library')} color="bg-yellow-300">📂 Arquivo</NavLink>
+                    <NavLink to="/school-library" active={isActive('/school-library')} color="bg-yellow-300">📚 Biblioteca Escolar</NavLink>
                     <NavLink to="/avatars?returnTo=/school" active={isActive('/avatars')} color="bg-blue-300">👤 Novo Aluno</NavLink>
                 </>
             )}
@@ -104,7 +104,7 @@ const Navbar: React.FC = () => {
                         ) : (
                             <>
                                 <MobileNavLink to="/school" onClick={closeMenu} active={isActive('/school')} emoji="🏫" color="hover:bg-green-300">Sala de Aula</MobileNavLink>
-                                <MobileNavLink to="/school-library" onClick={closeMenu} active={isActive('/school-library')} emoji="📂" color="hover:bg-yellow-300">Arquivo Escolar</MobileNavLink>
+                                <MobileNavLink to="/school-library" onClick={closeMenu} active={isActive('/school-library')} emoji="📚" color="hover:bg-yellow-300">Biblioteca Escolar</MobileNavLink>
                                 <MobileNavLink to="/avatars?returnTo=/school" onClick={closeMenu} active={isActive('/avatars')} emoji="👤" color="hover:bg-blue-300">Criar Aluno</MobileNavLink>
                             </>
                         )}
