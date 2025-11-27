@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -47,7 +47,17 @@ const Auth: React.FC = () => {
   if (loading) return null; // Evita piscar a tela de login enquanto verifica
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-white/50">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-white/50 relative">
+      
+      {/* Botão de Ajuda Flutuante (Visível para novos usuários) */}
+      <div className="absolute top-4 right-4 md:top-8 md:right-8 z-50">
+          <Link to="/tutorial">
+             <button className="bg-cartoon-blue text-white font-comic font-bold px-4 py-2 rounded-full border-2 border-black shadow-doodle hover:scale-105 transition-transform animate-bounce-slow flex items-center gap-2">
+                 <span>❓</span> Como usar o App?
+             </button>
+          </Link>
+      </div>
+
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
             {/* CK Logo Large */}

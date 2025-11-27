@@ -62,6 +62,8 @@ const Navbar: React.FC = () => {
                 </>
             )}
             
+            <NavLink to="/tutorial" active={isActive('/tutorial')} color="bg-gray-200">❓ Ajuda</NavLink>
+            
             <div className="w-0.5 h-8 bg-black/10 mx-2 rounded-full"></div>
 
             <UserSection user={user} logout={logout} />
@@ -108,6 +110,8 @@ const Navbar: React.FC = () => {
                                 <MobileNavLink to="/avatars?returnTo=/school" onClick={closeMenu} active={isActive('/avatars')} emoji="👤" color="hover:bg-blue-300">Criar Aluno</MobileNavLink>
                             </>
                         )}
+
+                        <MobileNavLink to="/tutorial" onClick={closeMenu} active={isActive('/tutorial')} emoji="❓" color="hover:bg-gray-200">Como Usar / Ajuda</MobileNavLink>
 
                         <div className="h-0.5 bg-black/10 w-full my-4 border-t-2 border-dashed border-black/20"></div>
                         

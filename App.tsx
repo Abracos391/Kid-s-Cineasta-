@@ -14,6 +14,7 @@ import Library from './pages/Library';
 import SchoolRoom from './pages/SchoolRoom';
 import SchoolLogin from './pages/SchoolLogin';
 import SchoolLibrary from './pages/SchoolLibrary';
+import Tutorial from './pages/Tutorial'; // Importação
 
 const App: React.FC = () => {
   return (
@@ -26,6 +27,9 @@ const App: React.FC = () => {
             
             {/* Rota Pública (Porteiro da Escola) */}
             <Route path="/school-login" element={<SchoolLogin />} />
+            
+            {/* Rota Pública (Manual/Tutorial) */}
+            <Route path="/tutorial" element={<Tutorial />} />
 
             {/* Página Inicial agora é protegida (redireciona para login se não logado) */}
             <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
