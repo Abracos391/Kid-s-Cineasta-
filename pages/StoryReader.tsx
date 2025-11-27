@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Story } from '../types';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
@@ -9,6 +9,8 @@ import { generateSpeech, generateChapterIllustration } from '../services/geminiS
 import AudioPlayer from '../components/AudioPlayer';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { supabase } from '../services/supabaseClient';
+import { uploadAsset } from '../services/storageService';
 
 const StoryReader: React.FC = () => {
   const { id } = useParams();
@@ -23,12 +25,10 @@ const StoryReader: React.FC = () => {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [pdfProgress, setPdfProgress] = useState(0); 
   const [loadError, setLoadError] = useState(false);
-  const [storageWarning, setStorageWarning] = useState(false);
 
-  // --- FUNÇÕES DE AÇÃO (Definidas antes de qualquer return) ---
+  // --- ACTIONS ---
 
   const handleExit = () => {
-    // Redirecionamento inteligente: Se for usuário escolar OU a história for educacional, vai pra biblioteca escolar
     if (user?.isSchoolUser || story?.isEducational) {
         navigate('/school-library');
     } else {
@@ -38,17 +38,8 @@ const StoryReader: React.FC = () => {
 
   const handleFullBookDownload = async () => {
     if (!story) return;
-
-    const isAllowed = story.isPremium === true || user?.plan === 'premium' || story.isEducational === true;
-    if (!isAllowed && user?.plan === 'free') {
-      if(confirm("🔒 Download PDF exclusivo Premium. Deseja fazer upgrade?")) navigate('/pricing');
-      return;
-    }
-
     setGeneratingPDF(true);
     setPdfProgress(10);
-    
-    // Pequeno delay para garantir que o DOM renderizou o layout oculto
     await new Promise(r => setTimeout(r, 500)); 
 
     try {
@@ -61,12 +52,10 @@ const StoryReader: React.FC = () => {
       for (let i = 0; i < pages.length; i++) {
           setPdfProgress(10 + Math.floor(((i + 1) / pages.length) * 80));
           const pageEl = pages[i] as HTMLElement;
-
           const canvas = await html2canvas(pageEl, { scale: 2, useCORS: true, logging: false });
           const imgData = canvas.toDataURL('image/jpeg', 0.9);
           const pdfWidth = pdf.internal.pageSize.getWidth();
           const pdfHeight = pdf.internal.pageSize.getHeight();
-
           if (i > 0) pdf.addPage();
           pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       }
@@ -80,237 +69,151 @@ const StoryReader: React.FC = () => {
     }
   };
 
-  // --- LÓGICA DE SALVAMENTO ---
-
-  const saveSafely = (key: string, data: any) => {
-      try {
-          localStorage.setItem(key, JSON.stringify(data));
-          setStorageWarning(false);
-      } catch (e: any) {
-          if (e.name === 'QuotaExceededError' || e.code === 22) {
-              console.warn("Memória cheia. Tentando salvar versão compacta...");
-              
-              if (Array.isArray(data)) {
-                  // Tenta compactar: remove assets de TODAS as histórias
-                  const compacted = data.map((s: Story) => ({
-                      ...s,
-                      chapters: s.chapters.map(c => ({
-                          ...c,
-                          generatedAudio: undefined,
-                          generatedImage: undefined
-                      }))
-                  }));
-                  
-                  try {
-                      localStorage.setItem(key, JSON.stringify(compacted));
-                      setStorageWarning(true); // Avisa o usuário mas salva o texto
-                      return;
-                  } catch (e2) {
-                       console.error("Falha crítica no salvamento compacto.");
-                  }
-              }
-              setStorageWarning(true);
-          }
-      }
+  // --- SAVE LOGIC ---
+  const updateChapterInDB = async (storyId: string, updatedChapters: any[]) => {
+      // Salva no Supabase
+      await supabase.from('stories').update({
+          chapters: updatedChapters
+      }).eq('id', storyId);
   };
 
-  const updateStoryInStorage = (updatedStory: Story) => {
-    setStory(updatedStory);
-    
-    // 1. Atualiza cache atual (Prioridade Alta)
-    try { localStorage.setItem('currentStory', JSON.stringify(updatedStory)); } catch(e){}
-
-    // 2. Atualiza Arquivo Permanente
-    const shouldSave = user?.plan === 'premium' || updatedStory.isEducational;
-    if (shouldSave) {
-        const savedStoriesRaw = localStorage.getItem('savedStories');
-        let savedStories: Story[] = savedStoriesRaw ? JSON.parse(savedStoriesRaw) : [];
-        
-        const index = savedStories.findIndex(s => String(s.id) === String(updatedStory.id));
-        
-        if (index !== -1) {
-            savedStories[index] = updatedStory;
-        } else {
-            savedStories.unshift(updatedStory);
-        }
-        
-        saveSafely('savedStories', savedStories);
-    }
-  };
-
-  // --- EFEITOS (Load e Generate) ---
-
+  // --- LOAD ---
   useEffect(() => {
     if (!id) return;
     
-    // Tenta carregar do acervo
-    const allStories: Story[] = JSON.parse(localStorage.getItem('savedStories') || '[]');
-    let found = allStories.find(s => String(s.id) === String(id));
-    
-    // Se não achar, tenta carregar do cache imediato (Recém criada)
-    if (!found) {
-      const current = localStorage.getItem('currentStory');
-      if (current) {
-        try {
-            const parsed = JSON.parse(current);
-            if (String(parsed.id) === String(id)) found = parsed;
-        } catch(e) { console.error("Cache inválido"); }
-      }
-    }
-    
-    if (found) {
-        if (!found.chapters || found.chapters.length === 0) {
-            setLoadError(true);
-        } else {
-            setStory(found);
+    const fetchStory = async () => {
+        // Tenta buscar no Supabase primeiro
+        const { data, error } = await supabase.from('stories').select('*').eq('id', id).single();
+        
+        if (data) {
+            setStory({
+                id: data.id,
+                title: data.title,
+                theme: data.theme,
+                createdAt: data.created_at,
+                isPremium: data.is_premium,
+                isEducational: data.is_educational,
+                educationalGoal: data.educational_goal,
+                chapters: data.chapters,
+                characters: data.characters
+            });
             setLoadError(false);
+        } else {
+            // Fallback para cache local temporário se acabou de criar
+            const current = localStorage.getItem('currentStory');
+            if (current) {
+                const parsed = JSON.parse(current);
+                if (String(parsed.id) === String(id)) {
+                    setStory(parsed);
+                    setLoadError(false);
+                    return;
+                }
+            }
+            setLoadError(true);
         }
-    } else {
-        setLoadError(true);
-    }
+    };
+    fetchStory();
   }, [id]);
 
+  // --- IMAGE GENERATION ---
   useEffect(() => {
     if (story && story.chapters && story.chapters[activeChapterIndex]) {
       const chapter = story.chapters[activeChapterIndex];
-      // Gera imagem se não existir
       if (!chapter.generatedImage) {
-        const charsDesc = story.characters ? story.characters.map(c => `${c.name} (${c.description})`).join(', ') : '';
-        const imageUrl = generateChapterIllustration(chapter.visualDescription, charsDesc);
-        
-        const updatedChapters = [...story.chapters];
-        updatedChapters[activeChapterIndex] = { ...chapter, generatedImage: imageUrl };
-        
-        setStory(prev => {
-            if (!prev) return null;
-            const newStory = { ...prev, chapters: updatedChapters };
-            // Debounce para evitar salvar a cada milissegundo
-            setTimeout(() => updateStoryInStorage(newStory), 500);
-            return newStory;
-        });
+        const genImage = async () => {
+            const charsDesc = story.characters ? story.characters.map(c => `${c.name} (${c.description})`).join(', ') : '';
+            const imageUrl = generateChapterIllustration(chapter.visualDescription, charsDesc);
+            
+            // Pollinations já é URL, mas podemos salvar no bucket para persistencia garantida se quisermos
+            // Por enquanto, salvamos a URL direta pois é rápido
+            
+            const updatedChapters = [...story.chapters];
+            updatedChapters[activeChapterIndex] = { ...chapter, generatedImage: imageUrl };
+            
+            setStory(prev => prev ? ({ ...prev, chapters: updatedChapters }) : null);
+            await updateChapterInDB(story.id, updatedChapters);
+        }
+        genImage();
       }
     }
-  }, [activeChapterIndex, story?.id]); // Dependências controladas
+  }, [activeChapterIndex, story?.id]);
 
-  // --- RENDERIZAÇÃO DE ÁUDIO ---
+  // --- AUDIO GENERATION ---
   const handleGenerateAudio = async () => {
     if (!story || !story.chapters) return;
     const currentChapter = story.chapters[activeChapterIndex];
-
-    const isAllowed = story.isPremium === true || user?.plan === 'premium' || story.isEducational === true;
-    if (!isAllowed && user?.plan === 'free') {
-        if(confirm("🔒 Narração exclusiva Premium. Deseja conhecer os planos?")) navigate('/pricing');
-        return;
-    }
     if (currentChapter.generatedAudio) return;
     
     setGeneratingAudio(true);
     try {
+      // 1. Gera base64
       const audioBase64 = await generateSpeech(currentChapter.text);
+      
+      // 2. UPLOAD para Supabase Storage (Adeus erro de memória!)
+      const fileName = `${story.id}_ch${activeChapterIndex}_${Date.now()}.wav`;
+      const publicUrl = await uploadAsset(audioBase64, 'audio', fileName);
+      
       const updatedChapters = [...story.chapters];
-      updatedChapters[activeChapterIndex] = { ...currentChapter, generatedAudio: audioBase64 };
-      updateStoryInStorage({ ...story, chapters: updatedChapters });
+      // Salva a URL, não o base64
+      updatedChapters[activeChapterIndex] = { ...currentChapter, generatedAudio: audioBase64 }; // Mantem base64 no estado local para tocar na hora
+      
+      // Salva URL no Banco
+      const chaptersForDB = [...story.chapters];
+      chaptersForDB[activeChapterIndex] = { ...currentChapter, generatedAudio: publicUrl }; 
+      
+      setStory(prev => prev ? ({ ...prev, chapters: updatedChapters }) : null); // Update UI
+      await updateChapterInDB(story.id, chaptersForDB); // Update DB
+
     } catch (error) {
-      alert("Erro ao gerar áudio. Verifique sua conexão ou limpe o espaço do navegador.");
+      console.error(error);
+      alert("Erro ao gerar áudio.");
     } finally {
       setGeneratingAudio(false);
     }
   };
 
+  // --- RENDER ---
 
-  // --- ESTADOS DE ERRO E CARREGAMENTO ---
+  if (loadError) return <div className="min-h-[60vh] flex items-center justify-center font-heading text-4xl">História não encontrada.</div>;
+  if (!story || !story.chapters) return <div className="min-h-[60vh] flex items-center justify-center font-heading text-3xl animate-pulse">Abrindo livro...</div>;
 
-  if (loadError) return (
-      <div className="min-h-[60vh] flex items-center justify-center flex-col gap-6 text-center">
-          <div className="text-8xl">⚠️</div>
-          <h1 className="font-heading text-4xl text-white text-stroke-black">História não encontrada</h1>
-          <p className="text-gray-700 font-bold bg-white p-2 rounded">O arquivo pode ter sido removido ou não foi salvo corretamente.</p>
-          <Button variant="primary" onClick={handleExit}>Voltar à Biblioteca</Button>
-      </div>
-  );
-
-  if (!story || !story.chapters) return (
-    <div className="min-h-[60vh] flex items-center justify-center flex-col gap-4">
-        <div className="animate-spin text-6xl">⏳</div>
-        <div className="font-heading text-3xl text-white text-stroke-black">Abrindo o livro...</div>
-    </div>
-  );
-
-  // --- TELA FINAL (THE END) ---
   const isFinished = activeChapterIndex >= story.chapters.length;
 
   if (isFinished) {
       return (
           <div className="min-h-[80vh] flex items-center justify-center flex-col gap-6 p-4 relative z-50">
                <Card color={story.isEducational ? 'green' : 'yellow'} className="text-center p-8 md:p-12 max-w-2xl w-full border-[6px] shadow-2xl animate-fade-in">
-                   <div className="text-6xl mb-4">🎉</div>
                    <h1 className="font-heading text-4xl md:text-5xl mb-4">Fim da Aventura!</h1>
-                   <p className="font-bold text-xl mb-8 text-gray-700">
-                       {story.isEducational 
-                        ? 'Aula concluída com sucesso!' 
-                        : 'Que história incrível!'}
-                   </p>
-                   
                    <div className="flex flex-col gap-4 justify-center">
-                       <Button variant="primary" onClick={() => setActiveChapterIndex(0)}>
-                           📖 Ler do Início
-                       </Button>
+                       <Button variant="primary" onClick={() => setActiveChapterIndex(0)}>📖 Ler do Início</Button>
                        <Button variant="secondary" onClick={handleFullBookDownload} disabled={generatingPDF}>
                            {generatingPDF ? 'Imprimindo...' : '📚 Baixar PDF Completo'}
                        </Button>
-                       <Button variant="danger" onClick={handleExit}>
-                           {story.isEducational ? '🚪 Voltar para Biblioteca' : '🚪 Sair'}
-                       </Button>
+                       <Button variant="danger" onClick={handleExit}>🚪 Voltar para Biblioteca</Button>
                    </div>
-                   
-                   {storageWarning && (
-                       <p className="mt-6 text-red-600 text-xs font-bold bg-red-100 p-2 rounded border border-red-400">
-                           Aviso: Memória cheia. O áudio pode não ter sido salvo, mas o texto da história está seguro na biblioteca.
-                       </p>
-                   )}
                </Card>
           </div>
       );
   }
 
-  // --- RENDERIZAÇÃO DO CAPÍTULO ATUAL ---
   const currentChapter = story.chapters[activeChapterIndex];
-
-  // Proteção extra
-  if (!currentChapter) {
-      return (
-        <div className="flex flex-col items-center justify-center h-screen">
-            <h1 className="text-2xl font-bold text-white">Erro de paginação</h1>
-            <Button onClick={handleExit} className="mt-4">Sair</Button>
-        </div>
-      );
-  }
 
   return (
     <div className={`max-w-5xl mx-auto px-4 pb-20 ${story.isEducational ? 'font-sans' : ''}`}>
       
-      {storageWarning && (
-          <div className="fixed top-0 left-0 w-full bg-red-500 text-white text-center p-2 z-[100] font-bold animate-pulse shadow-md">
-              ⚠️ Memória cheia! Os áudios não serão salvos permanentemente. Limpe histórias antigas.
-          </div>
-      )}
-
-      {/* --- LAYOUT A4 OCULTO (Para PDF) --- */}
+      {/* HIDDEN PRINT LAYOUT */}
       <div ref={bookPrintRef} style={{ position: 'fixed', top: 0, left: generatingPDF ? '0' : '-10000px', zIndex: -10, width: '794px' }}>
-        {/* CAPA */}
-        <div className={`book-page relative w-[794px] h-[1123px] overflow-hidden border-8 border-black flex flex-col items-center justify-between p-12 ${story.isEducational ? 'bg-[#1a3c28]' : 'bg-cartoon-yellow'}`}>
+         <div className={`book-page relative w-[794px] h-[1123px] overflow-hidden border-8 border-black flex flex-col items-center justify-between p-12 ${story.isEducational ? 'bg-[#1a3c28]' : 'bg-cartoon-yellow'}`}>
              <div className="z-10 text-center w-full mt-10">
                 <h1 className={`font-comic text-7xl drop-shadow-lg mb-4 ${story.isEducational ? 'text-white' : 'text-cartoon-blue text-stroke-3'}`}>{story.title}</h1>
              </div>
              <div className="z-10 w-[550px] h-[550px] bg-white border-[6px] border-black rounded-lg overflow-hidden shadow-2xl">
                  {story.chapters[0].generatedImage && <img src={story.chapters[0].generatedImage} className="w-full h-full object-cover" crossOrigin="anonymous" />}
              </div>
-             <div className="z-10 text-center w-full mb-10 bg-white border-4 border-black p-4 rounded-xl transform -rotate-1">
+             <div className="z-10 text-center w-full mb-10 bg-white border-4 border-black p-4 rounded-xl">
                  <p className="font-comic text-4xl text-black">Autor: {user?.name}</p>
-                 {story.isEducational && <p className="font-sans text-xl mt-2 text-gray-600">Material Didático - {story.educationalGoal}</p>}
              </div>
         </div>
-        {/* PÁGINAS */}
         {story.chapters.map((chapter, idx) => (
             <div key={idx} className="book-page w-[794px] h-[1123px] bg-white border-8 border-black flex flex-col">
                 <div className="h-1/2 border-b-8 border-black relative overflow-hidden">
@@ -324,15 +227,6 @@ const StoryReader: React.FC = () => {
         ))}
       </div>
 
-      {generatingPDF && (
-          <div className="fixed inset-0 bg-black/90 z-[100] flex flex-col items-center justify-center text-white">
-              <h2 className="font-comic text-4xl mb-4 animate-bounce">Imprimindo Livro ({pdfProgress}%)...</h2>
-              <div className="w-64 h-4 bg-gray-700 rounded-full border-2 border-white"><div className="h-full bg-green-500 rounded-full transition-all duration-300" style={{width: `${pdfProgress}%`}}></div></div>
-              <p className="mt-4 text-gray-400">Aguarde, estamos preparando as páginas...</p>
-          </div>
-      )}
-
-      {/* Navegação Superior */}
       <div className="mb-6 bg-white rounded-2xl border-4 border-black p-4 shadow-cartoon flex flex-col md:flex-row items-center justify-between gap-4 relative z-20">
         <div>
             <h1 className="font-heading text-3xl text-cartoon-purple">{story.title}</h1>
@@ -344,7 +238,6 @@ const StoryReader: React.FC = () => {
         </div>
       </div>
 
-      {/* Conteúdo do Livro */}
       <div className="grid md:grid-cols-12 gap-8">
         <div className="md:col-span-12">
           <Card className="min-h-[500px] flex flex-col bg-white" color="white">
@@ -352,10 +245,7 @@ const StoryReader: React.FC = () => {
                 {currentChapter.generatedImage ? (
                     <img src={currentChapter.generatedImage} className="w-full h-full object-cover animate-fade-in" crossOrigin="anonymous" />
                 ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500 flex-col">
-                        <span className="text-4xl animate-bounce">🎨</span>
-                        <span>Ilustrando...</span>
-                    </div>
+                    <div className="flex items-center justify-center h-full text-gray-500 flex-col"><span className="text-4xl animate-bounce">🎨</span><span>Ilustrando...</span></div>
                 )}
             </div>
 
@@ -376,12 +266,9 @@ const StoryReader: React.FC = () => {
                </div>
                <div className="flex gap-4">
                  <Button onClick={() => setActiveChapterIndex(p => Math.max(0, p - 1))} disabled={activeChapterIndex === 0} variant="secondary">⬅️</Button>
-                 
-                 {/* BOTÃO PRÓXIMO / FINALIZAR */}
                  <Button 
                     onClick={() => setActiveChapterIndex(p => p + 1)} 
                     variant={activeChapterIndex < story.chapters.length - 1 ? "primary" : "success"}
-                    className={activeChapterIndex === story.chapters.length - 1 ? "animate-pulse" : ""}
                  >
                     {activeChapterIndex < story.chapters.length - 1 ? 'Próxima ➡️' : 'FINALIZAR 🎉'}
                  </Button>

@@ -7,6 +7,7 @@ import { Avatar } from '../types';
 import { generateStory } from '../services/geminiService';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
+import { supabase } from '../services/supabaseClient';
 
 const StoryWizard: React.FC = () => {
   const navigate = useNavigate();
@@ -17,11 +18,21 @@ const StoryWizard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   
   useEffect(() => {
-    const saved = localStorage.getItem('avatars');
-    if (saved) {
-      setAvatars(JSON.parse(saved));
-    }
-  }, []);
+    if (!user) return;
+    // Carregar Avatares do Supabase
+    const loadAvatars = async () => {
+        const { data } = await supabase.from('avatars').select('*').eq('user_id', user.id);
+        if (data) {
+            setAvatars(data.map(d => ({
+                id: d.id,
+                name: d.name,
+                imageUrl: d.image_url,
+                description: d.description
+            })));
+        }
+    };
+    loadAvatars();
+  }, [user]);
 
   const toggleAvatar = (id: string) => {
     if (selectedAvatarIds.includes(id)) {
@@ -60,40 +71,42 @@ const StoryWizard: React.FC = () => {
     try {
       const storyData = await generateStory(theme, selectedChars);
       
+      const storyId = crypto.randomUUID();
       const fullStory = {
-        id: Date.now().toString(),
+        id: storyId,
         createdAt: Date.now(),
         characters: selectedChars,
         theme,
-        isPremium: check.type === 'premium', 
+        isPremium: check.type === 'premium',
+        isEducational: false,
         ...storyData
       };
 
-      authService.consumeStoryCredit(user.id, check.type || 'free');
+      await authService.consumeStoryCredit(user.id, check.type || 'free');
       refreshUser();
 
-      // Só salva na biblioteca se for Premium (seja pago ou a cota gratuita premium)
-      if (check.type === 'premium') {
-          try {
-            const existingStories = JSON.parse(localStorage.getItem('savedStories') || '[]');
-            localStorage.setItem('savedStories', JSON.stringify([fullStory, ...existingStories]));
-          } catch(e: any) {
-             if (e.name === 'QuotaExceededError') {
-                 alert("⚠️ Memória cheia. A história será exibida, mas talvez não fique salva na biblioteca.");
-             }
-          }
-      }
-      
-      try {
-        localStorage.setItem('currentStory', JSON.stringify(fullStory));
-        navigate(`/story/${fullStory.id}`);
-      } catch (e) {
-          alert("Erro crítico de memória. Limpe seu navegador.");
-      }
+      // Salva no Supabase
+      const { error } = await supabase.from('stories').insert({
+          id: storyId,
+          user_id: user.id,
+          title: fullStory.title,
+          theme: fullStory.theme,
+          is_premium: fullStory.isPremium,
+          is_educational: false,
+          characters: fullStory.characters,
+          chapters: fullStory.chapters,
+          created_at: fullStory.createdAt
+      });
+
+      if (error) throw error;
+
+      // Cache imediato para transição rápida
+      localStorage.setItem('currentStory', JSON.stringify(fullStory));
+      navigate(`/story/${storyId}`);
 
     } catch (error) {
       console.error(error);
-      alert("Ops! Tivemos um bloqueio criativo. Tente mudar o tema ou tente novamente!");
+      alert("Ops! Tivemos um bloqueio criativo. Tente mudar o tema.");
     } finally {
       setLoading(false);
     }
@@ -101,31 +114,29 @@ const StoryWizard: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
+      {/* Mantendo JSX visual original */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
         <h1 className="font-heading text-4xl md:text-5xl text-white text-stroke-black drop-shadow-md">
             Montando a Aventura 🗺️
         </h1>
         {user?.plan === 'free' && (
             <div className="bg-white border-2 border-black px-4 py-2 rounded-lg text-sm font-bold shadow-doodle flex flex-col items-end gap-1 transform rotate-1">
-                <div className="text-xs text-gray-500 mb-1 uppercase tracking-wide">Seus Créditos (Mês)</div>
-                <div className="flex items-center gap-3">
-                    <div className="text-right">
-                        <span className="block text-xs">🌟 Completa</span>
-                        <span className={`text-lg font-comic ${user.monthlyPremiumTrialUsed < 1 ? "text-green-600" : "text-gray-400"}`}>
-                            {1 - (user.monthlyPremiumTrialUsed || 0)}/1
-                        </span>
-                    </div>
-                    <div className="w-px h-8 bg-gray-300"></div>
+                 <div className="text-xs text-gray-500 mb-1 uppercase tracking-wide">Seus Créditos (Mês)</div>
+                 <div className="flex items-center gap-3">
                      <div className="text-right">
-                        <span className="block text-xs">📝 Texto</span>
-                        <span className={`text-lg font-comic ${user.monthlyFreeUsed < 3 ? "text-blue-600" : "text-gray-400"}`}>
-                            {3 - (user.monthlyFreeUsed || 0)}/3
-                        </span>
-                    </div>
-                </div>
-                <Button size="sm" variant="success" onClick={() => navigate('/pricing')} className="mt-1 w-full text-xs py-1 h-auto">
-                    + Créditos
-                </Button>
+                         <span className="block text-xs">🌟 Completa</span>
+                         <span className={`text-lg font-comic ${user.monthlyPremiumTrialUsed < 1 ? "text-green-600" : "text-gray-400"}`}>
+                             {1 - (user.monthlyPremiumTrialUsed || 0)}/1
+                         </span>
+                     </div>
+                     <div className="w-px h-8 bg-gray-300"></div>
+                      <div className="text-right">
+                         <span className="block text-xs">📝 Texto</span>
+                         <span className={`text-lg font-comic ${user.monthlyFreeUsed < 3 ? "text-blue-600" : "text-gray-400"}`}>
+                             {3 - (user.monthlyFreeUsed || 0)}/3
+                         </span>
+                     </div>
+                 </div>
             </div>
         )}
       </div>
@@ -176,18 +187,6 @@ const StoryWizard: React.FC = () => {
                     onChange={(e) => setTheme(e.target.value)}
                     />
                 </div>
-                <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
-                    <span className="font-bold text-sm shrink-0 self-center">Ideias:</span>
-                    {['Viagem no tempo', 'Festa surpresa', 'Dragão perdido'].map(t => (
-                        <button 
-                            key={t} 
-                            onClick={() => setTheme(t)}
-                            className="bg-white border-2 border-black rounded-lg px-3 py-1 text-xs font-bold hover:bg-cartoon-yellow whitespace-nowrap"
-                        >
-                            {t}
-                        </button>
-                    ))}
-                </div>
             </Card>
           </div>
 
@@ -202,12 +201,6 @@ const StoryWizard: React.FC = () => {
             >
                 {loading ? 'Escrevendo a história... 🪄' : 'CRIAR HISTÓRIA! 🎬'}
             </Button>
-            {user?.plan === 'free' && user.monthlyPremiumTrialUsed >= 1 && (
-                <p className="text-center text-xs font-bold mt-2 bg-blue-50 p-2 border border-blue-200 rounded mx-auto max-w-xs text-blue-800">
-                    ℹ️ Você está usando o crédito "Texto Simples". <br/>
-                    A história não terá áudio nem será salva na biblioteca.
-                </p>
-            )}
           </div>
         </div>
       </div>

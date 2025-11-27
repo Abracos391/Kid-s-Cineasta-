@@ -5,10 +5,10 @@ import { authService } from '../services/authService';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => void;
-  loginAsTeacher: (name: string, code: string) => void; 
-  registerSchool: (schoolName: string, teacherName: string, code: string) => void; // Novo
-  register: (name: string, email: string, password: string) => void;
+  login: (email: string, password: string) => Promise<void>;
+  loginAsTeacher: (name: string, code: string) => Promise<void>; 
+  registerSchool: (schoolName: string, teacherName: string, code: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => void;
   loading: boolean;
@@ -21,34 +21,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const currentUser = authService.getCurrentUser();
-    setUser(currentUser);
-    setLoading(false);
+    const loadUser = async () => {
+        try {
+            const currentUser = await authService.getCurrentUser();
+            setUser(currentUser);
+        } catch (e) {
+            console.error("Erro ao carregar sessão:", e);
+        } finally {
+            setLoading(false);
+        }
+    };
+    loadUser();
   }, []);
 
-  const refreshUser = () => {
-    const currentUser = authService.getCurrentUser();
+  const refreshUser = async () => {
+    const currentUser = await authService.getCurrentUser();
     setUser(currentUser);
   };
 
-  const login = (email: string, password: string) => {
-    const user = authService.login(email, password);
-    setUser(user);
+  const login = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+        const user = await authService.login(email, password);
+        setUser(user);
+    } finally {
+        setLoading(false);
+    }
   };
   
-  const loginAsTeacher = (name: string, code: string) => {
-    const user = authService.loginAsTeacher(name, code);
-    setUser(user);
+  const loginAsTeacher = async (name: string, code: string) => {
+    setLoading(true);
+    try {
+        const user = await authService.loginAsTeacher(name, code);
+        setUser(user);
+    } finally {
+        setLoading(false);
+    }
   }
 
-  const registerSchool = (schoolName: string, teacherName: string, code: string) => {
-    const user = authService.registerSchool(schoolName, teacherName, code);
-    setUser(user);
+  const registerSchool = async (schoolName: string, teacherName: string, code: string) => {
+    setLoading(true);
+    try {
+        const user = await authService.registerSchool(schoolName, teacherName, code);
+        setUser(user);
+    } finally {
+        setLoading(false);
+    }
   }
 
-  const register = (name: string, email: string, password: string) => {
-    const user = authService.register(name, email, password);
-    setUser(user);
+  const register = async (name: string, email: string, password: string) => {
+    setLoading(true);
+    try {
+        const user = await authService.register(name, email, password);
+        setUser(user);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const logout = () => {

@@ -14,6 +14,7 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.0",
     "@google/genai": "^1.30.0",
+    "@supabase/supabase-js": "^2.39.0",
     "serve": "^14.2.1",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.1"

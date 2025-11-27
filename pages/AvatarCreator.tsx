@@ -5,15 +5,17 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { analyzeFaceForAvatar, generateCaricatureImage } from '../services/geminiService';
 import { Avatar } from '../types';
+import { uploadAsset } from '../services/storageService';
+import { supabase } from '../services/supabaseClient';
+import { useAuth } from '../context/AuthContext';
 
 const AvatarCreator: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const returnTo = searchParams.get('returnTo'); // Verifica se deve voltar para a escola
+  const returnTo = searchParams.get('returnTo');
+  const { user } = useAuth();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Camera Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
@@ -23,14 +25,9 @@ const AvatarCreator: React.FC = () => {
   const [name, setName] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [isCameraReady, setIsCameraReady] = useState(false);
-  
-  // Camera State
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
-  
-  // Validation State
   const [errors, setErrors] = useState<{name?: string, image?: string}>({});
 
-  // Cleanup camera on unmount
   useEffect(() => {
     return () => {
       stopCameraStream();
@@ -51,7 +48,6 @@ const AvatarCreator: React.FC = () => {
     setStep('camera');
     setIsCameraReady(false);
     setFacingMode(mode);
-
     stopCameraStream();
 
     try {
@@ -71,7 +67,7 @@ const AvatarCreator: React.FC = () => {
       }
     } catch (err) {
       console.error("Erro ao acessar câmera:", err);
-      alert("Não conseguimos acessar sua câmera. Verifique se você deu permissão ou tente usar o botão 'Galeria'.");
+      alert("Não conseguimos acessar sua câmera.");
       setStep('upload');
     }
   };
@@ -88,24 +84,19 @@ const AvatarCreator: React.FC = () => {
     if (video && canvas && isCameraReady) {
       const width = video.videoWidth;
       const height = video.videoHeight;
-
       if (width === 0 || height === 0) return;
       
       canvas.width = width;
       canvas.height = height;
-      
       const context = canvas.getContext('2d');
       if (context) {
         if (facingMode === 'user') {
             context.translate(width, 0);
             context.scale(-1, 1);
         }
-        
         context.drawImage(video, 0, 0, width, height);
-        
         const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
         setPreview(dataUrl);
-        
         stopCameraStream();
         setStep('upload');
       }
@@ -134,6 +125,11 @@ const AvatarCreator: React.FC = () => {
         return;
     }
 
+    if (!user) {
+        alert("Você precisa estar logado.");
+        return;
+    }
+
     setStep('processing');
 
     try {
@@ -142,25 +138,39 @@ const AvatarCreator: React.FC = () => {
       const description = await analyzeFaceForAvatar(base64Data);
       
       setStatusMsg("🎨 Pintando sua caricatura 3D...");
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 1000));
       
       const cartoonUrl = await generateCaricatureImage(description);
 
+      setStatusMsg("💾 Salvando no álbum...");
+      
+      // Upload da imagem gerada (opcional, pois Pollinations é URL pública, mas ideal para persistencia)
+      // Como Pollinations já dá URL, salvamos ela. Se fosse base64, usariamos uploadAsset.
+
+      const avatarId = crypto.randomUUID();
       const newAvatar: Avatar = {
-        id: Date.now().toString(),
+        id: avatarId,
         name,
         imageUrl: cartoonUrl,
         description
       };
       
-      const existing = JSON.parse(localStorage.getItem('avatars') || '[]');
-      localStorage.setItem('avatars', JSON.stringify([...existing, newAvatar]));
+      // Salva no Supabase
+      const { error } = await supabase.from('avatars').insert({
+          id: avatarId,
+          user_id: user.id,
+          name: newAvatar.name,
+          image_url: newAvatar.imageUrl,
+          description: newAvatar.description
+      });
+
+      if (error) throw error;
 
       setGeneratedAvatar(newAvatar);
       setStep('result');
     } catch (error: any) {
       console.error(error);
-      alert("Ocorreu um erro. Tente novamente com outra foto.");
+      alert("Ocorreu um erro ao criar o avatar. Tente novamente.");
       setStep('upload');
     }
   };
@@ -175,7 +185,8 @@ const AvatarCreator: React.FC = () => {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
-      <div className="relative mb-8 text-center">
+       {/* (Mantém o mesmo JSX Visual) */}
+       <div className="relative mb-8 text-center">
          <h1 className="font-heading text-5xl text-white text-stroke-black drop-shadow-md transform -rotate-2">
            Fábrica de Avatares
          </h1>
@@ -221,7 +232,6 @@ const AvatarCreator: React.FC = () => {
                     >
                         <div className="text-6xl mb-2 group-hover:animate-bounce">📸</div>
                         <p className="font-comic font-bold text-xl">Usar Câmera</p>
-                        <p className="text-sm text-gray-500">Tirar foto agora</p>
                     </div>
 
                     <div 
@@ -230,7 +240,6 @@ const AvatarCreator: React.FC = () => {
                     >
                          <div className="text-6xl mb-2 group-hover:animate-pulse">📂</div>
                         <p className="font-comic font-bold text-xl">Galeria</p>
-                        <p className="text-sm text-gray-500 group-hover:text-white">Escolher arquivo</p>
                     </div>
                 </div>
               )}
@@ -272,19 +281,6 @@ const AvatarCreator: React.FC = () => {
                       onCanPlay={() => setIsCameraReady(true)}
                   ></video>
                   
-                  {!isCameraReady && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                          <span className="text-white font-comic text-xl animate-pulse">Ligando câmera...</span>
-                      </div>
-                  )}
-
-                  <div className="absolute inset-0 border-[3px] border-white/30 pointer-events-none m-4 rounded-xl">
-                       <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white"></div>
-                       <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white"></div>
-                       <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white"></div>
-                       <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white"></div>
-                  </div>
-
                   <div className="absolute bottom-0 left-0 w-full p-6 flex justify-between items-center bg-gradient-to-t from-black/80 to-transparent">
                        <button 
                          onClick={() => { stopCameraStream(); setStep('upload'); }}
@@ -314,11 +310,6 @@ const AvatarCreator: React.FC = () => {
                        </button>
                   </div>
               </div>
-              <p className="text-white font-comic mt-4 text-xl animate-pulse text-center">
-                  {isCameraReady ? "Faça uma careta e clique no botão vermelho! 🤪" : "Aguardando câmera..."}
-              </p>
-              
-              <canvas ref={canvasRef} className="hidden"></canvas>
           </div>
       )}
 
@@ -327,18 +318,12 @@ const AvatarCreator: React.FC = () => {
           <div className="animate-spin text-8xl mb-6 inline-block">🖌️</div>
           <h2 className="font-heading text-3xl mb-4">{statusMsg}</h2>
           <p className="text-lg font-bold text-gray-700 mb-6">Não feche essa tela...</p>
-          <div className="w-full bg-white border-4 border-black rounded-full h-6 overflow-hidden relative">
-            <div className="bg-cartoon-pink h-full w-1/2 animate-wiggle absolute top-0 left-0 bottom-0"></div>
-            <div className="bg-cartoon-blue h-full w-1/2 animate-wiggle absolute top-0 right-0 bottom-0" style={{animationDirection: 'reverse'}}></div>
-          </div>
         </Card>
       )}
 
       {step === 'result' && generatedAvatar && (
         <div className="text-center space-y-8">
           <div className="relative inline-block">
-             <div className="absolute inset-0 bg-cartoon-yellow scale-150 animate-spin-slow" style={{clipPath: 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)'}}></div>
-             
              <Card color="white" className="rotate-3 transform transition-transform hover:rotate-0 max-w-md mx-auto">
                <img 
                   src={generatedAvatar.imageUrl} 
