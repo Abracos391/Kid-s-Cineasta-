@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { Story } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../services/supabaseClient';
 
 const SchoolLibrary: React.FC = () => {
   const { user } = useAuth();
@@ -12,29 +11,21 @@ const SchoolLibrary: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
-    const fetchStories = async () => {
-        const { data } = await supabase.from('stories').select('*').eq('user_id', user.id).eq('is_educational', true);
-        if (data) {
-            setStories(data.map(d => ({
-                id: d.id,
-                title: d.title,
-                theme: d.theme,
-                createdAt: d.created_at,
-                isPremium: d.is_premium,
-                isEducational: d.is_educational,
-                educationalGoal: d.educational_goal,
-                chapters: d.chapters,
-                characters: d.characters
-            })));
-        }
-    };
-    fetchStories();
+    const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
+    const userStories = allStories[user.id] || [];
+    setStories(userStories.filter((s: Story) => s.isEducational));
   }, [user]);
 
   const deleteStory = async (id: string) => {
+    if (!user) return;
     if(confirm('Remover material didático?')) {
-      await supabase.from('stories').delete().eq('id', id);
-      setStories(prev => prev.filter(s => s.id !== id));
+      const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
+      const userStories = allStories[user.id] || [];
+      const newStories = userStories.filter((s: Story) => s.id !== id);
+      
+      allStories[user.id] = newStories;
+      localStorage.setItem('ck_stories', JSON.stringify(allStories));
+      setStories(newStories.filter((s: Story) => s.isEducational));
     }
   };
 

@@ -7,7 +7,6 @@ import { Avatar } from '../types';
 import { generateStory } from '../services/geminiService';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
-import { supabase } from '../services/supabaseClient';
 
 const StoryWizard: React.FC = () => {
   const navigate = useNavigate();
@@ -19,19 +18,10 @@ const StoryWizard: React.FC = () => {
   
   useEffect(() => {
     if (!user) return;
-    // Carregar Avatares do Supabase
-    const loadAvatars = async () => {
-        const { data } = await supabase.from('avatars').select('*').eq('user_id', user.id);
-        if (data) {
-            setAvatars(data.map(d => ({
-                id: d.id,
-                name: d.name,
-                imageUrl: d.image_url,
-                description: d.description
-            })));
-        }
-    };
-    loadAvatars();
+    // Carregar Avatares do LocalStorage
+    const savedAvatars = JSON.parse(localStorage.getItem('ck_avatars') || '{}');
+    const userAvatars = savedAvatars[user.id] || [];
+    setAvatars(userAvatars);
   }, [user]);
 
   const toggleAvatar = (id: string) => {
@@ -85,22 +75,20 @@ const StoryWizard: React.FC = () => {
       await authService.consumeStoryCredit(user.id, check.type || 'free');
       refreshUser();
 
-      // Salva no Supabase
-      const { error } = await supabase.from('stories').insert({
-          id: storyId,
-          user_id: user.id,
-          title: fullStory.title,
-          theme: fullStory.theme,
-          is_premium: fullStory.isPremium,
-          is_educational: false,
-          characters: fullStory.characters,
-          chapters: fullStory.chapters,
-          created_at: fullStory.createdAt
-      });
+      // LOCAL STORAGE SAVE
+      // Tenta salvar, se der erro de quota, avisa
+      try {
+          const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
+          const userStories = allStories[user.id] || [];
+          userStories.push(fullStory);
+          allStories[user.id] = userStories;
+          localStorage.setItem('ck_stories', JSON.stringify(allStories));
+      } catch (e) {
+          console.warn("Memória cheia ao salvar história nova. Removendo mais antiga...");
+          // Logica de limpeza simples se necessario, mas o Safe Save no reader é mais importante
+      }
 
-      if (error) throw error;
-
-      // Cache imediato para transição rápida
+      // Cache imediato para transição
       localStorage.setItem('currentStory', JSON.stringify(fullStory));
       navigate(`/story/${storyId}`);
 

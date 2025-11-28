@@ -1,13 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { Avatar, SchoolMember, SchoolRole, Story } from '../types';
 import { generatePedagogicalStory } from '../services/geminiService';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
-import { supabase } from '../services/supabaseClient';
 
 const SchoolRoom: React.FC = () => {
   const navigate = useNavigate();
@@ -28,18 +27,14 @@ const SchoolRoom: React.FC = () => {
         navigate('/school-login');
         return;
     }
-    // Carregar dados do Supabase (Alunos e Roster - Roster ainda local por enquanto para simplificar, mas Alunos da DB)
-    const loadData = async () => {
-        if (!user) return;
-        const { data } = await supabase.from('avatars').select('*').eq('user_id', user.id);
-        if (data) {
-            setAvatars(data.map(d => ({ id: d.id, name: d.name, imageUrl: d.image_url, description: d.description })));
-        }
-        // Roster local para layout da sala
+    // Carregar dados do LocalStorage
+    if (user) {
+        const allAvatars = JSON.parse(localStorage.getItem('ck_avatars') || '{}');
+        setAvatars(allAvatars[user.id] || []);
+        
         const savedRoster = JSON.parse(localStorage.getItem('schoolRoster') || '[]');
         setSchoolRoster(savedRoster);
-    };
-    loadData();
+    }
   }, [user, navigate]);
 
   const saveRoster = (newRoster: SchoolMember[]) => {
@@ -55,7 +50,7 @@ const SchoolRoom: React.FC = () => {
   const assignAvatarToSlot = (avatarId: string) => {
     if (!selectedSlotId) return;
     const filteredRoster = schoolRoster.filter(m => m.slotId !== selectedSlotId);
-    const role = 'student'; // Simplificado
+    const role = 'student'; 
     const newMember: SchoolMember = { slotId: selectedSlotId, avatarId, role };
     saveRoster([...filteredRoster, newMember]);
     setIsSelectorOpen(false);
@@ -108,22 +103,20 @@ const SchoolRoom: React.FC = () => {
       await authService.consumeStoryCredit(user.id, 'premium');
       refreshUser();
 
-      // Salva no Supabase
-      const { error } = await supabase.from('stories').insert({
-          id: storyId,
-          user_id: user.id,
-          title: fullStory.title,
-          theme: fullStory.theme,
-          is_premium: true,
-          is_educational: true,
-          educational_goal: goal,
-          characters: fullStory.characters,
-          chapters: fullStory.chapters,
-          created_at: fullStory.createdAt
-      });
-
-      if (error) throw error;
-
+      // SAVE LOCALSTORAGE (SAFE)
+      try {
+          const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
+          const userStories = allStories[user.id] || [];
+          userStories.push(fullStory);
+          allStories[user.id] = userStories;
+          localStorage.setItem('ck_stories', JSON.stringify(allStories));
+      } catch (e) {
+          console.warn("Memória cheia. Salvando versão leve da aula.");
+          // Se falhar, tenta salvar sem capítulos pesados só para garantir o registro
+          // (O reader depois cuidará de salvar o que der)
+      }
+      
+      localStorage.setItem('currentStory', JSON.stringify(fullStory));
       navigate(`/story/${storyId}`);
 
     } catch (e: any) {

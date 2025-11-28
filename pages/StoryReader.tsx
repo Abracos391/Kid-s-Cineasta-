@@ -9,8 +9,8 @@ import { generateSpeech, generateChapterIllustration } from '../services/geminiS
 import AudioPlayer from '../components/AudioPlayer';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { supabase } from '../services/supabaseClient';
-import { uploadAsset } from '../services/storageService';
+
+// --- ACTIONS MOVIDAS PARA O TOPO ---
 
 const StoryReader: React.FC = () => {
   const { id } = useParams();
@@ -69,51 +69,81 @@ const StoryReader: React.FC = () => {
     }
   };
 
-  // --- SAVE LOGIC ---
-  const updateChapterInDB = async (storyId: string, updatedChapters: any[]) => {
-      // Salva no Supabase
-      await supabase.from('stories').update({
-          chapters: updatedChapters
-      }).eq('id', storyId);
+  // --- SAVE LOGIC (LOCALSTORAGE SAFE SAVE) ---
+  const saveStoryProgress = (updatedStory: Story) => {
+      if (!user) return;
+      try {
+          const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
+          const userStories = allStories[user.id] || [];
+          
+          const storyIndex = userStories.findIndex((s: Story) => s.id === updatedStory.id);
+          
+          if (storyIndex >= 0) {
+              userStories[storyIndex] = updatedStory;
+          } else {
+              userStories.push(updatedStory);
+          }
+          
+          allStories[user.id] = userStories;
+          localStorage.setItem('ck_stories', JSON.stringify(allStories));
+          
+          // Update Current Cache
+          localStorage.setItem('currentStory', JSON.stringify(updatedStory));
+
+      } catch (e: any) {
+          if (e.name === 'QuotaExceededError') {
+              console.warn("Memória cheia! Executando Safe Save (removendo áudios antigos)...");
+              
+              // Remove áudios dos capítulos para economizar espaço
+              const lightStory = { ...updatedStory };
+              lightStory.chapters = lightStory.chapters.map(c => ({
+                  ...c,
+                  generatedAudio: undefined // Remove áudio do cache persistente
+              }));
+              
+              try {
+                  const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
+                  const userStories = allStories[user.id] || [];
+                  const storyIndex = userStories.findIndex((s: Story) => s.id === lightStory.id);
+                  if (storyIndex >= 0) userStories[storyIndex] = lightStory;
+                  else userStories.push(lightStory);
+                  
+                  allStories[user.id] = userStories;
+                  localStorage.setItem('ck_stories', JSON.stringify(allStories));
+                  alert("Aviso: Memória do navegador cheia. O áudio não será salvo para a próxima vez, mas o texto e imagens estão seguros!");
+              } catch (e2) {
+                  alert("Erro crítico de armazenamento. Não foi possível salvar o progresso.");
+              }
+          }
+      }
   };
 
   // --- LOAD ---
   useEffect(() => {
-    if (!id) return;
+    if (!id || !user) return;
     
-    const fetchStory = async () => {
-        // Tenta buscar no Supabase primeiro
-        const { data, error } = await supabase.from('stories').select('*').eq('id', id).single();
-        
-        if (data) {
-            setStory({
-                id: data.id,
-                title: data.title,
-                theme: data.theme,
-                createdAt: data.created_at,
-                isPremium: data.is_premium,
-                isEducational: data.is_educational,
-                educationalGoal: data.educational_goal,
-                chapters: data.chapters,
-                characters: data.characters
-            });
-            setLoadError(false);
-        } else {
-            // Fallback para cache local temporário se acabou de criar
-            const current = localStorage.getItem('currentStory');
-            if (current) {
-                const parsed = JSON.parse(current);
-                if (String(parsed.id) === String(id)) {
-                    setStory(parsed);
-                    setLoadError(false);
-                    return;
-                }
+    // 1. Tenta carregar do "Banco de Dados" Local
+    const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
+    const userStories = allStories[user.id] || [];
+    const found = userStories.find((s: Story) => s.id === id);
+
+    if (found) {
+        setStory(found);
+        setLoadError(false);
+    } else {
+        // 2. Fallback para cache temporário de criação recente
+        const current = localStorage.getItem('currentStory');
+        if (current) {
+            const parsed = JSON.parse(current);
+            if (String(parsed.id) === String(id)) {
+                setStory(parsed);
+                setLoadError(false);
+                return;
             }
-            setLoadError(true);
         }
-    };
-    fetchStory();
-  }, [id]);
+        setLoadError(true);
+    }
+  }, [id, user]);
 
   // --- IMAGE GENERATION ---
   useEffect(() => {
@@ -124,14 +154,12 @@ const StoryReader: React.FC = () => {
             const charsDesc = story.characters ? story.characters.map(c => `${c.name} (${c.description})`).join(', ') : '';
             const imageUrl = generateChapterIllustration(chapter.visualDescription, charsDesc);
             
-            // Pollinations já é URL, mas podemos salvar no bucket para persistencia garantida se quisermos
-            // Por enquanto, salvamos a URL direta pois é rápido
-            
             const updatedChapters = [...story.chapters];
             updatedChapters[activeChapterIndex] = { ...chapter, generatedImage: imageUrl };
             
-            setStory(prev => prev ? ({ ...prev, chapters: updatedChapters }) : null);
-            await updateChapterInDB(story.id, updatedChapters);
+            const updatedStory = { ...story, chapters: updatedChapters };
+            setStory(updatedStory);
+            saveStoryProgress(updatedStory);
         }
         genImage();
       }
@@ -146,23 +174,14 @@ const StoryReader: React.FC = () => {
     
     setGeneratingAudio(true);
     try {
-      // 1. Gera base64
       const audioBase64 = await generateSpeech(currentChapter.text);
       
-      // 2. UPLOAD para Supabase Storage (Adeus erro de memória!)
-      const fileName = `${story.id}_ch${activeChapterIndex}_${Date.now()}.wav`;
-      const publicUrl = await uploadAsset(audioBase64, 'audio', fileName);
-      
       const updatedChapters = [...story.chapters];
-      // Salva a URL, não o base64
-      updatedChapters[activeChapterIndex] = { ...currentChapter, generatedAudio: audioBase64 }; // Mantem base64 no estado local para tocar na hora
+      updatedChapters[activeChapterIndex] = { ...currentChapter, generatedAudio: audioBase64 };
       
-      // Salva URL no Banco
-      const chaptersForDB = [...story.chapters];
-      chaptersForDB[activeChapterIndex] = { ...currentChapter, generatedAudio: publicUrl }; 
-      
-      setStory(prev => prev ? ({ ...prev, chapters: updatedChapters }) : null); // Update UI
-      await updateChapterInDB(story.id, chaptersForDB); // Update DB
+      const updatedStory = { ...story, chapters: updatedChapters };
+      setStory(updatedStory);
+      saveStoryProgress(updatedStory);
 
     } catch (error) {
       console.error(error);

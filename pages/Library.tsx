@@ -5,7 +5,6 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { Avatar, Story } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../services/supabaseClient';
 
 type FilterType = 'all' | 'adventure' | 'educational';
 
@@ -18,38 +17,37 @@ const Library: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    const fetchData = async () => {
-        // Avatars
-        const { data: avData } = await supabase.from('avatars').select('*').eq('user_id', user.id);
-        if (avData) setAvatars(avData.map(d => ({ id: d.id, name: d.name, imageUrl: d.image_url, description: d.description })));
+    // Load from LocalStorage
+    const allAvatars = JSON.parse(localStorage.getItem('ck_avatars') || '{}');
+    setAvatars(allAvatars[user.id] || []);
 
-        // Stories
-        const { data: stData } = await supabase.from('stories').select('*').eq('user_id', user.id);
-        if (stData) setStories(stData.map(d => ({
-            id: d.id,
-            title: d.title,
-            theme: d.theme,
-            createdAt: d.created_at,
-            isPremium: d.is_premium,
-            isEducational: d.is_educational,
-            chapters: d.chapters,
-            characters: d.characters
-        })));
-    };
-    fetchData();
+    const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
+    setStories(allStories[user.id] || []);
   }, [user]);
 
   const deleteAvatar = async (id: string) => {
+    if (!user) return;
     if(confirm('Tem certeza que quer deletar este personagem?')) {
-      await supabase.from('avatars').delete().eq('id', id);
-      setAvatars(prev => prev.filter(a => a.id !== id));
+      const allAvatars = JSON.parse(localStorage.getItem('ck_avatars') || '{}');
+      const userAvatars = allAvatars[user.id] || [];
+      const newAvatars = userAvatars.filter((a: Avatar) => a.id !== id);
+      
+      allAvatars[user.id] = newAvatars;
+      localStorage.setItem('ck_avatars', JSON.stringify(allAvatars));
+      setAvatars(newAvatars);
     }
   };
 
   const deleteStory = async (id: string) => {
+    if (!user) return;
     if(confirm('Tem certeza que quer apagar esta história do acervo?')) {
-      await supabase.from('stories').delete().eq('id', id);
-      setStories(prev => prev.filter(s => s.id !== id));
+      const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
+      const userStories = allStories[user.id] || [];
+      const newStories = userStories.filter((s: Story) => s.id !== id);
+      
+      allStories[user.id] = newStories;
+      localStorage.setItem('ck_stories', JSON.stringify(allStories));
+      setStories(newStories);
     }
   };
 

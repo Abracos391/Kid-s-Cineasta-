@@ -5,8 +5,6 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { analyzeFaceForAvatar, generateCaricatureImage } from '../services/geminiService';
 import { Avatar } from '../types';
-import { uploadAsset } from '../services/storageService';
-import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 const AvatarCreator: React.FC = () => {
@@ -144,27 +142,19 @@ const AvatarCreator: React.FC = () => {
 
       setStatusMsg("💾 Salvando no álbum...");
       
-      // Upload da imagem gerada (opcional, pois Pollinations é URL pública, mas ideal para persistencia)
-      // Como Pollinations já dá URL, salvamos ela. Se fosse base64, usariamos uploadAsset.
-
-      const avatarId = crypto.randomUUID();
       const newAvatar: Avatar = {
-        id: avatarId,
+        id: crypto.randomUUID(),
         name,
         imageUrl: cartoonUrl,
         description
       };
       
-      // Salva no Supabase
-      const { error } = await supabase.from('avatars').insert({
-          id: avatarId,
-          user_id: user.id,
-          name: newAvatar.name,
-          image_url: newAvatar.imageUrl,
-          description: newAvatar.description
-      });
-
-      if (error) throw error;
+      // LOCAL STORAGE SAVE
+      const savedAvatars = JSON.parse(localStorage.getItem('ck_avatars') || '{}');
+      const userAvatars = savedAvatars[user.id] || [];
+      userAvatars.push(newAvatar);
+      savedAvatars[user.id] = userAvatars;
+      localStorage.setItem('ck_avatars', JSON.stringify(savedAvatars));
 
       setGeneratedAvatar(newAvatar);
       setStep('result');
