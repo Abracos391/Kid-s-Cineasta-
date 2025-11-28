@@ -70,18 +70,79 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ base64Audio }) => {
     }
   };
 
+  const downloadAudio = () => {
+    try {
+        // Para baixar, precisamos adicionar um cabeçalho WAV simples ou salvar como raw PCM
+        // Para simplificar e funcionar na maioria dos players, vamos encapsular o PCM em um WAV container
+        // Ou, mais simples para este contexto: Baixar como binário e o navegador/player interpreta
+        // Mas o ideal para usuário final é WAV.
+        
+        // Vamos criar um link simples de download do binário
+        const audioBytes = decode(base64Audio);
+        
+        // Cabeçalho WAV simples (Mono, 24kHz, 16bit)
+        const wavHeader = new ArrayBuffer(44);
+        const view = new DataView(wavHeader);
+        
+        const writeString = (offset: number, string: string) => {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        };
+
+        const sampleRate = 24000;
+        const numChannels = 1;
+        const bitsPerSample = 16;
+        const dataLength = audioBytes.length;
+        const fileSize = 36 + dataLength;
+
+        writeString(0, 'RIFF');
+        view.setUint32(4, fileSize, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true); // Subchunk1Size (16 for PCM)
+        view.setUint16(20, 1, true); // AudioFormat (1 for PCM)
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true); // ByteRate
+        view.setUint16(32, numChannels * (bitsPerSample / 8), true); // BlockAlign
+        view.setUint16(34, bitsPerSample, true);
+        writeString(36, 'data');
+        view.setUint32(40, dataLength, true);
+
+        const blob = new Blob([wavHeader, audioBytes], { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `narracao_cineasta_kids_${Date.now()}.wav`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        console.error("Erro ao baixar áudio", e);
+        alert("Erro ao preparar download.");
+    }
+  };
+
   return (
-    <Button onClick={playAudio} size="sm" variant="secondary" className="flex items-center gap-2">
-      {isPlaying ? (
-        <>
-          <span className="animate-pulse">🔊</span> Parar
-        </>
-      ) : (
-        <>
-          <span>🔈</span> Ouvir Narrador
-        </>
-      )}
-    </Button>
+    <div className="flex gap-2">
+        <Button onClick={playAudio} size="sm" variant="secondary" className="flex items-center gap-2">
+        {isPlaying ? (
+            <>
+            <span className="animate-pulse">🔊</span> Parar
+            </>
+        ) : (
+            <>
+            <span>🔈</span> Ouvir
+            </>
+        )}
+        </Button>
+        <Button onClick={downloadAudio} size="sm" variant="secondary" title="Baixar Áudio">
+            ⬇️
+        </Button>
+    </div>
   );
 };
 

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Story } from '../types';
@@ -40,22 +39,37 @@ const StoryReader: React.FC = () => {
     if (!story) return;
     setGeneratingPDF(true);
     setPdfProgress(10);
-    await new Promise(r => setTimeout(r, 500)); 
 
     try {
       const bookContainer = bookPrintRef.current;
       if (!bookContainer) throw new Error("Erro de layout");
 
+      // 1. Pré-carregar imagens dentro do container oculto
+      // Precisamos dar tempo para o navegador renderizar as imagens do Pollinations
+      // A melhor forma é esperar um pouco e verificar se as imagens carregaram
+      setPdfProgress(20);
+      await new Promise(r => setTimeout(r, 2000)); // Aguarda 2 segundos para renderização inicial
+
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pages = bookContainer.querySelectorAll('.book-page');
       
       for (let i = 0; i < pages.length; i++) {
-          setPdfProgress(10 + Math.floor(((i + 1) / pages.length) * 80));
+          setPdfProgress(20 + Math.floor(((i + 1) / pages.length) * 80));
           const pageEl = pages[i] as HTMLElement;
-          const canvas = await html2canvas(pageEl, { scale: 2, useCORS: true, logging: false });
+          
+          // html2canvas config otimizada para imagens externas
+          const canvas = await html2canvas(pageEl, { 
+              scale: 2, 
+              useCORS: true, 
+              logging: false,
+              allowTaint: true,
+              backgroundColor: null 
+          });
+          
           const imgData = canvas.toDataURL('image/jpeg', 0.9);
           const pdfWidth = pdf.internal.pageSize.getWidth();
           const pdfHeight = pdf.internal.pageSize.getHeight();
+          
           if (i > 0) pdf.addPage();
           pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       }
@@ -63,7 +77,7 @@ const StoryReader: React.FC = () => {
       pdf.save(`${story.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
     } catch (error) {
         console.error(error);
-        alert("Erro ao gerar PDF.");
+        alert("Não foi possível gerar o PDF agora. Tente novamente em alguns instantes ou verifique sua conexão.");
     } finally {
         setGeneratingPDF(false);
     }
@@ -206,7 +220,7 @@ const StoryReader: React.FC = () => {
                    <div className="flex flex-col gap-4 justify-center">
                        <Button variant="primary" onClick={() => setActiveChapterIndex(0)}>📖 Ler do Início</Button>
                        <Button variant="secondary" onClick={handleFullBookDownload} disabled={generatingPDF}>
-                           {generatingPDF ? 'Imprimindo...' : '📚 Baixar PDF Completo'}
+                           {generatingPDF ? `Imprimindo... ${pdfProgress}%` : '📚 Baixar PDF Completo'}
                        </Button>
                        <Button variant="danger" onClick={handleExit}>🚪 Voltar para Biblioteca</Button>
                    </div>
@@ -220,8 +234,19 @@ const StoryReader: React.FC = () => {
   return (
     <div className={`max-w-5xl mx-auto px-4 pb-20 ${story.isEducational ? 'font-sans' : ''}`}>
       
-      {/* HIDDEN PRINT LAYOUT */}
-      <div ref={bookPrintRef} style={{ position: 'fixed', top: 0, left: generatingPDF ? '0' : '-10000px', zIndex: -10, width: '794px' }}>
+      {/* HIDDEN PRINT LAYOUT - AJUSTADO PARA EVITAR ERROS DE VISIBILIDADE */}
+      <div 
+        ref={bookPrintRef} 
+        style={{ 
+            position: 'fixed', 
+            top: 0, 
+            left: generatingPDF ? '0' : '-10000px', // Se gerando, traz pra tela mas escondido pelo z-index
+            zIndex: -50, // Fica atrás de tudo
+            width: '794px',
+            opacity: generatingPDF ? 0 : 0, // Invisível mas renderizado
+            pointerEvents: 'none'
+        }}
+      >
          <div className={`book-page relative w-[794px] h-[1123px] overflow-hidden border-8 border-black flex flex-col items-center justify-between p-12 ${story.isEducational ? 'bg-[#1a3c28]' : 'bg-cartoon-yellow'}`}>
              <div className="z-10 text-center w-full mt-10">
                 <h1 className={`font-comic text-7xl drop-shadow-lg mb-4 ${story.isEducational ? 'text-white' : 'text-cartoon-blue text-stroke-3'}`}>{story.title}</h1>
@@ -231,11 +256,12 @@ const StoryReader: React.FC = () => {
              </div>
              <div className="z-10 text-center w-full mb-10 bg-white border-4 border-black p-4 rounded-xl">
                  <p className="font-comic text-4xl text-black">Autor: {user?.name}</p>
+                 {story.isEducational && <p className="font-sans text-xl mt-2 font-bold">Material Didático - Cineasta Kids</p>}
              </div>
         </div>
         {story.chapters.map((chapter, idx) => (
             <div key={idx} className="book-page w-[794px] h-[1123px] bg-white border-8 border-black flex flex-col">
-                <div className="h-1/2 border-b-8 border-black relative overflow-hidden">
+                <div className="h-1/2 border-b-8 border-black relative overflow-hidden bg-gray-100">
                     {chapter.generatedImage && <img src={chapter.generatedImage} className="w-full h-full object-cover" crossOrigin="anonymous" />}
                 </div>
                 <div className="h-1/2 p-12 flex flex-col justify-center bg-cartoon-cream">
@@ -252,7 +278,9 @@ const StoryReader: React.FC = () => {
             <div className="text-gray-500 font-bold">Página {activeChapterIndex + 1} de {story.chapters.length}</div>
         </div>
         <div className="flex gap-2">
-            <Button size="sm" variant="primary" onClick={handleFullBookDownload} disabled={generatingPDF}>📚 PDF</Button>
+            <Button size="sm" variant="primary" onClick={handleFullBookDownload} disabled={generatingPDF}>
+                {generatingPDF ? '⏳' : '📚 PDF'}
+            </Button>
             <Button size="sm" variant="danger" onClick={handleExit}>❌ Sair</Button>
         </div>
       </div>
