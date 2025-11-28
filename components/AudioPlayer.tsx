@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import Button from './ui/Button';
 
@@ -72,12 +73,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ base64Audio }) => {
 
   const downloadAudio = () => {
     try {
-        // Para baixar, precisamos adicionar um cabeçalho WAV simples ou salvar como raw PCM
-        // Para simplificar e funcionar na maioria dos players, vamos encapsular o PCM em um WAV container
-        // Ou, mais simples para este contexto: Baixar como binário e o navegador/player interpreta
-        // Mas o ideal para usuário final é WAV.
-        
-        // Vamos criar um link simples de download do binário
+        if (!base64Audio) {
+            alert("Áudio não disponível para download.");
+            return;
+        }
+
+        // Vamos criar um link simples de download do binário WAV
         const audioBytes = decode(base64Audio);
         
         // Cabeçalho WAV simples (Mono, 24kHz, 16bit)
@@ -127,7 +128,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ base64Audio }) => {
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 flex-wrap">
         <Button onClick={playAudio} size="sm" variant="secondary" className="flex items-center gap-2">
         {isPlaying ? (
             <>
@@ -139,8 +140,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ base64Audio }) => {
             </>
         )}
         </Button>
-        <Button onClick={downloadAudio} size="sm" variant="secondary" title="Baixar Áudio">
-            ⬇️
+        <Button onClick={downloadAudio} size="sm" variant="primary" title="Baixar Áudio no formato WAV">
+            💾 Baixar Áudio
         </Button>
     </div>
   );

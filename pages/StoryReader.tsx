@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Story } from '../types';
@@ -46,7 +47,6 @@ const StoryReader: React.FC = () => {
 
       // 1. Pré-carregar imagens dentro do container oculto
       // Precisamos dar tempo para o navegador renderizar as imagens do Pollinations
-      // A melhor forma é esperar um pouco e verificar se as imagens carregaram
       setPdfProgress(20);
       await new Promise(r => setTimeout(r, 2000)); // Aguarda 2 segundos para renderização inicial
 
@@ -57,7 +57,7 @@ const StoryReader: React.FC = () => {
           setPdfProgress(20 + Math.floor(((i + 1) / pages.length) * 80));
           const pageEl = pages[i] as HTMLElement;
           
-          // html2canvas config otimizada para imagens externas
+          // html2canvas config otimizada
           const canvas = await html2canvas(pageEl, { 
               scale: 2, 
               useCORS: true, 
@@ -234,7 +234,13 @@ const StoryReader: React.FC = () => {
   return (
     <div className={`max-w-5xl mx-auto px-4 pb-20 ${story.isEducational ? 'font-sans' : ''}`}>
       
-      {/* HIDDEN PRINT LAYOUT - AJUSTADO PARA EVITAR ERROS DE VISIBILIDADE */}
+      {/* 
+          HIDDEN PRINT LAYOUT 
+          Ajustado para evitar cortes de texto:
+          1. justify-start (em vez de center) para o texto começar do topo
+          2. text-2xl (em vez de 3xl) para caber mais texto
+          3. p-12 e pt-8 para garantir margens
+      */}
       <div 
         ref={bookPrintRef} 
         style={{ 
@@ -247,6 +253,7 @@ const StoryReader: React.FC = () => {
             pointerEvents: 'none'
         }}
       >
+         {/* CAPA */}
          <div className={`book-page relative w-[794px] h-[1123px] overflow-hidden border-8 border-black flex flex-col items-center justify-between p-12 ${story.isEducational ? 'bg-[#1a3c28]' : 'bg-cartoon-yellow'}`}>
              <div className="z-10 text-center w-full mt-10">
                 <h1 className={`font-comic text-7xl drop-shadow-lg mb-4 ${story.isEducational ? 'text-white' : 'text-cartoon-blue text-stroke-3'}`}>{story.title}</h1>
@@ -259,19 +266,27 @@ const StoryReader: React.FC = () => {
                  {story.isEducational && <p className="font-sans text-xl mt-2 font-bold">Material Didático - Cineasta Kids</p>}
              </div>
         </div>
+        
+        {/* PÁGINAS DOS CAPÍTULOS */}
         {story.chapters.map((chapter, idx) => (
             <div key={idx} className="book-page w-[794px] h-[1123px] bg-white border-8 border-black flex flex-col">
+                {/* Imagem no Topo (50%) */}
                 <div className="h-1/2 border-b-8 border-black relative overflow-hidden bg-gray-100">
                     {chapter.generatedImage && <img src={chapter.generatedImage} className="w-full h-full object-cover" crossOrigin="anonymous" />}
                 </div>
-                <div className="h-1/2 p-12 flex flex-col justify-center bg-cartoon-cream">
-                    <h2 className="font-heading text-4xl mb-6 text-cartoon-purple text-center">{chapter.title}</h2>
-                    <p className="font-sans text-3xl leading-relaxed text-justify">{chapter.text}</p>
+                {/* Texto em Baixo (50%) - Ajustado para não cortar */}
+                <div className="h-1/2 p-12 pt-8 flex flex-col justify-start items-start bg-cartoon-cream overflow-hidden">
+                    <h2 className="font-heading text-4xl mb-6 text-cartoon-purple w-full text-center border-b-2 border-black/10 pb-2">{chapter.title}</h2>
+                    {/* Fonte reduzida para 2xl para evitar corte em textos longos */}
+                    <p className="font-sans text-2xl leading-normal text-justify w-full text-gray-900 font-medium">
+                        {chapter.text}
+                    </p>
                 </div>
             </div>
         ))}
       </div>
 
+      {/* TELA PRINCIPAL DO LEITOR (VISÍVEL) */}
       <div className="mb-6 bg-white rounded-2xl border-4 border-black p-4 shadow-cartoon flex flex-col md:flex-row items-center justify-between gap-4 relative z-20">
         <div>
             <h1 className="font-heading text-3xl text-cartoon-purple">{story.title}</h1>
