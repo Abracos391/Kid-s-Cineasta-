@@ -2,9 +2,8 @@
 import { User, Story, Avatar, SchoolMember } from '../types';
 
 const DB_NAME = 'CineastaDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Incrementado para forçar atualização do esquema
 
-// Stores (Tabelas)
 const STORE_USERS = 'users';
 const STORE_STORIES = 'stories';
 const STORE_AVATARS = 'avatars';
@@ -12,33 +11,45 @@ const STORE_SCHOOL_DATA = 'school_data';
 
 export const idbService = {
   
-  // Abre conexão com o banco interno do navegador
   openDB: (): Promise<IDBDatabase> => {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
+        const transaction = (event.target as IDBOpenDBRequest).transaction;
         
-        // Criar Tabela de Usuários
+        // --- USERS ---
+        let userStore;
         if (!db.objectStoreNames.contains(STORE_USERS)) {
-          const userStore = db.createObjectStore(STORE_USERS, { keyPath: 'id' });
-          userStore.createIndex('email', 'email', { unique: true });
+          userStore = db.createObjectStore(STORE_USERS, { keyPath: 'id' });
+        } else {
+          userStore = transaction?.objectStore(STORE_USERS);
         }
 
-        // Criar Tabela de Histórias
+        // Migração V1 -> V2 (Email para WhatsApp)
+        if (userStore) {
+            if (userStore.indexNames.contains('email')) {
+                userStore.deleteIndex('email');
+            }
+            if (!userStore.indexNames.contains('whatsapp')) {
+                userStore.createIndex('whatsapp', 'whatsapp', { unique: true });
+            }
+        }
+
+        // --- STORIES ---
         if (!db.objectStoreNames.contains(STORE_STORIES)) {
           const storyStore = db.createObjectStore(STORE_STORIES, { keyPath: 'id' });
           storyStore.createIndex('userId', 'userId', { unique: false });
         }
 
-        // Criar Tabela de Avatares
+        // --- AVATARS ---
         if (!db.objectStoreNames.contains(STORE_AVATARS)) {
           const avatarStore = db.createObjectStore(STORE_AVATARS, { keyPath: 'id' });
           avatarStore.createIndex('userId', 'userId', { unique: false });
         }
         
-        // Criar Tabela de Dados Escolares
+        // --- SCHOOL ---
         if (!db.objectStoreNames.contains(STORE_SCHOOL_DATA)) {
             db.createObjectStore(STORE_SCHOOL_DATA, { keyPath: 'id' });
         }
@@ -54,14 +65,12 @@ export const idbService = {
     });
   },
 
-  // --- CRUD GENÉRICO ---
-
   add: async (storeName: string, item: any) => {
     const db = await idbService.openDB();
     return new Promise<void>((resolve, reject) => {
       const tx = db.transaction(storeName, 'readwrite');
       const store = tx.objectStore(storeName);
-      const request = store.put(item); // Salva ou Atualiza
+      const request = store.put(item); 
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
@@ -105,14 +114,13 @@ export const idbService = {
     });
   },
 
-  // Busca específica para login
-  findUserByEmail: async (email: string): Promise<User | undefined> => {
+  findUserByWhatsapp: async (whatsapp: string): Promise<User | undefined> => {
     const db = await idbService.openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_USERS, 'readonly');
       const store = tx.objectStore(STORE_USERS);
-      const index = store.index('email');
-      const request = index.get(email);
+      const index = store.index('whatsapp');
+      const request = index.get(whatsapp);
 
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
