@@ -8,18 +8,21 @@ export const authService = {
 
   // --- REGISTRO ---
 
-  register: async (name: string, email: string, password: string): Promise<User> => {
-    const existing = await idbService.findUserByEmail(email);
+  register: async (name: string, whatsapp: string, password: string): Promise<User> => {
+    // Remove caracteres não numéricos do zap
+    const cleanWhatsapp = whatsapp.replace(/\D/g, '');
+    
+    const existing = await idbService.findUserByWhatsapp(cleanWhatsapp);
     if (existing) {
-        throw new Error('Este e-mail já está cadastrado.');
+        throw new Error('Este número de WhatsApp já está cadastrado.');
     }
 
     const userId = crypto.randomUUID();
     const newUser: User = {
         id: userId,
         name,
-        email,
-        // @ts-ignore: Senha salva localmente no banco do navegador
+        whatsapp: cleanWhatsapp,
+        // @ts-ignore
         password: password, 
         plan: 'free',
         credits: 0,
@@ -36,15 +39,15 @@ export const authService = {
 
   // --- LOGIN ---
 
-  login: async (email: string, password: string): Promise<User> => {
-    const user = await idbService.findUserByEmail(email);
+  login: async (whatsapp: string, password: string): Promise<User> => {
+    const cleanWhatsapp = whatsapp.replace(/\D/g, '');
+    const user = await idbService.findUserByWhatsapp(cleanWhatsapp);
     
     // @ts-ignore
     if (!user || user.password !== password) {
-        throw new Error('E-mail ou senha inválidos.');
+        throw new Error('WhatsApp ou senha inválidos.');
     }
     
-    // Verifica virada de mês para resetar plano Free
     const now = new Date();
     const lastReset = user.lastResetDate ? new Date(user.lastResetDate) : new Date(0);
     
@@ -62,8 +65,9 @@ export const authService = {
   // --- MODO ESCOLA ---
 
   loginAsTeacher: async (teacherName: string, accessCode: string): Promise<User> => {
-     const fakeEmail = `code_${accessCode}@school.local`;
-     let user = await idbService.findUserByEmail(fakeEmail);
+     // Modo escola continua usando código, mas geramos um ID interno
+     const fakeWhatsapp = `CODE_${accessCode}`;
+     let user = await idbService.findUserByWhatsapp(fakeWhatsapp);
 
      if (!user) {
          throw new Error("Código não encontrado. Cadastre sua escola primeiro.");
@@ -73,9 +77,9 @@ export const authService = {
      return user;
   },
 
-  registerSchool: async (schoolName: string, teacherName: string, accessCode: string): Promise<User> => {
-      const fakeEmail = `code_${accessCode}@school.local`;
-      const existing = await idbService.findUserByEmail(fakeEmail);
+  registerSchool: async (schoolName: string, teacherName: string, accessCode: string, teacherWhatsapp: string): Promise<User> => {
+      const fakeWhatsapp = `CODE_${accessCode}`;
+      const existing = await idbService.findUserByWhatsapp(fakeWhatsapp);
       
       if (existing) throw new Error("Este código de acesso já está em uso.");
 
@@ -83,7 +87,7 @@ export const authService = {
       const newSchoolUser: User = {
             id: userId,
             name: `Prof. ${teacherName}`,
-            email: fakeEmail,
+            whatsapp: fakeWhatsapp, // Armazena o código como ID
             // @ts-ignore
             password: accessCode,
             plan: 'premium',
@@ -111,8 +115,6 @@ export const authService = {
     if (!userId) return null;
     return await idbService.get('users', userId);
   },
-
-  // --- REGRAS DE NEGÓCIO ---
 
   canCreateStory: (user: User): { allowed: boolean; type?: 'premium' | 'free'; reason?: string } => {
     if (user.isSchoolUser) {
