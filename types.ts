@@ -2,21 +2,19 @@
 export interface User {
   id: string;
   name: string;
-  email: string;
+  whatsapp: string; // Alterado de email para whatsapp
   plan: 'free' | 'premium' | 'enterprise';
-  credits: number; // Créditos avulsos ou mensais do plano Premium
+  credits: number; 
   
-  // Controle do plano FREE (Mensal)
-  monthlyFreeUsed: number; // Limite Novo: 3 (Apenas texto/avatar)
-  monthlyPremiumTrialUsed: number; // Limite Novo: 1 (Completa)
+  monthlyFreeUsed: number;
+  monthlyPremiumTrialUsed: number;
   
-  lastResetDate: number; // Para resetar o contador mensal
+  lastResetDate: number;
 
-  // MODO ESCOLA
-  isSchoolUser?: boolean; // Flag para identificar sessão de professor
-  schoolName?: string; // Nome da instituição
-  schoolStoriesUsed?: number; // Limite Novo: 10 por pacote
-  maxStudents?: number; // Limite Novo: 40
+  isSchoolUser?: boolean;
+  schoolName?: string;
+  schoolStoriesUsed?: number;
+  maxStudents?: number;
 }
 
 export interface Avatar {
@@ -30,8 +28,8 @@ export interface StoryChapter {
   title: string;
   text: string;
   visualDescription: string;
-  generatedImage?: string; // Cache da imagem gerada
-  generatedAudio?: string; // Cache do áudio gerado
+  generatedImage?: string; 
+  generatedAudio?: string; 
 }
 
 export interface Story {
@@ -41,10 +39,9 @@ export interface Story {
   createdAt: number;
   chapters: StoryChapter[];
   characters: Avatar[];
-  isPremium?: boolean; // Flag para identificar se foi gerada como premium
-  isEducational?: boolean; // Flag para modo escola
+  isPremium?: boolean;
+  isEducational?: boolean; 
   
-  // Metadados Pedagógicos
   educationalGoal?: string;
   bnccCode?: string;
 }
@@ -56,12 +53,10 @@ export enum AppStatus {
   ERROR
 }
 
-// --- MODO ESCOLA ---
-
 export type SchoolRole = 'director' | 'vice_director' | 'teacher' | 'student';
 
 export interface SchoolMember {
-  slotId: string; // ex: 'dir', 'vice', 'prof_1', 'aluno_01'
+  slotId: string;
   avatarId: string;
   role: SchoolRole;
 }
