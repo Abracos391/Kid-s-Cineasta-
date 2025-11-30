@@ -21,17 +21,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadUser = async () => {
+    const initAuth = async () => {
         try {
             const currentUser = await authService.getCurrentUser();
             setUser(currentUser);
         } catch (e) {
-            console.error("Erro ao carregar sessão:", e);
+            console.error(e);
         } finally {
             setLoading(false);
         }
     };
-    loadUser();
+    initAuth();
   }, []);
 
   const refreshUser = async () => {
