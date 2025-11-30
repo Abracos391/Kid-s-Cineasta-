@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 
 const SchoolLogin: React.FC = () => {
@@ -11,10 +10,12 @@ const SchoolLogin: React.FC = () => {
   const [name, setName] = useState(''); 
   const [schoolName, setSchoolName] = useState(''); 
   const [code, setCode] = useState(''); 
+  const [whatsapp, setWhatsapp] = useState(''); // Novo Campo
   
   const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false); // Novo estado local
+  const [submitting, setSubmitting] = useState(false); 
   
+  // @ts-ignore
   const { loginAsTeacher, registerSchool, user, loading } = useAuth();
   const navigate = useNavigate();
 
@@ -34,13 +35,13 @@ const SchoolLogin: React.FC = () => {
           if (!schoolName.trim()) throw new Error("O nome da escola é obrigatório.");
           if (!name.trim()) throw new Error("O nome do educador é obrigatório.");
           if (code.length < 4) throw new Error("Crie um código com pelo menos 4 caracteres.");
+          if (whatsapp.length < 10) throw new Error("Informe um WhatsApp válido.");
           
-          await registerSchool(schoolName, name, code);
+          await registerSchool(schoolName, name, code, whatsapp);
       } else {
           if (!name.trim()) throw new Error("Por favor, identifique-se Professor(a).");
           await loginAsTeacher(name, code);
       }
-      // O useEffect cuidará da navegação
     } catch (err: any) {
       setError(err.message || "Acesso negado.");
       setSubmitting(false);
@@ -51,7 +52,6 @@ const SchoolLogin: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#1a3c28] flex items-center justify-center p-4 relative overflow-hidden">
-        {/* Background Elements */}
         <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
         
         <div className="max-w-md w-full relative z-10">
@@ -73,16 +73,28 @@ const SchoolLogin: React.FC = () => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     
                     {isRegistering && (
-                        <div className="animate-fade-in">
-                            <label className="block text-white font-bold mb-1 font-heading uppercase text-xs tracking-wider">Nome da Instituição</label>
-                            <input 
-                                type="text" 
-                                className="w-full p-3 bg-black/20 border-b-2 border-white/30 text-white font-hand text-xl placeholder-white/30 outline-none focus:border-yellow-400 transition-colors"
-                                placeholder="Ex: Escola Municipal do Saber"
-                                value={schoolName}
-                                onChange={e => setSchoolName(e.target.value)}
-                                style={{ fontFamily: '"Comic Neue", cursive' }}
-                            />
+                        <div className="animate-fade-in space-y-4">
+                            <div>
+                                <label className="block text-white font-bold mb-1 font-heading uppercase text-xs tracking-wider">Nome da Instituição</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full p-3 bg-black/20 border-b-2 border-white/30 text-white font-hand text-xl placeholder-white/30 outline-none focus:border-yellow-400 transition-colors"
+                                    placeholder="Ex: Escola Municipal do Saber"
+                                    value={schoolName}
+                                    onChange={e => setSchoolName(e.target.value)}
+                                    style={{ fontFamily: '"Comic Neue", cursive' }}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-white font-bold mb-1 font-heading uppercase text-xs tracking-wider">WhatsApp para Contato</label>
+                                <input 
+                                    type="tel" 
+                                    className="w-full p-3 bg-black/20 border-b-2 border-white/30 text-white font-hand text-xl placeholder-white/30 outline-none focus:border-yellow-400 transition-colors"
+                                    placeholder="(00) 00000-0000"
+                                    value={whatsapp}
+                                    onChange={e => setWhatsapp(e.target.value)}
+                                />
+                            </div>
                         </div>
                     )}
 
@@ -123,7 +135,6 @@ const SchoolLogin: React.FC = () => {
                     </Button>
                 </form>
 
-                {/* Toggle entre Login e Cadastro */}
                 <div className="mt-6 text-center border-t border-white/10 pt-4">
                     <button 
                         onClick={() => {
