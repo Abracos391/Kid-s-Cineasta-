@@ -7,10 +7,9 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { generateSpeech, generateChapterIllustration } from '../services/geminiService';
 import AudioPlayer from '../components/AudioPlayer';
+import { dbService } from '../services/dbService';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-
-// --- ACTIONS MOVIDAS PARA O TOPO ---
 
 const StoryReader: React.FC = () => {
   const { id } = useParams();
@@ -25,8 +24,11 @@ const StoryReader: React.FC = () => {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [pdfProgress, setPdfProgress] = useState(0); 
   const [loadError, setLoadError] = useState(false);
+  
+  // Audio unificado
+  const [stitchingAudio, setStitchingAudio] = useState(false);
 
-  // --- ACTIONS ---
+  // --- ACTIONS (Topo) ---
 
   const handleExit = () => {
     if (user?.isSchoolUser || story?.isEducational) {
@@ -45,10 +47,9 @@ const StoryReader: React.FC = () => {
       const bookContainer = bookPrintRef.current;
       if (!bookContainer) throw new Error("Erro de layout");
 
-      // 1. Pré-carregar imagens dentro do container oculto
-      // Precisamos dar tempo para o navegador renderizar as imagens do Pollinations
+      // Pré-renderização (Garante que imagens carreguem)
       setPdfProgress(20);
-      await new Promise(r => setTimeout(r, 2000)); // Aguarda 2 segundos para renderização inicial
+      await new Promise(r => setTimeout(r, 2000));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pages = bookContainer.querySelectorAll('.book-page');
@@ -57,7 +58,6 @@ const StoryReader: React.FC = () => {
           setPdfProgress(20 + Math.floor(((i + 1) / pages.length) * 80));
           const pageEl = pages[i] as HTMLElement;
           
-          // html2canvas config otimizada
           const canvas = await html2canvas(pageEl, { 
               scale: 2, 
               useCORS: true, 
@@ -77,58 +77,101 @@ const StoryReader: React.FC = () => {
       pdf.save(`${story.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
     } catch (error) {
         console.error(error);
-        alert("Não foi possível gerar o PDF agora. Tente novamente em alguns instantes ou verifique sua conexão.");
+        alert("Erro ao gerar PDF.");
     } finally {
         setGeneratingPDF(false);
     }
   };
 
-  // --- SAVE LOGIC (LOCALSTORAGE SAFE SAVE) ---
-  const saveStoryProgress = (updatedStory: Story) => {
+  // --- AUDIO STITCHING (Arquivo Único) ---
+  const downloadUnifiedAudio = async () => {
+      if (!story || !story.chapters) return;
+      
+      // Verifica se todos os áudios foram gerados
+      const missingAudio = story.chapters.some(c => !c.generatedAudio);
+      if (missingAudio) {
+          alert("Gere a narração de todos os capítulos antes de baixar o áudio completo.");
+          return;
+      }
+
+      setStitchingAudio(true);
+      try {
+          // 1. Decodificar Base64 para Arrays de Bytes
+          const chunks = story.chapters.map(c => {
+              const binary = atob(c.generatedAudio!);
+              const len = binary.length;
+              const bytes = new Uint8Array(len);
+              for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+              return bytes;
+          });
+
+          // 2. Calcular tamanho total
+          const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+          
+          // 3. Criar buffer combinado + cabeçalho WAV (44 bytes)
+          const combinedBuffer = new Uint8Array(44 + totalLength);
+          
+          // 4. Escrever Cabeçalho WAV
+          const view = new DataView(combinedBuffer.buffer);
+          const writeString = (offset: number, s: string) => {
+              for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+          };
+
+          const sampleRate = 24000;
+          const numChannels = 1;
+          const bitsPerSample = 16;
+          const dataLength = totalLength;
+          const fileSize = 36 + dataLength;
+
+          writeString(0, 'RIFF');
+          view.setUint32(4, fileSize, true);
+          writeString(8, 'WAVE');
+          writeString(12, 'fmt ');
+          view.setUint32(16, 16, true);
+          view.setUint16(20, 1, true); // PCM
+          view.setUint16(22, numChannels, true);
+          view.setUint32(24, sampleRate, true);
+          view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true);
+          view.setUint16(32, numChannels * (bitsPerSample / 8), true);
+          view.setUint16(34, bitsPerSample, true);
+          writeString(36, 'data');
+          view.setUint32(40, dataLength, true);
+
+          // 5. Escrever dados de áudio
+          let offset = 44;
+          chunks.forEach(chunk => {
+              combinedBuffer.set(chunk, offset);
+              offset += chunk.length;
+          });
+
+          // 6. Download
+          const blob = new Blob([combinedBuffer], { type: 'audio/wav' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${story.title}_Audiobook_Completo.wav`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+      } catch (e) {
+          console.error("Erro ao criar arquivo único:", e);
+          alert("Erro ao unificar áudios.");
+      } finally {
+          setStitchingAudio(false);
+      }
+  };
+
+
+  // --- SAVE LOGIC (DB Service) ---
+  const updateStoryInDB = async (updatedStory: Story) => {
       if (!user) return;
       try {
-          const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
-          const userStories = allStories[user.id] || [];
-          
-          const storyIndex = userStories.findIndex((s: Story) => s.id === updatedStory.id);
-          
-          if (storyIndex >= 0) {
-              userStories[storyIndex] = updatedStory;
-          } else {
-              userStories.push(updatedStory);
-          }
-          
-          allStories[user.id] = userStories;
-          localStorage.setItem('ck_stories', JSON.stringify(allStories));
-          
-          // Update Current Cache
-          localStorage.setItem('currentStory', JSON.stringify(updatedStory));
-
-      } catch (e: any) {
-          if (e.name === 'QuotaExceededError') {
-              console.warn("Memória cheia! Executando Safe Save (removendo áudios antigos)...");
-              
-              // Remove áudios dos capítulos para economizar espaço
-              const lightStory = { ...updatedStory };
-              lightStory.chapters = lightStory.chapters.map(c => ({
-                  ...c,
-                  generatedAudio: undefined // Remove áudio do cache persistente
-              }));
-              
-              try {
-                  const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
-                  const userStories = allStories[user.id] || [];
-                  const storyIndex = userStories.findIndex((s: Story) => s.id === lightStory.id);
-                  if (storyIndex >= 0) userStories[storyIndex] = lightStory;
-                  else userStories.push(lightStory);
-                  
-                  allStories[user.id] = userStories;
-                  localStorage.setItem('ck_stories', JSON.stringify(allStories));
-                  alert("Aviso: Memória do navegador cheia. O áudio não será salvo para a próxima vez, mas o texto e imagens estão seguros!");
-              } catch (e2) {
-                  alert("Erro crítico de armazenamento. Não foi possível salvar o progresso.");
-              }
-          }
+          // O idbService agora lida com arquivos grandes sem problemas
+          await dbService.updateStory(user.id, updatedStory);
+      } catch (e) {
+          console.error("Erro ao atualizar história no banco:", e);
       }
   };
 
@@ -136,27 +179,21 @@ const StoryReader: React.FC = () => {
   useEffect(() => {
     if (!id || !user) return;
     
-    // 1. Tenta carregar do "Banco de Dados" Local
-    const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
-    const userStories = allStories[user.id] || [];
-    const found = userStories.find((s: Story) => s.id === id);
-
-    if (found) {
-        setStory(found);
-        setLoadError(false);
-    } else {
-        // 2. Fallback para cache temporário de criação recente
-        const current = localStorage.getItem('currentStory');
-        if (current) {
-            const parsed = JSON.parse(current);
-            if (String(parsed.id) === String(id)) {
-                setStory(parsed);
+    const loadStory = async () => {
+        try {
+            const found = await dbService.getStoryById(user.id, id);
+            if (found) {
+                setStory(found);
                 setLoadError(false);
-                return;
+            } else {
+                setLoadError(true);
             }
+        } catch (e) {
+            console.error(e);
+            setLoadError(true);
         }
-        setLoadError(true);
-    }
+    };
+    loadStory();
   }, [id, user]);
 
   // --- IMAGE GENERATION ---
@@ -173,7 +210,7 @@ const StoryReader: React.FC = () => {
             
             const updatedStory = { ...story, chapters: updatedChapters };
             setStory(updatedStory);
-            saveStoryProgress(updatedStory);
+            updateStoryInDB(updatedStory);
         }
         genImage();
       }
@@ -195,7 +232,7 @@ const StoryReader: React.FC = () => {
       
       const updatedStory = { ...story, chapters: updatedChapters };
       setStory(updatedStory);
-      saveStoryProgress(updatedStory);
+      updateStoryInDB(updatedStory);
 
     } catch (error) {
       console.error(error);
@@ -204,8 +241,6 @@ const StoryReader: React.FC = () => {
       setGeneratingAudio(false);
     }
   };
-
-  // --- RENDER ---
 
   if (loadError) return <div className="min-h-[60vh] flex items-center justify-center font-heading text-4xl">História não encontrada.</div>;
   if (!story || !story.chapters) return <div className="min-h-[60vh] flex items-center justify-center font-heading text-3xl animate-pulse">Abrindo livro...</div>;
@@ -219,9 +254,15 @@ const StoryReader: React.FC = () => {
                    <h1 className="font-heading text-4xl md:text-5xl mb-4">Fim da Aventura!</h1>
                    <div className="flex flex-col gap-4 justify-center">
                        <Button variant="primary" onClick={() => setActiveChapterIndex(0)}>📖 Ler do Início</Button>
+                       
                        <Button variant="secondary" onClick={handleFullBookDownload} disabled={generatingPDF}>
-                           {generatingPDF ? `Imprimindo... ${pdfProgress}%` : '📚 Baixar PDF Completo'}
+                           {generatingPDF ? `Imprimindo... ${pdfProgress}%` : '📄 Baixar Livro em PDF'}
                        </Button>
+
+                       <Button variant="success" onClick={downloadUnifiedAudio} disabled={stitchingAudio}>
+                            {stitchingAudio ? 'Unificando Áudios...' : '🎧 Baixar Audiobook Completo (.WAV)'}
+                       </Button>
+
                        <Button variant="danger" onClick={handleExit}>🚪 Voltar para Biblioteca</Button>
                    </div>
                </Card>
@@ -234,23 +275,18 @@ const StoryReader: React.FC = () => {
   return (
     <div className={`max-w-5xl mx-auto px-4 pb-20 ${story.isEducational ? 'font-sans' : ''}`}>
       
-      {/* 
-          HIDDEN PRINT LAYOUT 
-          Ajustado para evitar cortes de texto:
-          1. justify-start (em vez de center) para o texto começar do topo
-          2. text-2xl (em vez de 3xl) para caber mais texto
-          3. p-12 e pt-8 para garantir margens
-      */}
+      {/* HIDDEN PRINT LAYOUT (A4) */}
       <div 
         ref={bookPrintRef} 
         style={{ 
             position: 'fixed', 
             top: 0, 
-            left: generatingPDF ? '0' : '-10000px', // Se gerando, traz pra tela mas escondido pelo z-index
-            zIndex: -50, // Fica atrás de tudo
+            left: generatingPDF ? '0' : '-10000px',
+            zIndex: -50,
             width: '794px',
-            opacity: generatingPDF ? 0 : 0, // Invisível mas renderizado
-            pointerEvents: 'none'
+            opacity: generatingPDF ? 1 : 0, // Opacity 1 during generation for html2canvas to capture correctly
+            pointerEvents: 'none',
+            backgroundColor: 'white' // Ensure background is captured
         }}
       >
          {/* CAPA */}
@@ -267,17 +303,14 @@ const StoryReader: React.FC = () => {
              </div>
         </div>
         
-        {/* PÁGINAS DOS CAPÍTULOS */}
+        {/* PÁGINAS */}
         {story.chapters.map((chapter, idx) => (
             <div key={idx} className="book-page w-[794px] h-[1123px] bg-white border-8 border-black flex flex-col">
-                {/* Imagem no Topo (50%) */}
                 <div className="h-1/2 border-b-8 border-black relative overflow-hidden bg-gray-100">
                     {chapter.generatedImage && <img src={chapter.generatedImage} className="w-full h-full object-cover" crossOrigin="anonymous" />}
                 </div>
-                {/* Texto em Baixo (50%) - Ajustado para não cortar */}
                 <div className="h-1/2 p-12 pt-8 flex flex-col justify-start items-start bg-cartoon-cream overflow-hidden">
                     <h2 className="font-heading text-4xl mb-6 text-cartoon-purple w-full text-center border-b-2 border-black/10 pb-2">{chapter.title}</h2>
-                    {/* Fonte reduzida para 2xl para evitar corte em textos longos */}
                     <p className="font-sans text-2xl leading-normal text-justify w-full text-gray-900 font-medium">
                         {chapter.text}
                     </p>
@@ -286,7 +319,7 @@ const StoryReader: React.FC = () => {
         ))}
       </div>
 
-      {/* TELA PRINCIPAL DO LEITOR (VISÍVEL) */}
+      {/* LEITOR VISÍVEL */}
       <div className="mb-6 bg-white rounded-2xl border-4 border-black p-4 shadow-cartoon flex flex-col md:flex-row items-center justify-between gap-4 relative z-20">
         <div>
             <h1 className="font-heading text-3xl text-cartoon-purple">{story.title}</h1>
@@ -294,7 +327,7 @@ const StoryReader: React.FC = () => {
         </div>
         <div className="flex gap-2">
             <Button size="sm" variant="primary" onClick={handleFullBookDownload} disabled={generatingPDF}>
-                {generatingPDF ? '⏳' : '📚 PDF'}
+                {generatingPDF ? '⏳' : '📄 PDF'}
             </Button>
             <Button size="sm" variant="danger" onClick={handleExit}>❌ Sair</Button>
         </div>
