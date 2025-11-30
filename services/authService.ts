@@ -1,139 +1,125 @@
 
 import { User } from '../types';
+import { idbService } from './idbService';
 
-const STORAGE_KEYS = {
-  USERS: 'ck_users',
-  CURRENT_USER_ID: 'ck_current_user_id'
-};
-
-// --- HELPER: Simula Banco de Dados Local ---
-const getUsers = (): User[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.USERS);
-  return data ? JSON.parse(data) : [];
-};
-
-const saveUsers = (users: User[]) => {
-  localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-};
+// Chave para simular sessão no SessionStorage (que dura enquanto a aba está aberta ou recarrega)
+const SESSION_KEY = 'cineasta_session_user_id';
 
 export const authService = {
-  
-  // --- LOGIN / CADASTRO ---
+
+  // --- REGISTRO ---
 
   register: async (name: string, email: string, password: string): Promise<User> => {
-    // Simula delay de rede
-    await new Promise(r => setTimeout(r, 500));
-
-    const users = getUsers();
-    const cleanEmail = email.toLowerCase().trim();
-
-    if (users.find(u => u.email === cleanEmail)) {
-      throw new Error('Este e-mail já está cadastrado.');
+    // 1. Verifica se já existe
+    const existing = await idbService.findUserByEmail(email);
+    if (existing) {
+        throw new Error('Este e-mail já está cadastrado.');
     }
 
+    // 2. Cria usuário
+    const userId = crypto.randomUUID();
     const newUser: User = {
-      id: crypto.randomUUID(),
-      name,
-      email: cleanEmail,
-      plan: 'free',
-      credits: 0,
-      monthlyFreeUsed: 0,
-      monthlyPremiumTrialUsed: 0,
-      lastResetDate: Date.now(),
-      isSchoolUser: false
+        id: userId,
+        name,
+        email,
+        // Em um app real, salvaríamos o hash da senha. Aqui salvamos a senha crua pois é local.
+        // @ts-ignore
+        password: password, 
+        plan: 'free',
+        credits: 0,
+        monthlyFreeUsed: 0,
+        monthlyPremiumTrialUsed: 0,
+        lastResetDate: Date.now(),
+        isSchoolUser: false
     };
 
-    users.push(newUser);
-    saveUsers(users);
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, newUser.id); 
+    await idbService.add('users', newUser);
+    
+    // Auto-login
+    sessionStorage.setItem(SESSION_KEY, userId);
     return newUser;
   },
 
-  login: async (email: string, password: string): Promise<User> => {
-    await new Promise(r => setTimeout(r, 500));
-    
-    const users = getUsers();
-    const cleanEmail = email.toLowerCase().trim();
-    const user = users.find(u => u.email === cleanEmail);
+  // --- LOGIN ---
 
-    if (!user) {
-      throw new Error('Usuário não encontrado.');
+  login: async (email: string, password: string): Promise<User> => {
+    const user = await idbService.findUserByEmail(email);
+    
+    // @ts-ignore - Acessando senha salva localmente
+    if (!user || user.password !== password) {
+        throw new Error('E-mail ou senha inválidos.');
     }
 
-    // Reset mensal automático (Simulação)
+    // Reset mensal check
     const now = new Date();
     const lastReset = user.lastResetDate ? new Date(user.lastResetDate) : new Date(0);
-
+    
     if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
-       user.monthlyFreeUsed = 0;
-       user.monthlyPremiumTrialUsed = 0;
-       user.lastResetDate = Date.now();
-       saveUsers(users); // Salva atualização
+         user.monthlyFreeUsed = 0;
+         user.monthlyPremiumTrialUsed = 0;
+         user.lastResetDate = Date.now();
+         await idbService.add('users', user);
     }
 
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, user.id);
+    sessionStorage.setItem(SESSION_KEY, user.id);
     return user;
   },
 
   // --- MODO ESCOLA ---
 
   loginAsTeacher: async (teacherName: string, accessCode: string): Promise<User> => {
-     await new Promise(r => setTimeout(r, 500));
-
-     // Simula login de escola existente ou cria nova baseada no código
-     // Para simplificar no modo local: Se o código for PROFESSOR123, entra.
+     // Usa o código de acesso como "email" fictício para busca única
+     const fakeEmail = `code_${accessCode}@school.local`;
      
-     const users = getUsers();
-     // Procura se já existe esse professor
-     let teacher = users.find(u => u.isSchoolUser && u.name === `Prof. ${teacherName}`);
+     let user = await idbService.findUserByEmail(fakeEmail);
 
-     if (teacher) {
-         localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, teacher.id);
-         return teacher;
+     // Se o usuário não existe, mas usou um código válido (lógica de convite), criamos na hora?
+     // Na lógica anterior, o registro era separado. Aqui vamos manter a busca.
+     if (!user) {
+         throw new Error("Escola não encontrada. Cadastre-se primeiro.");
      }
 
-     if (accessCode === "PROFESSOR123" || accessCode.length >= 4) {
-         // Cria escola on-the-fly para o teste
-         return authService.registerSchool('Escola Local', teacherName, accessCode);
-     }
-
-     throw new Error("Código de acesso inválido.");
+     sessionStorage.setItem(SESSION_KEY, user.id);
+     return user;
   },
 
   registerSchool: async (schoolName: string, teacherName: string, accessCode: string): Promise<User> => {
-      await new Promise(r => setTimeout(r, 800));
+      const fakeEmail = `code_${accessCode}@school.local`;
       
-      const users = getUsers();
+      const existing = await idbService.findUserByEmail(fakeEmail);
+      if (existing) throw new Error("Este código de acesso já está em uso.");
+
+      const userId = crypto.randomUUID();
       const newSchoolUser: User = {
-        id: crypto.randomUUID(),
-        name: `Prof. ${teacherName}`,
-        email: `${teacherName.toLowerCase()}@school.com`, // Fake email
-        plan: 'premium',
-        credits: 10, // Pacote inicial
-        schoolStoriesUsed: 0,
-        monthlyFreeUsed: 0,
-        monthlyPremiumTrialUsed: 0,
-        lastResetDate: Date.now(),
-        isSchoolUser: true,
-        schoolName: schoolName,
-        maxStudents: 40
+            id: userId,
+            name: `Prof. ${teacherName}`,
+            email: fakeEmail,
+            // @ts-ignore
+            password: accessCode,
+            plan: 'premium',
+            credits: 10,
+            schoolStoriesUsed: 0,
+            monthlyFreeUsed: 0,
+            monthlyPremiumTrialUsed: 0,
+            lastResetDate: Date.now(),
+            isSchoolUser: true,
+            schoolName: schoolName,
+            maxStudents: 40
       };
 
-      users.push(newSchoolUser);
-      saveUsers(users);
-      localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, newSchoolUser.id);
+      await idbService.add('users', newSchoolUser);
+      sessionStorage.setItem(SESSION_KEY, userId);
       return newSchoolUser;
   },
 
-  logout: () => {
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER_ID);
+  logout: async () => {
+    sessionStorage.removeItem(SESSION_KEY);
   },
 
   getCurrentUser: async (): Promise<User | null> => {
-    const id = localStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
-    if (!id) return null;
-    const users = getUsers();
-    return users.find(u => u.id === id) || null;
+    const userId = sessionStorage.getItem(SESSION_KEY);
+    if (!userId) return null;
+    return await idbService.get('users', userId);
   },
 
   // --- REGRAS DE NEGÓCIO ---
@@ -147,7 +133,7 @@ export const authService = {
       if (user.credits > 0) return { allowed: true, type: 'premium' };
       return { allowed: false, reason: 'Créditos Premium esgotados.' };
     } 
-    // Regra FREE: 1 Premium + 3 Free
+    
     if ((user.monthlyPremiumTrialUsed || 0) < 1) return { allowed: true, type: 'premium' }; 
     if ((user.monthlyFreeUsed || 0) < 3) return { allowed: true, type: 'free' };
 
@@ -155,11 +141,8 @@ export const authService = {
   },
 
   consumeStoryCredit: async (userId: string, type: 'premium' | 'free'): Promise<void> => {
-    const users = getUsers();
-    const userIndex = users.findIndex(u => u.id === userId);
-    if (userIndex === -1) return;
-
-    const user = users[userIndex];
+    const user = await idbService.get('users', userId);
+    if (!user) return;
 
     if (user.isSchoolUser) {
         user.schoolStoriesUsed = (user.schoolStoriesUsed || 0) + 1;
@@ -172,17 +155,12 @@ export const authService = {
             user.monthlyFreeUsed = (user.monthlyFreeUsed || 0) + 1;
         }
     }
-
-    users[userIndex] = user;
-    saveUsers(users);
+    await idbService.add('users', user);
   },
 
   buyPack: async (userId: string, packType: string): Promise<void> => {
-      const users = getUsers();
-      const userIndex = users.findIndex(u => u.id === userId);
-      if (userIndex === -1) return;
-
-      const user = users[userIndex];
+      const user = await idbService.get('users', userId);
+      if (!user) return;
       
       if (packType === 'premium_5') {
           user.plan = 'premium';
@@ -191,8 +169,7 @@ export const authService = {
           user.plan = 'enterprise';
           user.credits = (user.credits || 0) + 100;
       }
-
-      users[userIndex] = user;
-      saveUsers(users);
+      
+      await idbService.add('users', user);
   }
 };
