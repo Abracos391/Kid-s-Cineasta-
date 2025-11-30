@@ -2,7 +2,6 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Avatar, StoryChapter } from "../types";
 
-// Função auxiliar para validar a chave
 const getAiClient = () => {
   const apiKey = process.env.API_KEY;
   
@@ -13,7 +12,6 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-// --- HELPER: Extrator de JSON Robusto ---
 const extractJSON = (text: string): any => {
   try {
     return JSON.parse(text);
@@ -39,20 +37,16 @@ const extractJSON = (text: string): any => {
   }
 };
 
-// --- HELPER: Sanitizador de História ---
-// Garante que o objeto retornado tenha a estrutura exata que o App espera, evitando erros de "undefined"
 const sanitizeStoryData = (rawData: any): { title: string, chapters: StoryChapter[], educationalGoal: string } => {
   const title = rawData.title || rawData.storyTitle || "Sem Título";
   const educationalGoal = rawData.educationalGoal || "";
   
   let chapters: any[] = [];
   
-  // Tenta encontrar o array de capítulos em várias chaves comuns que a IA pode confundir
   if (Array.isArray(rawData.chapters)) chapters = rawData.chapters;
   else if (Array.isArray(rawData.parts)) chapters = rawData.parts;
   else if (Array.isArray(rawData.story)) chapters = rawData.story;
   
-  // Mapeia para o formato estrito do App
   const cleanChapters: StoryChapter[] = chapters.map((c: any, index: number) => ({
     title: c.title || c.chapterTitle || `Capítulo ${index + 1}`,
     text: c.text || c.content || c.storyText || "Texto indisponível.",
@@ -66,9 +60,6 @@ const sanitizeStoryData = (rawData: any): { title: string, chapters: StoryChapte
   return { title, chapters: cleanChapters, educationalGoal };
 };
 
-/**
- * 1. Analisa a foto para criar uma descrição textual (Prompt)
- */
 export const analyzeFaceForAvatar = async (base64Image: string): Promise<string> => {
   try {
     const ai = getAiClient();
@@ -95,9 +86,6 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
   }
 };
 
-/**
- * 2. Gera a URL da imagem usando Pollinations.ai
- */
 export const generateCaricatureImage = async (description: string): Promise<string> => {
   const seed = Math.floor(Math.random() * 10000);
   const safeDesc = description && description.trim().length > 0 ? description : "cute 3d character";
@@ -106,9 +94,6 @@ export const generateCaricatureImage = async (description: string): Promise<stri
   return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=800&seed=${seed}&nologo=true&model=flux`;
 };
 
-/**
- * 3. Gera URL para ilustração de um capítulo específico
- */
 export const generateChapterIllustration = (visualDescription: string, charactersDescription: string = ''): string => {
   const seed = Math.floor(Math.random() * 10000);
   const safeDesc = visualDescription && visualDescription.length > 5 ? visualDescription : "happy children learning and playing together in a colorful environment";
@@ -119,16 +104,12 @@ export const generateChapterIllustration = (visualDescription: string, character
   return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
 };
 
-/**
- * 4. Gera a História (Lazer/Padrão)
- */
 export const generateStory = async (theme: string, characters: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
   const ai = getAiClient();
   const charNames = characters.map(c => c.name).join(", ");
   const charDescs = characters.map(c => c.description).join("; ");
 
   try {
-    // TENTATIVA 1
     const prompt = `
       Você é um autor de livros infantis. Escreva uma história curta (4 partes) sobre "${theme}".
       Personagens: ${charNames} (${charDescs}).
@@ -154,7 +135,6 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
   } catch (error) {
     console.warn("Tentando fallback simplificado...", error);
     try {
-        // TENTATIVA 2
         const promptSimple = `
             Crie uma história de 4 parágrafos sobre: ${theme}. Personagens: ${charNames}.
             Formato JSON: {"title": "X", "chapters": [{"title": "P1", "text": "...", "visualDescription": "English desc"}]}
@@ -172,15 +152,11 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
   throw new Error("Erro desconhecido.");
 };
 
-/**
- * 4.1 Gera História PEDAGÓGICA (Modo Escola)
- */
 export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, educationalGoal: string, chapters: StoryChapter[] }> => {
     const ai = getAiClient();
     const studentDetails = students.map(c => `${c.name} (Visual: ${c.description})`).join("; ");
 
     try {
-      // TENTATIVA 1 (BNCC)
       const promptComplex = `
         ATUE COMO: Pedagogo/Autor Infantil.
         CONTEXTO: Aula sobre "${goal}" baseada na situação "${situation}".
@@ -214,7 +190,6 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
     } catch (error) {
       console.warn("Tentando fallback pedagógico...", error);
       try {
-        // TENTATIVA 2 (Simples)
         const promptSimple = `
             Escreva uma história educativa curta (4 partes) sobre "${situation}" ensinando "${goal}".
             Personagens: Prof ${teacher.name} e alunos ${studentDetails}.
@@ -236,9 +211,6 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
     throw new Error("Falha desconhecida.");
   };
 
-/**
- * 5. Gera Áudio (TTS)
- */
 export const generateSpeech = async (text: string): Promise<string> => {
   try {
     const ai = getAiClient();
