@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
 import { authService } from '../services/authService';
@@ -7,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
   loginAsTeacher: (name: string, code: string) => Promise<void>; 
-  registerSchool: (schoolName: string, teacherName: string, code: string) => Promise<void>;
+  registerSchool: (schoolName: string, teacherName: string, code: string, whatsapp: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => void;
@@ -59,10 +58,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  const registerSchool = async (schoolName: string, teacherName: string, code: string) => {
+  const registerSchool = async (schoolName: string, teacherName: string, code: string, whatsapp: string) => {
     setLoading(true);
     try {
-        const user = await authService.registerSchool(schoolName, teacherName, code);
+        const user = await authService.registerSchool(schoolName, teacherName, code, whatsapp);
         setUser(user);
     } finally {
         setLoading(false);
