@@ -5,21 +5,22 @@ import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 
+// Admin number for notifications
+const ADMIN_PHONE = '5586999334312';
+
 const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false); // Novo estado local
+  const [submitting, setSubmitting] = useState(false); 
   
   const { login, register, user, loading } = useAuth(); 
   const navigate = useNavigate();
 
-  // Redirecionamento Automático se já estiver logado
   useEffect(() => {
     if (!loading && user) {
-        // Se for usuário de escola tentando acessar login comum, manda pra escola
         if (user.isSchoolUser) {
             navigate('/school');
         } else {
@@ -28,19 +29,44 @@ const Auth: React.FC = () => {
     }
   }, [user, loading, navigate]);
 
+  // Máscara de Telefone (BR)
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(/\D/g, '');
+    if (val.length > 11) val = val.substring(0, 11);
+    
+    if (val.length > 2) val = `(${val.substring(0, 2)}) ${val.substring(2)}`;
+    if (val.length > 10) val = `${val.substring(0, 10)}-${val.substring(10)}`;
+    
+    setWhatsapp(val);
+  };
+
+  const notifyAdmin = (newUserName: string, userPhone: string) => {
+    const msg = `Olá! Novo usuário cadastrado no Cineasta Kids: ${newUserName} (Tel: ${userPhone}).`;
+    const link = `https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(msg)}`;
+    
+    // Abre em nova aba para notificar
+    window.open(link, '_blank');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSubmitting(true);
     
     try {
+      const cleanPhone = whatsapp.replace(/\D/g, '');
+      if (cleanPhone.length < 10) throw new Error("Número de WhatsApp inválido");
+
       if (isLogin) {
-        await login(email, password);
+        await login(cleanPhone, password);
       } else {
         if (!name) throw new Error("Nome é obrigatório");
-        await register(name, email, password);
+        await register(name, cleanPhone, password);
+        
+        // Notificação de Sucesso
+        notifyAdmin(name, whatsapp);
+        alert("Cadastro realizado! Enviando confirmação para o suporte...");
       }
-      // O useEffect acima vai lidar com o redirecionamento assim que o 'user' mudar
     } catch (err: any) {
       setError(err.message || "Ocorreu um erro.");
       setSubmitting(false);
@@ -52,7 +78,6 @@ const Auth: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-white/50 relative">
       
-      {/* Botão de Ajuda Flutuante */}
       <div className="absolute top-4 right-4 md:top-8 md:right-8 z-50">
           <Link to="/tutorial">
              <button className="bg-cartoon-blue text-white font-comic font-bold px-4 py-2 rounded-full border-2 border-black shadow-doodle hover:scale-105 transition-transform animate-bounce-slow flex items-center gap-2">
@@ -71,7 +96,7 @@ const Auth: React.FC = () => {
                 {isLogin ? 'Entrar' : 'Criar Conta'}
             </h2>
             <p className="font-sans font-bold text-gray-700">
-                {isLogin ? 'Bem-vindo de volta ao mundo da imaginação!' : 'Junte-se a nós para criar histórias mágicas!'}
+                {isLogin ? 'Use seu WhatsApp para entrar!' : 'Cadastre-se para começar a mágica!'}
             </p>
         </div>
 
@@ -91,13 +116,13 @@ const Auth: React.FC = () => {
                 )}
                 
                 <div>
-                    <label className="block font-bold mb-1 font-heading">E-mail</label>
+                    <label className="block font-bold mb-1 font-heading">WhatsApp (com DDD)</label>
                     <input 
-                        type="email" 
+                        type="tel" 
                         className="w-full p-3 border-4 border-black rounded-xl font-sans outline-none focus:border-cartoon-blue"
-                        placeholder="exemplo@email.com"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
+                        placeholder="(00) 00000-0000"
+                        value={whatsapp}
+                        onChange={handlePhoneChange}
                     />
                 </div>
 
@@ -115,7 +140,7 @@ const Auth: React.FC = () => {
                 {error && <p className="text-red-500 font-bold text-center bg-red-100 p-2 rounded-lg border-2 border-red-500 animate-pulse">{error}</p>}
 
                 <Button variant="primary" size="lg" className="w-full" loading={submitting}>
-                    {isLogin ? '🚀 DECOLAR!' : '✨ CADASTRAR'}
+                    {isLogin ? '🚀 ENTRAR' : '✨ CADASTRAR'}
                 </Button>
             </form>
 
@@ -125,7 +150,7 @@ const Auth: React.FC = () => {
                     className="text-blue-600 font-bold hover:underline font-sans"
                     type="button"
                 >
-                    {isLogin ? 'Não tem conta? Crie grátis!' : 'Já tem conta? Entre aqui.'}
+                    {isLogin ? 'Não tem conta? Cadastre-se grátis!' : 'Já tem conta? Entre aqui.'}
                 </button>
             </div>
         </Card>
@@ -133,7 +158,7 @@ const Auth: React.FC = () => {
         {!isLogin && (
             <div className="bg-yellow-100 border-2 border-black p-2 rounded-lg text-center transform -rotate-2">
                 <p className="text-xs text-black font-sans font-bold">
-                    🎁 Ao cadastrar, você começa no plano FREE (4 histórias/mês).
+                    🔔 Ao cadastrar, notificaremos nosso suporte no WhatsApp.
                 </p>
             </div>
         )}
