@@ -2,7 +2,7 @@
 import { User, Story, Avatar, SchoolMember } from '../types';
 
 const DB_NAME = 'CineastaDB';
-const DB_VERSION = 4; // BUMP VERSION: Força recriação de índices para corrigir bugs de salvamento
+const DB_VERSION = 5; // BUMP VERSION: Garante que todos os usuários tenham a estrutura mais recente
 
 const STORE_USERS = 'users';
 const STORE_STORIES = 'stories';
@@ -49,7 +49,6 @@ export const idbService = {
         }
 
         // --- AVATARS ---
-        // Correção Crítica: Garante que a store e o índice existam
         if (!db.objectStoreNames.contains(STORE_AVATARS)) {
           const avatarStore = db.createObjectStore(STORE_AVATARS, { keyPath: 'id' });
           avatarStore.createIndex('userId', 'userId', { unique: false });
