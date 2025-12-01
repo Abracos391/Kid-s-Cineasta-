@@ -16,18 +16,28 @@ const StoryWizard: React.FC = () => {
   const [selectedAvatarIds, setSelectedAvatarIds] = useState<string[]>([]);
   const [theme, setTheme] = useState('');
   const [loading, setLoading] = useState(false);
-  
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Carrega avatares com retry simples
   useEffect(() => {
     const loadAvatars = async () => {
         if (!user) return;
         try {
+            console.log("Carregando avatares para o wizard...");
             const userAvatars = await dbService.getUserAvatars(user.id);
+            console.log("Avatares carregados:", userAvatars.length);
             setAvatars(userAvatars);
         } catch (e) {
             console.error("Erro ao carregar avatares:", e);
         }
     };
+    
     loadAvatars();
+
+    // Listener para recarregar caso o usuário volte de outra aba/janela
+    const onFocus = () => loadAvatars();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, [user]);
 
   const toggleAvatar = (id: string) => {
@@ -43,6 +53,7 @@ const StoryWizard: React.FC = () => {
   };
 
   const handleGenerate = async () => {
+    setErrorMsg('');
     if (!theme.trim()) {
         alert("Por favor, digite sobre o que será a história!");
         return;
@@ -92,7 +103,7 @@ const StoryWizard: React.FC = () => {
     } catch (error: any) {
       console.error(error);
       const msg = error?.message || "Erro desconhecido";
-      alert(`Ops! Tivemos um problema: ${msg}. Tente simplificar o tema.`);
+      setErrorMsg(`Ops! Ocorreu um problema: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -176,6 +187,11 @@ const StoryWizard: React.FC = () => {
           </div>
 
           <div className="transform hover:scale-105 transition-transform relative group">
+             {errorMsg && (
+                 <div className="bg-red-100 border-2 border-red-500 text-red-800 p-3 rounded-lg mb-4 font-bold text-sm animate-pulse">
+                     {errorMsg}
+                 </div>
+             )}
              <Button 
                 className="w-full text-2xl py-6 shadow-cartoon-lg" 
                 variant="primary"
