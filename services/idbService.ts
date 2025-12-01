@@ -2,7 +2,7 @@
 import { User, Story, Avatar, SchoolMember } from '../types';
 
 const DB_NAME = 'CineastaDB';
-const DB_VERSION = 2; // Incrementado para forçar atualização do esquema
+const DB_VERSION = 3; // Versão 3 para garantir atualização de estrutura
 
 const STORE_USERS = 'users';
 const STORE_STORIES = 'stories';
@@ -27,7 +27,6 @@ export const idbService = {
           userStore = transaction?.objectStore(STORE_USERS);
         }
 
-        // Migração V1 -> V2 (Email para WhatsApp)
         if (userStore) {
             if (userStore.indexNames.contains('email')) {
                 userStore.deleteIndex('email');
@@ -72,8 +71,9 @@ export const idbService = {
       const store = tx.objectStore(storeName);
       const request = store.put(item); 
 
-      request.onsuccess = () => resolve();
+      tx.oncomplete = () => resolve(); // Garante que a transação completou
       request.onerror = () => reject(request.error);
+      tx.onerror = () => reject(tx.error);
     });
   },
 
@@ -109,7 +109,7 @@ export const idbService = {
       const store = tx.objectStore(storeName);
       const request = store.delete(key);
 
-      request.onsuccess = () => resolve();
+      tx.oncomplete = () => resolve();
       request.onerror = () => reject(request.error);
     });
   },
