@@ -73,7 +73,7 @@ const StoryReader: React.FC = () => {
 
       // Espera extra para renderização final de fontes e estilos
       setPdfProgress(30);
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 2000));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pages = bookContainer.querySelectorAll('.book-page');
@@ -291,18 +291,19 @@ const StoryReader: React.FC = () => {
       {/* 
         LAYOUT DE IMPRESSÃO (PDF)
         Renderizado FORA do condicional de isFinished para garantir que sempre exista no DOM.
+        Usamos left: -5000px para garantir que ele seja renderizado pelo navegador, mas não visível pelo usuário.
+        Opacity 0 às vezes causa problemas no html2canvas.
       */}
       <div 
         ref={bookPrintRef} 
         style={{ 
             position: 'fixed', 
             top: 0, 
-            left: 0, 
+            left: '-5000px', // Fora da tela, mas renderizado
             width: '794px', // A4
             minHeight: '1123px',
             backgroundColor: 'white',
-            zIndex: -1000, // Muito atrás de tudo
-            opacity: 0, // Invisível ao olho, visível ao DOM
+            zIndex: -1000, 
             pointerEvents: 'none'
         }}
       >
