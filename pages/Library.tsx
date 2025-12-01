@@ -1,10 +1,11 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { Avatar, Story } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { dbService } from '../services/dbService';
 
 type FilterType = 'all' | 'adventure' | 'educational';
 
@@ -13,41 +14,56 @@ const Library: React.FC = () => {
   const [avatars, setAvatars] = useState<Avatar[]>([]);
   const [stories, setStories] = useState<Story[]>([]);
   const [filter, setFilter] = useState<FilterType>('all');
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+      if (!user) return;
+      // setLoading(true); // Omitido para evitar piscar na tela ao focar
+      try {
+          console.log("Atualizando biblioteca...");
+          const [userAvatars, userStories] = await Promise.all([
+              dbService.getUserAvatars(user.id),
+              dbService.getUserStories(user.id)
+          ]);
+          setAvatars(userAvatars);
+          setStories(userStories);
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setLoading(false);
+      }
+  }, [user]);
 
   useEffect(() => {
-    if (!user) return;
+    loadData();
 
-    // Load from LocalStorage
-    const allAvatars = JSON.parse(localStorage.getItem('ck_avatars') || '{}');
-    setAvatars(allAvatars[user.id] || []);
-
-    const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
-    setStories(allStories[user.id] || []);
-  }, [user]);
+    // Recarrega sempre que a janela ganhar foco (voltar do Leitor)
+    const onFocus = () => loadData();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [loadData]);
 
   const deleteAvatar = async (id: string) => {
     if (!user) return;
     if(confirm('Tem certeza que quer deletar este personagem?')) {
-      const allAvatars = JSON.parse(localStorage.getItem('ck_avatars') || '{}');
-      const userAvatars = allAvatars[user.id] || [];
-      const newAvatars = userAvatars.filter((a: Avatar) => a.id !== id);
-      
-      allAvatars[user.id] = newAvatars;
-      localStorage.setItem('ck_avatars', JSON.stringify(allAvatars));
-      setAvatars(newAvatars);
+      try {
+          await dbService.deleteAvatar(user.id, id);
+          setAvatars(prev => prev.filter(a => a.id !== id));
+      } catch (e) {
+          alert("Erro ao deletar.");
+      }
     }
   };
 
   const deleteStory = async (id: string) => {
     if (!user) return;
     if(confirm('Tem certeza que quer apagar esta história do acervo?')) {
-      const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
-      const userStories = allStories[user.id] || [];
-      const newStories = userStories.filter((s: Story) => s.id !== id);
-      
-      allStories[user.id] = newStories;
-      localStorage.setItem('ck_stories', JSON.stringify(allStories));
-      setStories(newStories);
+      try {
+          await dbService.deleteStory(user.id, id);
+          setStories(prev => prev.filter(s => s.id !== id));
+      } catch (e) {
+          alert("Erro ao deletar.");
+      }
     }
   };
 
@@ -57,6 +73,8 @@ const Library: React.FC = () => {
     if (filter === 'adventure') return !story.isEducational;
     return true;
   });
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center font-comic text-2xl animate-bounce">Carregando Biblioteca...</div>;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-12">
