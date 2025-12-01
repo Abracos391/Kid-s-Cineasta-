@@ -32,7 +32,11 @@ const StoryReader: React.FC = () => {
   const saveProgress = async () => {
       if (!story || !user) return;
       console.log("Salvando progresso final...");
-      await dbService.updateStory(user.id, story);
+      try {
+        await dbService.updateStory(user.id, story);
+      } catch (e) {
+        console.error("Erro ao salvar progresso:", e);
+      }
   };
 
   const handleExit = async () => {
@@ -49,35 +53,41 @@ const StoryReader: React.FC = () => {
   const handleFullBookDownload = async () => {
     if (!story) return;
     setGeneratingPDF(true);
-    setPdfProgress(10);
+    setPdfProgress(5);
 
     try {
       const bookContainer = bookPrintRef.current;
-      if (!bookContainer) throw new Error("Erro de layout");
+      if (!bookContainer) throw new Error("Elemento de layout do livro não encontrado.");
 
-      // Espera o navegador renderizar o layout oculto
-      await new Promise(r => setTimeout(r, 1000));
-      setPdfProgress(30);
+      // Espera o navegador renderizar o layout oculto e carregar imagens
+      // Aumentado para 2500ms para garantir carregamento de imagens cross-origin
+      await new Promise(r => setTimeout(r, 2500));
+      setPdfProgress(20);
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pages = bookContainer.querySelectorAll('.book-page');
       
+      if (pages.length === 0) throw new Error("Nenhuma página encontrada para imprimir.");
+
       for (let i = 0; i < pages.length; i++) {
-          setPdfProgress(30 + Math.floor(((i + 1) / pages.length) * 70));
+          setPdfProgress(20 + Math.floor(((i + 1) / pages.length) * 80));
           const pageEl = pages[i] as HTMLElement;
           
           // html2canvas configuration optimized for images
           const canvas = await html2canvas(pageEl, { 
-              scale: 2, 
-              useCORS: true, 
+              scale: 2, // Melhor qualidade
+              useCORS: true, // Obrigatório para imagens externas
               allowTaint: true,
               backgroundColor: '#ffffff',
               logging: false,
               x: 0,
-              y: 0
+              y: 0,
+              width: 794, // Largura fixa A4 px
+              height: 1123, // Altura fixa A4 px
+              windowWidth: 1200 // Simula janela larga para evitar quebras
           });
           
-          const imgData = canvas.toDataURL('image/jpeg', 0.8);
+          const imgData = canvas.toDataURL('image/jpeg', 0.85);
           const pdfWidth = pdf.internal.pageSize.getWidth();
           const pdfHeight = pdf.internal.pageSize.getHeight();
           
@@ -85,10 +95,15 @@ const StoryReader: React.FC = () => {
           pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       }
       setPdfProgress(100);
-      pdf.save(`${story.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
-    } catch (error) {
-        console.error(error);
-        alert("Erro ao gerar PDF. Tente novamente.");
+      const safeTitle = story.title ? story.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'historia_cineasta_kids';
+      pdf.save(`${safeTitle}.pdf`);
+      
+      // Salva progresso ao baixar PDF também
+      await saveProgress();
+
+    } catch (error: any) {
+        console.error("Erro PDF:", error);
+        alert(`Não foi possível gerar o PDF. Detalhe: ${error.message || "Erro desconhecido"}`);
     } finally {
         setGeneratingPDF(false);
         setPdfProgress(0);
@@ -287,22 +302,21 @@ const StoryReader: React.FC = () => {
       
       {/* 
         LAYOUT DE IMPRESSÃO (PDF)
-        - position: fixed para html2canvas pegar coordenadas absolutas
-        - zIndex: -50 para ficar atrás
-        - NÃO usar left: -10000px, pois isso mata o render. Usamos top:0, left:0.
+        - position: absolute para não bugar o html2canvas com viewport
+        - left: -5000px para ficar fora da tela (Off-screen) mas ainda ser renderizado (visível para o browser)
+        - NÃO usar visibility: hidden ou display: none, pois html2canvas ignora
       */}
       <div 
         ref={bookPrintRef} 
         style={{ 
-            position: 'fixed', 
+            position: 'absolute', 
             top: 0, 
-            left: 0,
-            zIndex: -50,
+            left: '-5000px', // Fora da tela, mas "existente"
             width: '794px', // Largura A4 em pixels (96dpi)
             minHeight: '1123px',
-            pointerEvents: 'none',
             backgroundColor: 'white',
-            visibility: generatingPDF ? 'visible' : 'hidden' // Truque: visível só na hora da foto
+            zIndex: -1, // Garante que não sobreponha se algo der errado
+            overflow: 'visible' // Permite que o conteúdo flua
         }}
       >
          {/* CAPA */}
@@ -321,11 +335,11 @@ const StoryReader: React.FC = () => {
         
         {/* CAPÍTULOS */}
         {story.chapters.map((chapter, idx) => (
-            <div key={idx} className="book-page w-[794px] h-[1123px] bg-white border-8 border-black flex flex-col">
+            <div key={idx} className="book-page w-[794px] h-[1123px] bg-white border-8 border-black flex flex-col break-inside-avoid">
                 <div className="h-1/2 border-b-8 border-black relative overflow-hidden bg-gray-100">
                     {chapter.generatedImage && <img src={chapter.generatedImage} className="w-full h-full object-cover" crossOrigin="anonymous" />}
                 </div>
-                {/* Ajuste de Texto para PDF: Fonte menor e overflow visível para não cortar */}
+                {/* Texto ajustado para não cortar */}
                 <div className="h-1/2 p-12 pt-8 flex flex-col justify-start items-start bg-cartoon-cream">
                     <h2 className="font-heading text-3xl mb-4 text-cartoon-purple w-full text-center border-b-2 border-black/10 pb-2">{chapter.title}</h2>
                     <div className="w-full">
