@@ -57,7 +57,7 @@ const StoryReader: React.FC = () => {
 
     try {
       const bookContainer = bookPrintRef.current;
-      if (!bookContainer) throw new Error("Layout de impressão indisponível.");
+      if (!bookContainer) throw new Error("Layout de impressão indisponível. Aguarde a página carregar.");
 
       // 1. Pré-carregamento forçado de imagens
       // O navegador precisa ter certeza que as imagens estão em cache antes do html2canvas rodar
@@ -283,42 +283,19 @@ const StoryReader: React.FC = () => {
   if (!story || !story.chapters) return <div className="min-h-[60vh] flex items-center justify-center font-heading text-3xl animate-pulse">Abrindo livro...</div>;
 
   const isFinished = activeChapterIndex >= story.chapters.length;
-
-  if (isFinished) {
-      return (
-          <div className="min-h-[80vh] flex items-center justify-center flex-col gap-6 p-4 relative z-50">
-               <Card color={story.isEducational ? 'green' : 'yellow'} className="text-center p-8 md:p-12 max-w-2xl w-full border-[6px] shadow-2xl animate-fade-in">
-                   <h1 className="font-heading text-4xl md:text-5xl mb-4">Fim da Aventura!</h1>
-                   <div className="flex flex-col gap-4 justify-center">
-                       <Button variant="primary" onClick={() => setActiveChapterIndex(0)}>📖 Ler do Início</Button>
-                       <Button variant="secondary" onClick={handleFullBookDownload} disabled={generatingPDF}>
-                           {generatingPDF ? `Imprimindo... ${pdfProgress}%` : '📄 Baixar Livro em PDF'}
-                       </Button>
-                       <Button variant="success" onClick={downloadUnifiedAudio} disabled={stitchingAudio}>
-                            {stitchingAudio ? 'Unificando Áudios...' : '🎧 Baixar Audiobook Completo (.WAV)'}
-                       </Button>
-                       <Button variant="danger" onClick={handleExit}>🚪 Salvar e Ir para Biblioteca</Button>
-                   </div>
-               </Card>
-          </div>
-      );
-  }
-
-  const currentChapter = story.chapters[activeChapterIndex];
+  const currentChapter = story.chapters[activeChapterIndex] || story.chapters[story.chapters.length-1];
 
   return (
     <div className={`max-w-5xl mx-auto px-4 pb-20 ${story.isEducational ? 'font-sans' : ''}`}>
       
       {/* 
-        LAYOUT DE IMPRESSÃO (PDF) - Correção Definitiva
-        Usamos position: fixed e z-index negativo para garantir que o navegador renderize
-        o conteúdo (não pode usar display:none ou visibility:hidden), mas o usuário não veja.
-        opacity: 0 garante invisibilidade visual, mas pointer-events: none impede cliques acidentais.
+        LAYOUT DE IMPRESSÃO (PDF)
+        Renderizado FORA do condicional de isFinished para garantir que sempre exista no DOM.
       */}
       <div 
         ref={bookPrintRef} 
         style={{ 
-            position: 'fixed', // Mudança crítica de absolute para fixed
+            position: 'fixed', 
             top: 0, 
             left: 0, 
             width: '794px', // A4
@@ -361,57 +338,79 @@ const StoryReader: React.FC = () => {
         ))}
       </div>
 
-      {/* BARRA SUPERIOR */}
-      <div className="mb-6 bg-white rounded-2xl border-4 border-black p-4 shadow-cartoon flex flex-col md:flex-row items-center justify-between gap-4 relative z-20">
-        <div>
-            <h1 className="font-heading text-3xl text-cartoon-purple">{story.title}</h1>
-            <div className="text-gray-500 font-bold">Página {activeChapterIndex + 1} de {story.chapters.length}</div>
-        </div>
-        <div className="flex gap-2">
-            <Button size="sm" variant="danger" onClick={handleExit}>❌ Salvar e Sair</Button>
-        </div>
-      </div>
-
-      {/* ÁREA DE LEITURA (VISUALIZAÇÃO NORMAL) */}
-      <div className="grid md:grid-cols-12 gap-8">
-        <div className="md:col-span-12">
-          <Card className="min-h-[500px] flex flex-col bg-white" color="white">
-            <div className="w-full h-64 md:h-96 mb-8 rounded-xl border-4 border-black overflow-hidden bg-gray-100 relative shadow-inner">
-                {currentChapter.generatedImage ? (
-                    <img src={currentChapter.generatedImage} className="w-full h-full object-cover animate-fade-in" crossOrigin="anonymous" />
-                ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500 flex-col"><span className="text-4xl animate-bounce">🎨</span><span>Ilustrando...</span></div>
-                )}
-            </div>
-
-            <div className="flex-grow">
-                <h2 className="font-heading text-3xl mb-4 text-black">{currentChapter.title}</h2>
-                <div className="font-sans text-xl md:text-2xl text-gray-800 leading-loose mb-8">
-                    {currentChapter.text.split('\n').map((p, i) => <p key={i} className="mb-4">{p}</p>)}
+      {isFinished ? (
+          // TELA DE FIM DA AVENTURA
+          <div className="min-h-[80vh] flex items-center justify-center flex-col gap-6 p-4 relative z-50">
+               <Card color={story.isEducational ? 'green' : 'yellow'} className="text-center p-8 md:p-12 max-w-2xl w-full border-[6px] shadow-2xl animate-fade-in">
+                   <h1 className="font-heading text-4xl md:text-5xl mb-4">Fim da Aventura!</h1>
+                   <div className="flex flex-col gap-4 justify-center">
+                       <Button variant="primary" onClick={() => setActiveChapterIndex(0)}>📖 Ler do Início</Button>
+                       <Button variant="secondary" onClick={handleFullBookDownload} disabled={generatingPDF}>
+                           {generatingPDF ? `Imprimindo... ${pdfProgress}%` : '📄 Baixar Livro em PDF'}
+                       </Button>
+                       <Button variant="success" onClick={downloadUnifiedAudio} disabled={stitchingAudio}>
+                            {stitchingAudio ? 'Unificando Áudios...' : '🎧 Baixar Audiobook Completo (.WAV)'}
+                       </Button>
+                       <Button variant="danger" onClick={handleExit}>🚪 Salvar e Ir para Biblioteca</Button>
+                   </div>
+               </Card>
+          </div>
+      ) : (
+          // TELA DE LEITURA
+          <>
+            {/* BARRA SUPERIOR */}
+            <div className="mb-6 bg-white rounded-2xl border-4 border-black p-4 shadow-cartoon flex flex-col md:flex-row items-center justify-between gap-4 relative z-20">
+                <div>
+                    <h1 className="font-heading text-3xl text-cartoon-purple">{story.title}</h1>
+                    <div className="text-gray-500 font-bold">Página {activeChapterIndex + 1} de {story.chapters.length}</div>
+                </div>
+                <div className="flex gap-2">
+                    <Button size="sm" variant="danger" onClick={handleExit}>❌ Salvar e Sair</Button>
                 </div>
             </div>
 
-            <div className="border-t-4 border-gray-100 border-dashed pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
-               <div className="w-full md:w-auto">
-                {currentChapter.generatedAudio ? (
-                    <AudioPlayer base64Audio={currentChapter.generatedAudio} />
-                ) : (
-                    <Button onClick={handleGenerateAudio} disabled={generatingAudio} variant="secondary" size="sm" loading={generatingAudio}>🔊 Narrar</Button>
-                )}
-               </div>
-               <div className="flex gap-4">
-                 <Button onClick={() => setActiveChapterIndex(p => Math.max(0, p - 1))} disabled={activeChapterIndex === 0} variant="secondary">⬅️</Button>
-                 <Button 
-                    onClick={() => setActiveChapterIndex(p => p + 1)} 
-                    variant={activeChapterIndex < story.chapters.length - 1 ? "primary" : "success"}
-                 >
-                    {activeChapterIndex < story.chapters.length - 1 ? 'Próxima ➡️' : 'FINALIZAR 🎉'}
-                 </Button>
-               </div>
+            {/* ÁREA DE LEITURA */}
+            <div className="grid md:grid-cols-12 gap-8">
+                <div className="md:col-span-12">
+                <Card className="min-h-[500px] flex flex-col bg-white" color="white">
+                    <div className="w-full h-64 md:h-96 mb-8 rounded-xl border-4 border-black overflow-hidden bg-gray-100 relative shadow-inner">
+                        {currentChapter.generatedImage ? (
+                            <img src={currentChapter.generatedImage} className="w-full h-full object-cover animate-fade-in" crossOrigin="anonymous" />
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-gray-500 flex-col"><span className="text-4xl animate-bounce">🎨</span><span>Ilustrando...</span></div>
+                        )}
+                    </div>
+
+                    <div className="flex-grow">
+                        <h2 className="font-heading text-3xl mb-4 text-black">{currentChapter.title}</h2>
+                        <div className="font-sans text-xl md:text-2xl text-gray-800 leading-loose mb-8">
+                            {currentChapter.text.split('\n').map((p, i) => <p key={i} className="mb-4">{p}</p>)}
+                        </div>
+                    </div>
+
+                    <div className="border-t-4 border-gray-100 border-dashed pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="w-full md:w-auto">
+                        {currentChapter.generatedAudio ? (
+                            <AudioPlayer base64Audio={currentChapter.generatedAudio} />
+                        ) : (
+                            <Button onClick={handleGenerateAudio} disabled={generatingAudio} variant="secondary" size="sm" loading={generatingAudio}>🔊 Narrar</Button>
+                        )}
+                    </div>
+                    <div className="flex gap-4">
+                        <Button onClick={() => setActiveChapterIndex(p => Math.max(0, p - 1))} disabled={activeChapterIndex === 0} variant="secondary">⬅️</Button>
+                        <Button 
+                            onClick={() => setActiveChapterIndex(p => p + 1)} 
+                            variant={activeChapterIndex < story.chapters.length - 1 ? "primary" : "success"}
+                        >
+                            {activeChapterIndex < story.chapters.length - 1 ? 'Próxima ➡️' : 'FINALIZAR 🎉'}
+                        </Button>
+                    </div>
+                    </div>
+                </Card>
+                </div>
             </div>
-          </Card>
-        </div>
-      </div>
+          </>
+      )}
     </div>
   );
 };
