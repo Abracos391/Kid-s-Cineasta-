@@ -2,7 +2,7 @@
 import { User, Story, Avatar, SchoolMember } from '../types';
 
 const DB_NAME = 'CineastaDB';
-const DB_VERSION = 3; // Versão 3 para garantir atualização de estrutura
+const DB_VERSION = 4; // BUMP VERSION: Força recriação de índices para corrigir bugs de salvamento
 
 const STORE_USERS = 'users';
 const STORE_STORIES = 'stories';
@@ -28,9 +28,10 @@ export const idbService = {
         }
 
         if (userStore) {
-            if (userStore.indexNames.contains('email')) {
-                userStore.deleteIndex('email');
-            }
+            // Limpa índices antigos se existirem
+            if (userStore.indexNames.contains('email')) userStore.deleteIndex('email');
+            
+            // Cria índice novo
             if (!userStore.indexNames.contains('whatsapp')) {
                 userStore.createIndex('whatsapp', 'whatsapp', { unique: true });
             }
@@ -40,12 +41,23 @@ export const idbService = {
         if (!db.objectStoreNames.contains(STORE_STORIES)) {
           const storyStore = db.createObjectStore(STORE_STORIES, { keyPath: 'id' });
           storyStore.createIndex('userId', 'userId', { unique: false });
+        } else {
+           const storyStore = transaction?.objectStore(STORE_STORIES);
+           if (storyStore && !storyStore.indexNames.contains('userId')) {
+               storyStore.createIndex('userId', 'userId', { unique: false });
+           }
         }
 
         // --- AVATARS ---
+        // Correção Crítica: Garante que a store e o índice existam
         if (!db.objectStoreNames.contains(STORE_AVATARS)) {
           const avatarStore = db.createObjectStore(STORE_AVATARS, { keyPath: 'id' });
           avatarStore.createIndex('userId', 'userId', { unique: false });
+        } else {
+           const avatarStore = transaction?.objectStore(STORE_AVATARS);
+           if (avatarStore && !avatarStore.indexNames.contains('userId')) {
+               avatarStore.createIndex('userId', 'userId', { unique: false });
+           }
         }
         
         // --- SCHOOL ---
@@ -71,7 +83,7 @@ export const idbService = {
       const store = tx.objectStore(storeName);
       const request = store.put(item); 
 
-      tx.oncomplete = () => resolve(); // Garante que a transação completou
+      tx.oncomplete = () => resolve(); 
       request.onerror = () => reject(request.error);
       tx.onerror = () => reject(tx.error);
     });
@@ -94,6 +106,14 @@ export const idbService = {
     return new Promise<any[]>((resolve, reject) => {
       const tx = db.transaction(storeName, 'readonly');
       const store = tx.objectStore(storeName);
+      
+      // Proteção contra índice inexistente
+      if (!store.indexNames.contains(indexName)) {
+          console.warn(`Índice ${indexName} não encontrado em ${storeName}. Retornando array vazio.`);
+          resolve([]);
+          return;
+      }
+
       const index = store.index(indexName);
       const request = index.getAll(value);
 
@@ -119,6 +139,12 @@ export const idbService = {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_USERS, 'readonly');
       const store = tx.objectStore(STORE_USERS);
+      
+      if (!store.indexNames.contains('whatsapp')) {
+          reject(new Error("Índice de WhatsApp não encontrado. Tente limpar os dados do navegador."));
+          return;
+      }
+
       const index = store.index('whatsapp');
       const request = index.get(whatsapp);
 
