@@ -29,7 +29,16 @@ const StoryReader: React.FC = () => {
 
   // --- ACTIONS ---
 
-  const handleExit = () => {
+  const saveProgress = async () => {
+      if (!story || !user) return;
+      console.log("Salvando progresso final...");
+      await dbService.updateStory(user.id, story);
+  };
+
+  const handleExit = async () => {
+    // Força salvamento antes de sair
+    await saveProgress();
+    
     if (user?.isSchoolUser || story?.isEducational) {
         navigate('/school-library');
     } else {
@@ -46,25 +55,29 @@ const StoryReader: React.FC = () => {
       const bookContainer = bookPrintRef.current;
       if (!bookContainer) throw new Error("Erro de layout");
 
-      setPdfProgress(20);
-      await new Promise(r => setTimeout(r, 2000));
+      // Espera o navegador renderizar o layout oculto
+      await new Promise(r => setTimeout(r, 1000));
+      setPdfProgress(30);
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pages = bookContainer.querySelectorAll('.book-page');
       
       for (let i = 0; i < pages.length; i++) {
-          setPdfProgress(20 + Math.floor(((i + 1) / pages.length) * 80));
+          setPdfProgress(30 + Math.floor(((i + 1) / pages.length) * 70));
           const pageEl = pages[i] as HTMLElement;
           
+          // html2canvas configuration optimized for images
           const canvas = await html2canvas(pageEl, { 
               scale: 2, 
               useCORS: true, 
-              logging: false,
               allowTaint: true,
-              backgroundColor: null 
+              backgroundColor: '#ffffff',
+              logging: false,
+              x: 0,
+              y: 0
           });
           
-          const imgData = canvas.toDataURL('image/jpeg', 0.9);
+          const imgData = canvas.toDataURL('image/jpeg', 0.8);
           const pdfWidth = pdf.internal.pageSize.getWidth();
           const pdfHeight = pdf.internal.pageSize.getHeight();
           
@@ -75,9 +88,10 @@ const StoryReader: React.FC = () => {
       pdf.save(`${story.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
     } catch (error) {
         console.error(error);
-        alert("Erro ao gerar PDF.");
+        alert("Erro ao gerar PDF. Tente novamente.");
     } finally {
         setGeneratingPDF(false);
+        setPdfProgress(0);
     }
   };
 
@@ -160,7 +174,7 @@ const StoryReader: React.FC = () => {
     if (!id || !user) return;
     
     let attempts = 0;
-    const maxAttempts = 3;
+    const maxAttempts = 5; // Aumentado para 5 tentativas
 
     const loadStory = async () => {
         try {
@@ -171,8 +185,8 @@ const StoryReader: React.FC = () => {
             } else {
                 if (attempts < maxAttempts) {
                     attempts++;
-                    // Se não achou, tenta de novo em 500ms (Race condition fix)
-                    setTimeout(loadStory, 500);
+                    console.log(`Tentativa ${attempts} de carregar história...`);
+                    setTimeout(loadStory, 800);
                 } else {
                     setLoadError(true);
                 }
@@ -181,7 +195,7 @@ const StoryReader: React.FC = () => {
             console.error(e);
             if (attempts < maxAttempts) {
                 attempts++;
-                setTimeout(loadStory, 500);
+                setTimeout(loadStory, 800);
             } else {
                 setLoadError(true);
             }
@@ -259,7 +273,7 @@ const StoryReader: React.FC = () => {
                        <Button variant="success" onClick={downloadUnifiedAudio} disabled={stitchingAudio}>
                             {stitchingAudio ? 'Unificando Áudios...' : '🎧 Baixar Audiobook Completo (.WAV)'}
                        </Button>
-                       <Button variant="danger" onClick={handleExit}>🚪 Voltar para Biblioteca</Button>
+                       <Button variant="danger" onClick={handleExit}>🚪 Salvar e Ir para Biblioteca</Button>
                    </div>
                </Card>
           </div>
@@ -271,41 +285,51 @@ const StoryReader: React.FC = () => {
   return (
     <div className={`max-w-5xl mx-auto px-4 pb-20 ${story.isEducational ? 'font-sans' : ''}`}>
       
+      {/* 
+        LAYOUT DE IMPRESSÃO (PDF)
+        - position: fixed para html2canvas pegar coordenadas absolutas
+        - zIndex: -50 para ficar atrás
+        - NÃO usar left: -10000px, pois isso mata o render. Usamos top:0, left:0.
+      */}
       <div 
         ref={bookPrintRef} 
         style={{ 
             position: 'fixed', 
             top: 0, 
-            left: generatingPDF ? '0' : '-10000px',
+            left: 0,
             zIndex: -50,
-            width: '794px',
-            opacity: generatingPDF ? 1 : 0, 
+            width: '794px', // Largura A4 em pixels (96dpi)
+            minHeight: '1123px',
             pointerEvents: 'none',
-            backgroundColor: 'white' 
+            backgroundColor: 'white',
+            visibility: generatingPDF ? 'visible' : 'hidden' // Truque: visível só na hora da foto
         }}
       >
+         {/* CAPA */}
          <div className={`book-page relative w-[794px] h-[1123px] overflow-hidden border-8 border-black flex flex-col items-center justify-between p-12 ${story.isEducational ? 'bg-[#1a3c28]' : 'bg-cartoon-yellow'}`}>
              <div className="z-10 text-center w-full mt-10">
-                <h1 className={`font-comic text-7xl drop-shadow-lg mb-4 text-center leading-tight ${story.isEducational ? 'text-white' : 'text-cartoon-blue text-stroke-3'}`}>{story.title}</h1>
+                <h1 className={`font-comic text-6xl drop-shadow-lg mb-4 text-center leading-tight ${story.isEducational ? 'text-white' : 'text-cartoon-blue text-stroke-3'}`}>{story.title}</h1>
              </div>
              <div className="z-10 w-[550px] h-[550px] bg-white border-[6px] border-black rounded-lg overflow-hidden shadow-2xl">
                  {story.chapters[0].generatedImage && <img src={story.chapters[0].generatedImage} className="w-full h-full object-cover" crossOrigin="anonymous" />}
              </div>
              <div className="z-10 text-center w-full mb-10 bg-white border-4 border-black p-4 rounded-xl">
-                 <p className="font-comic text-4xl text-black">Autor: {user?.name}</p>
+                 <p className="font-comic text-3xl text-black">Autor: {user?.name}</p>
                  {story.isEducational && <p className="font-sans text-xl mt-2 font-bold">Material Didático - Cineasta Kids</p>}
              </div>
         </div>
         
+        {/* CAPÍTULOS */}
         {story.chapters.map((chapter, idx) => (
             <div key={idx} className="book-page w-[794px] h-[1123px] bg-white border-8 border-black flex flex-col">
                 <div className="h-1/2 border-b-8 border-black relative overflow-hidden bg-gray-100">
                     {chapter.generatedImage && <img src={chapter.generatedImage} className="w-full h-full object-cover" crossOrigin="anonymous" />}
                 </div>
-                <div className="h-1/2 p-12 pt-8 flex flex-col justify-start items-start bg-cartoon-cream overflow-hidden">
-                    <h2 className="font-heading text-4xl mb-6 text-cartoon-purple w-full text-center border-b-2 border-black/10 pb-2">{chapter.title}</h2>
-                    <div className="flex justify-start items-start w-full h-full">
-                         <p className="font-sans text-2xl leading-normal text-justify w-full text-gray-900 font-medium">
+                {/* Ajuste de Texto para PDF: Fonte menor e overflow visível para não cortar */}
+                <div className="h-1/2 p-12 pt-8 flex flex-col justify-start items-start bg-cartoon-cream">
+                    <h2 className="font-heading text-3xl mb-4 text-cartoon-purple w-full text-center border-b-2 border-black/10 pb-2">{chapter.title}</h2>
+                    <div className="w-full">
+                         <p className="font-sans text-xl leading-relaxed text-justify text-gray-900 font-medium">
                             {chapter.text}
                         </p>
                     </div>
@@ -314,19 +338,18 @@ const StoryReader: React.FC = () => {
         ))}
       </div>
 
+      {/* BARRA SUPERIOR */}
       <div className="mb-6 bg-white rounded-2xl border-4 border-black p-4 shadow-cartoon flex flex-col md:flex-row items-center justify-between gap-4 relative z-20">
         <div>
             <h1 className="font-heading text-3xl text-cartoon-purple">{story.title}</h1>
             <div className="text-gray-500 font-bold">Página {activeChapterIndex + 1} de {story.chapters.length}</div>
         </div>
         <div className="flex gap-2">
-            <Button size="sm" variant="primary" onClick={handleFullBookDownload} disabled={generatingPDF}>
-                {generatingPDF ? '⏳' : '📄 PDF'}
-            </Button>
-            <Button size="sm" variant="danger" onClick={handleExit}>❌ Sair</Button>
+            <Button size="sm" variant="danger" onClick={handleExit}>❌ Salvar e Sair</Button>
         </div>
       </div>
 
+      {/* ÁREA DE LEITURA (VISUALIZAÇÃO NORMAL) */}
       <div className="grid md:grid-cols-12 gap-8">
         <div className="md:col-span-12">
           <Card className="min-h-[500px] flex flex-col bg-white" color="white">
