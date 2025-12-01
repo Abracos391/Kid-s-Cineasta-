@@ -7,6 +7,7 @@ import { Avatar } from '../types';
 import { generateStory } from '../services/geminiService';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
+import { dbService } from '../services/dbService';
 
 const StoryWizard: React.FC = () => {
   const navigate = useNavigate();
@@ -17,11 +18,16 @@ const StoryWizard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   
   useEffect(() => {
-    if (!user) return;
-    // Carregar Avatares do LocalStorage
-    const savedAvatars = JSON.parse(localStorage.getItem('ck_avatars') || '{}');
-    const userAvatars = savedAvatars[user.id] || [];
-    setAvatars(userAvatars);
+    const loadAvatars = async () => {
+        if (!user) return;
+        try {
+            const userAvatars = await dbService.getUserAvatars(user.id);
+            setAvatars(userAvatars);
+        } catch (e) {
+            console.error("Erro ao carregar avatares:", e);
+        }
+    };
+    loadAvatars();
   }, [user]);
 
   const toggleAvatar = (id: string) => {
@@ -75,26 +81,18 @@ const StoryWizard: React.FC = () => {
       await authService.consumeStoryCredit(user.id, check.type || 'free');
       refreshUser();
 
-      // LOCAL STORAGE SAVE
-      // Tenta salvar, se der erro de quota, avisa
-      try {
-          const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
-          const userStories = allStories[user.id] || [];
-          userStories.push(fullStory);
-          allStories[user.id] = userStories;
-          localStorage.setItem('ck_stories', JSON.stringify(allStories));
-      } catch (e) {
-          console.warn("Memória cheia ao salvar história nova. Removendo mais antiga...");
-          // Logica de limpeza simples se necessario, mas o Safe Save no reader é mais importante
-      }
+      // SALVAR NO BANCO
+      await dbService.saveStory(user.id, fullStory);
 
-      // Cache imediato para transição
-      localStorage.setItem('currentStory', JSON.stringify(fullStory));
-      navigate(`/story/${storyId}`);
+      // DELAY DE SEGURANÇA: Espera 500ms para garantir que o banco gravou os dados antes de navegar
+      setTimeout(() => {
+          navigate(`/story/${storyId}`);
+      }, 500);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Ops! Tivemos um bloqueio criativo. Tente mudar o tema.");
+      const msg = error?.message || "Erro desconhecido";
+      alert(`Ops! Tivemos um problema: ${msg}. Tente simplificar o tema.`);
     } finally {
       setLoading(false);
     }
@@ -102,7 +100,6 @@ const StoryWizard: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      {/* Mantendo JSX visual original */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
         <h1 className="font-heading text-4xl md:text-5xl text-white text-stroke-black drop-shadow-md">
             Montando a Aventura 🗺️
