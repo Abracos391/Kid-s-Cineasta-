@@ -4,7 +4,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { analyzeFaceForAvatar, generateCaricatureImage } from '../services/geminiService';
-import { uploadAsset } from '../services/storageService';
 import { dbService } from '../services/dbService';
 import { Avatar } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -151,10 +150,8 @@ const AvatarCreator: React.FC = () => {
       };
       
       // SALVAR NO DB INTERNO
-      console.log("Tentando salvar avatar para usuário:", user.id);
       await dbService.saveAvatar(user.id, newAvatar);
-      console.log("Avatar salvo com sucesso!");
-
+      
       setGeneratedAvatar(newAvatar);
       setStep('result');
     } catch (error: any) {
@@ -310,30 +307,50 @@ const AvatarCreator: React.FC = () => {
       )}
 
       {step === 'result' && generatedAvatar && (
-        <div className="text-center space-y-8">
-          <div className="relative inline-block">
-             <Card color="white" className="rotate-3 transform transition-transform hover:rotate-0 max-w-md mx-auto">
-               <img 
-                  src={generatedAvatar.imageUrl} 
-                  alt="Avatar gerado" 
-                  className="w-full rounded-2xl border-4 border-black mb-4 shadow-sm bg-gray-100" 
-                />
-                <h2 className="font-heading text-4xl text-cartoon-purple drop-shadow-sm">
+        <div className="flex flex-col items-center space-y-6 animate-fade-in">
+          
+          <div className="text-center w-full">
+             <h2 className="font-heading text-4xl text-white text-stroke-black mb-4 animate-bounce-slow">
+               Ficou Incrível! 🤩
+             </h2>
+          </div>
+
+          {/* Cartão do Avatar em Grande Destaque */}
+          <div className="relative transform hover:scale-105 transition-transform duration-300 z-10">
+             <Card color="white" className="p-4 rotate-2 shadow-2xl max-w-sm">
+               <div className="border-4 border-black rounded-xl overflow-hidden bg-gray-100">
+                   <img 
+                      src={generatedAvatar.imageUrl} 
+                      alt="Avatar gerado" 
+                      className="w-full h-auto object-cover" 
+                    />
+               </div>
+               <h2 className="font-heading text-4xl text-cartoon-purple text-center mt-4 mb-2 drop-shadow-sm">
                   {generatedAvatar.name}
-                </h2>
+               </h2>
              </Card>
           </div>
           
-          <div className="bg-green-100 border-2 border-green-500 text-green-800 p-4 rounded-xl font-bold">
-              ✅ Avatar salvo com sucesso!
+          <div className="bg-white/80 backdrop-blur-sm border-2 border-black text-gray-700 px-6 py-2 rounded-full font-bold text-sm shadow-sm">
+              ✅ Personagem salvo na biblioteca
           </div>
           
-          <div className="flex flex-col sm:flex-row justify-center gap-6 mt-6">
-            <Button onClick={() => { setGeneratedAvatar(null); setName(''); setPreview(null); setStep('upload'); }} variant="secondary">
-              🔄 Novo Personagem
+          <div className="flex flex-col sm:flex-row justify-center gap-6 mt-4 w-full max-w-lg">
+            <Button 
+                onClick={() => { setGeneratedAvatar(null); setName(''); setPreview(null); setStep('upload'); }} 
+                variant="secondary"
+                className="flex-1"
+            >
+              🔄 Criar Outro
             </Button>
-            <Button onClick={finishCreation} variant="success" size="lg">
-              {returnTo ? 'Voltar para Sala de Aula 🏫' : 'Ir para Histórias 🚀'}
+            <Button 
+                onClick={finishCreation} 
+                variant="success" 
+                size="lg"
+                className="flex-1 shadow-cartoon"
+                pulse
+            >
+              {returnTo ? 'Voltar para Aula 🏫' : 'Criar História 🚀'}
             </Button>
           </div>
         </div>
