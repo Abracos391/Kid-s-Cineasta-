@@ -4,6 +4,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { analyzeFaceForAvatar, generateCaricatureImage } from '../services/geminiService';
+import { uploadAsset } from '../services/storageService';
+import { dbService } from '../services/dbService';
 import { Avatar } from '../types';
 import { useAuth } from '../context/AuthContext';
 
@@ -124,7 +126,8 @@ const AvatarCreator: React.FC = () => {
     }
 
     if (!user) {
-        alert("Você precisa estar logado.");
+        alert("Erro crítico: Usuário não identificado. Faça login novamente.");
+        navigate('/auth');
         return;
     }
 
@@ -136,31 +139,27 @@ const AvatarCreator: React.FC = () => {
       const description = await analyzeFaceForAvatar(base64Data);
       
       setStatusMsg("🎨 Pintando sua caricatura 3D...");
-      await new Promise(r => setTimeout(r, 1000));
-      
       const cartoonUrl = await generateCaricatureImage(description);
 
-      setStatusMsg("💾 Salvando no álbum...");
+      setStatusMsg("☁️ Salvando no banco de dados...");
       
       const newAvatar: Avatar = {
         id: crypto.randomUUID(),
-        name,
+        name: name.trim(),
         imageUrl: cartoonUrl,
         description
       };
       
-      // LOCAL STORAGE SAVE
-      const savedAvatars = JSON.parse(localStorage.getItem('ck_avatars') || '{}');
-      const userAvatars = savedAvatars[user.id] || [];
-      userAvatars.push(newAvatar);
-      savedAvatars[user.id] = userAvatars;
-      localStorage.setItem('ck_avatars', JSON.stringify(savedAvatars));
+      // SALVAR NO DB INTERNO
+      console.log("Tentando salvar avatar para usuário:", user.id);
+      await dbService.saveAvatar(user.id, newAvatar);
+      console.log("Avatar salvo com sucesso!");
 
       setGeneratedAvatar(newAvatar);
       setStep('result');
     } catch (error: any) {
-      console.error(error);
-      alert("Ocorreu um erro ao criar o avatar. Tente novamente.");
+      console.error("Erro no processamento:", error);
+      alert(`Ocorreu um erro ao criar o avatar: ${error.message}`);
       setStep('upload');
     }
   };
@@ -174,8 +173,7 @@ const AvatarCreator: React.FC = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-       {/* (Mantém o mesmo JSX Visual) */}
+    <div className="max-w-3xl mx-auto px-4 py-8 pb-24">
        <div className="relative mb-8 text-center">
          <h1 className="font-heading text-5xl text-white text-stroke-black drop-shadow-md transform -rotate-2">
            Fábrica de Avatares
@@ -326,8 +324,12 @@ const AvatarCreator: React.FC = () => {
              </Card>
           </div>
           
-          <div className="flex flex-col sm:flex-row justify-center gap-6 mt-12">
-            <Button onClick={() => setStep('upload')} variant="secondary">
+          <div className="bg-green-100 border-2 border-green-500 text-green-800 p-4 rounded-xl font-bold">
+              ✅ Avatar salvo com sucesso!
+          </div>
+          
+          <div className="flex flex-col sm:flex-row justify-center gap-6 mt-6">
+            <Button onClick={() => { setGeneratedAvatar(null); setName(''); setPreview(null); setStep('upload'); }} variant="secondary">
               🔄 Novo Personagem
             </Button>
             <Button onClick={finishCreation} variant="success" size="lg">
