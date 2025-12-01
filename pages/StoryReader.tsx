@@ -25,10 +25,9 @@ const StoryReader: React.FC = () => {
   const [pdfProgress, setPdfProgress] = useState(0); 
   const [loadError, setLoadError] = useState(false);
   
-  // Audio unificado
   const [stitchingAudio, setStitchingAudio] = useState(false);
 
-  // --- ACTIONS (Topo) ---
+  // --- ACTIONS ---
 
   const handleExit = () => {
     if (user?.isSchoolUser || story?.isEducational) {
@@ -47,7 +46,6 @@ const StoryReader: React.FC = () => {
       const bookContainer = bookPrintRef.current;
       if (!bookContainer) throw new Error("Erro de layout");
 
-      // Pré-renderização (Garante que imagens carreguem)
       setPdfProgress(20);
       await new Promise(r => setTimeout(r, 2000));
 
@@ -83,20 +81,15 @@ const StoryReader: React.FC = () => {
     }
   };
 
-  // --- AUDIO STITCHING (Arquivo Único) ---
   const downloadUnifiedAudio = async () => {
       if (!story || !story.chapters) return;
-      
-      // Verifica se todos os áudios foram gerados
       const missingAudio = story.chapters.some(c => !c.generatedAudio);
       if (missingAudio) {
           alert("Gere a narração de todos os capítulos antes de baixar o áudio completo.");
           return;
       }
-
       setStitchingAudio(true);
       try {
-          // 1. Decodificar Base64 para Arrays de Bytes
           const chunks = story.chapters.map(c => {
               const binary = atob(c.generatedAudio!);
               const len = binary.length;
@@ -104,19 +97,12 @@ const StoryReader: React.FC = () => {
               for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
               return bytes;
           });
-
-          // 2. Calcular tamanho total
           const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-          
-          // 3. Criar buffer combinado + cabeçalho WAV (44 bytes)
           const combinedBuffer = new Uint8Array(44 + totalLength);
-          
-          // 4. Escrever Cabeçalho WAV
           const view = new DataView(combinedBuffer.buffer);
           const writeString = (offset: number, s: string) => {
               for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
           };
-
           const sampleRate = 24000;
           const numChannels = 1;
           const bitsPerSample = 16;
@@ -128,7 +114,7 @@ const StoryReader: React.FC = () => {
           writeString(8, 'WAVE');
           writeString(12, 'fmt ');
           view.setUint32(16, 16, true);
-          view.setUint16(20, 1, true); // PCM
+          view.setUint16(20, 1, true);
           view.setUint16(22, numChannels, true);
           view.setUint32(24, sampleRate, true);
           view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true);
@@ -137,14 +123,12 @@ const StoryReader: React.FC = () => {
           writeString(36, 'data');
           view.setUint32(40, dataLength, true);
 
-          // 5. Escrever dados de áudio
           let offset = 44;
           chunks.forEach(chunk => {
               combinedBuffer.set(chunk, offset);
               offset += chunk.length;
           });
 
-          // 6. Download
           const blob = new Blob([combinedBuffer], { type: 'audio/wav' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -154,7 +138,6 @@ const StoryReader: React.FC = () => {
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-
       } catch (e) {
           console.error("Erro ao criar arquivo único:", e);
           alert("Erro ao unificar áudios.");
@@ -163,22 +146,22 @@ const StoryReader: React.FC = () => {
       }
   };
 
-
-  // --- SAVE LOGIC (DB Service) ---
   const updateStoryInDB = async (updatedStory: Story) => {
       if (!user) return;
       try {
-          // O idbService agora lida com arquivos grandes sem problemas
           await dbService.updateStory(user.id, updatedStory);
       } catch (e) {
           console.error("Erro ao atualizar história no banco:", e);
       }
   };
 
-  // --- LOAD ---
+  // --- LOAD WITH RETRY ---
   useEffect(() => {
     if (!id || !user) return;
     
+    let attempts = 0;
+    const maxAttempts = 3;
+
     const loadStory = async () => {
         try {
             const found = await dbService.getStoryById(user.id, id);
@@ -186,17 +169,27 @@ const StoryReader: React.FC = () => {
                 setStory(found);
                 setLoadError(false);
             } else {
-                setLoadError(true);
+                if (attempts < maxAttempts) {
+                    attempts++;
+                    // Se não achou, tenta de novo em 500ms (Race condition fix)
+                    setTimeout(loadStory, 500);
+                } else {
+                    setLoadError(true);
+                }
             }
         } catch (e) {
             console.error(e);
-            setLoadError(true);
+            if (attempts < maxAttempts) {
+                attempts++;
+                setTimeout(loadStory, 500);
+            } else {
+                setLoadError(true);
+            }
         }
     };
     loadStory();
   }, [id, user]);
 
-  // --- IMAGE GENERATION ---
   useEffect(() => {
     if (story && story.chapters && story.chapters[activeChapterIndex]) {
       const chapter = story.chapters[activeChapterIndex];
@@ -217,7 +210,6 @@ const StoryReader: React.FC = () => {
     }
   }, [activeChapterIndex, story?.id]);
 
-  // --- AUDIO GENERATION ---
   const handleGenerateAudio = async () => {
     if (!story || !story.chapters) return;
     const currentChapter = story.chapters[activeChapterIndex];
@@ -242,7 +234,14 @@ const StoryReader: React.FC = () => {
     }
   };
 
-  if (loadError) return <div className="min-h-[60vh] flex items-center justify-center font-heading text-4xl">História não encontrada.</div>;
+  if (loadError) return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center font-heading gap-4">
+          <div className="text-4xl text-cartoon-orange">Ops!</div>
+          <div className="text-2xl">História não encontrada.</div>
+          <Button onClick={() => navigate('/create-story')}>Voltar</Button>
+      </div>
+  );
+  
   if (!story || !story.chapters) return <div className="min-h-[60vh] flex items-center justify-center font-heading text-3xl animate-pulse">Abrindo livro...</div>;
 
   const isFinished = activeChapterIndex >= story.chapters.length;
@@ -254,15 +253,12 @@ const StoryReader: React.FC = () => {
                    <h1 className="font-heading text-4xl md:text-5xl mb-4">Fim da Aventura!</h1>
                    <div className="flex flex-col gap-4 justify-center">
                        <Button variant="primary" onClick={() => setActiveChapterIndex(0)}>📖 Ler do Início</Button>
-                       
                        <Button variant="secondary" onClick={handleFullBookDownload} disabled={generatingPDF}>
                            {generatingPDF ? `Imprimindo... ${pdfProgress}%` : '📄 Baixar Livro em PDF'}
                        </Button>
-
                        <Button variant="success" onClick={downloadUnifiedAudio} disabled={stitchingAudio}>
                             {stitchingAudio ? 'Unificando Áudios...' : '🎧 Baixar Audiobook Completo (.WAV)'}
                        </Button>
-
                        <Button variant="danger" onClick={handleExit}>🚪 Voltar para Biblioteca</Button>
                    </div>
                </Card>
@@ -275,7 +271,6 @@ const StoryReader: React.FC = () => {
   return (
     <div className={`max-w-5xl mx-auto px-4 pb-20 ${story.isEducational ? 'font-sans' : ''}`}>
       
-      {/* HIDDEN PRINT LAYOUT (A4) */}
       <div 
         ref={bookPrintRef} 
         style={{ 
@@ -284,15 +279,14 @@ const StoryReader: React.FC = () => {
             left: generatingPDF ? '0' : '-10000px',
             zIndex: -50,
             width: '794px',
-            opacity: generatingPDF ? 1 : 0, // Opacity 1 during generation for html2canvas to capture correctly
+            opacity: generatingPDF ? 1 : 0, 
             pointerEvents: 'none',
-            backgroundColor: 'white' // Ensure background is captured
+            backgroundColor: 'white' 
         }}
       >
-         {/* CAPA */}
          <div className={`book-page relative w-[794px] h-[1123px] overflow-hidden border-8 border-black flex flex-col items-center justify-between p-12 ${story.isEducational ? 'bg-[#1a3c28]' : 'bg-cartoon-yellow'}`}>
              <div className="z-10 text-center w-full mt-10">
-                <h1 className={`font-comic text-7xl drop-shadow-lg mb-4 ${story.isEducational ? 'text-white' : 'text-cartoon-blue text-stroke-3'}`}>{story.title}</h1>
+                <h1 className={`font-comic text-7xl drop-shadow-lg mb-4 text-center leading-tight ${story.isEducational ? 'text-white' : 'text-cartoon-blue text-stroke-3'}`}>{story.title}</h1>
              </div>
              <div className="z-10 w-[550px] h-[550px] bg-white border-[6px] border-black rounded-lg overflow-hidden shadow-2xl">
                  {story.chapters[0].generatedImage && <img src={story.chapters[0].generatedImage} className="w-full h-full object-cover" crossOrigin="anonymous" />}
@@ -303,7 +297,6 @@ const StoryReader: React.FC = () => {
              </div>
         </div>
         
-        {/* PÁGINAS */}
         {story.chapters.map((chapter, idx) => (
             <div key={idx} className="book-page w-[794px] h-[1123px] bg-white border-8 border-black flex flex-col">
                 <div className="h-1/2 border-b-8 border-black relative overflow-hidden bg-gray-100">
@@ -311,15 +304,16 @@ const StoryReader: React.FC = () => {
                 </div>
                 <div className="h-1/2 p-12 pt-8 flex flex-col justify-start items-start bg-cartoon-cream overflow-hidden">
                     <h2 className="font-heading text-4xl mb-6 text-cartoon-purple w-full text-center border-b-2 border-black/10 pb-2">{chapter.title}</h2>
-                    <p className="font-sans text-2xl leading-normal text-justify w-full text-gray-900 font-medium">
-                        {chapter.text}
-                    </p>
+                    <div className="flex justify-start items-start w-full h-full">
+                         <p className="font-sans text-2xl leading-normal text-justify w-full text-gray-900 font-medium">
+                            {chapter.text}
+                        </p>
+                    </div>
                 </div>
             </div>
         ))}
       </div>
 
-      {/* LEITOR VISÍVEL */}
       <div className="mb-6 bg-white rounded-2xl border-4 border-black p-4 shadow-cartoon flex flex-col md:flex-row items-center justify-between gap-4 relative z-20">
         <div>
             <h1 className="font-heading text-3xl text-cartoon-purple">{story.title}</h1>
