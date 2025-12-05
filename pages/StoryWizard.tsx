@@ -17,6 +17,7 @@ const StoryWizard: React.FC = () => {
   const [theme, setTheme] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [canCreate, setCanCreate] = useState(true);
 
   // Carrega avatares com retry simples
   useEffect(() => {
@@ -27,6 +28,14 @@ const StoryWizard: React.FC = () => {
             const userAvatars = await dbService.getUserAvatars(user.id);
             console.log("Avatares carregados:", userAvatars.length);
             setAvatars(userAvatars);
+            
+            // Verifica créditos sem bloquear navegação
+            const check = authService.canCreateStory(user);
+            setCanCreate(check.allowed);
+            if (!check.allowed) {
+                setErrorMsg(`⚠️ ${check.reason}`);
+            }
+
         } catch (e) {
             console.error("Erro ao carregar avatares:", e);
         }
@@ -64,9 +73,10 @@ const StoryWizard: React.FC = () => {
     }
     if (!user) return;
 
+    // Verificação final no momento do clique
     const check = authService.canCreateStory(user);
     if (!check.allowed) {
-        if (confirm(`${check.reason}\n\n✨ Deseja ir para a Loja ver os planos?`)) {
+        if (confirm(`${check.reason}\n\n✨ Seus créditos acabaram por hoje. Deseja ver os planos Premium ou ir para sua Biblioteca?`)) {
             navigate('/pricing');
         }
         return;
@@ -110,7 +120,7 @@ const StoryWizard: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-8 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
         <h1 className="font-heading text-4xl md:text-5xl text-white text-stroke-black drop-shadow-md">
             Montando a Aventura 🗺️
@@ -177,31 +187,40 @@ const StoryWizard: React.FC = () => {
             <Card title="2. O que vai acontecer?" color="orange">
                 <div className="bg-white p-2 rounded-2xl border-4 border-black">
                     <textarea
-                    className="w-full h-40 p-4 rounded-xl outline-none resize-none font-sans text-xl bg-cartoon-cream"
+                    className="w-full h-40 p-4 rounded-xl outline-none resize-none font-sans text-xl bg-cartoon-cream disabled:opacity-50"
                     placeholder="Ex: Eles encontraram uma nave espacial no quintal e viajaram para o planeta dos doces..."
                     value={theme}
                     onChange={(e) => setTheme(e.target.value)}
+                    disabled={!canCreate || loading}
                     />
                 </div>
             </Card>
           </div>
 
           <div className="transform hover:scale-105 transition-transform relative group">
-             {errorMsg && (
-                 <div className="bg-red-100 border-2 border-red-500 text-red-800 p-3 rounded-lg mb-4 font-bold text-sm animate-pulse">
-                     {errorMsg}
+             {errorMsg && !canCreate && (
+                 <div className="bg-white border-4 border-black text-black p-4 rounded-xl mb-4 shadow-doodle text-center">
+                     <p className="font-heading text-xl mb-2">Poxa, seus créditos acabaram! 😢</p>
+                     <p className="mb-4">Mas você ainda pode ler suas histórias antigas.</p>
+                     <div className="flex gap-2 justify-center">
+                        <Button onClick={() => navigate('/library')} variant="primary" size="sm">Minha Biblioteca</Button>
+                        <Button onClick={() => navigate('/pricing')} variant="success" size="sm">Ver Planos</Button>
+                     </div>
                  </div>
              )}
-             <Button 
-                className="w-full text-2xl py-6 shadow-cartoon-lg" 
-                variant="primary"
-                disabled={loading || avatars.length === 0}
-                onClick={handleGenerate}
-                loading={loading}
-                pulse={!loading && !!theme && selectedAvatarIds.length > 0}
-            >
-                {loading ? 'Escrevendo a história... 🪄' : 'CRIAR HISTÓRIA! 🎬'}
-            </Button>
+             
+             {canCreate && (
+                 <Button 
+                    className="w-full text-2xl py-6 shadow-cartoon-lg" 
+                    variant="primary"
+                    disabled={loading || avatars.length === 0}
+                    onClick={handleGenerate}
+                    loading={loading}
+                    pulse={!loading && !!theme && selectedAvatarIds.length > 0}
+                >
+                    {loading ? 'Escrevendo a história... 🪄' : 'CRIAR HISTÓRIA! 🎬'}
+                </Button>
+             )}
           </div>
         </div>
       </div>
