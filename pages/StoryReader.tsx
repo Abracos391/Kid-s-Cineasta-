@@ -40,9 +40,7 @@ const StoryReader: React.FC = () => {
   };
 
   const handleExit = async () => {
-    // Força salvamento antes de sair
     await saveProgress();
-    
     if (user?.isSchoolUser || story?.isEducational) {
         navigate('/school-library');
     } else {
@@ -56,29 +54,31 @@ const StoryReader: React.FC = () => {
     setPdfProgress(1);
 
     try {
-      const bookContainer = bookPrintRef.current;
+      // Tenta pegar pelo Ref ou pelo ID (Fallback de segurança)
+      const bookContainer = bookPrintRef.current || document.getElementById('print-layout-container');
+      
       if (!bookContainer) throw new Error("Layout de impressão indisponível. Aguarde a página carregar.");
 
-      // 1. Pré-carregamento forçado de imagens
-      // O navegador precisa ter certeza que as imagens estão em cache antes do html2canvas rodar
       setPdfProgress(10);
-      const images = Array.from(bookContainer.querySelectorAll('img'));
+      
+      // Força o navegador a carregar todas as imagens antes de gerar
+      const images = Array.from(bookContainer.querySelectorAll('img')) as HTMLImageElement[];
       await Promise.all(images.map(img => {
           if (img.complete) return Promise.resolve();
-          return new Promise((resolve, reject) => {
-              img.onload = resolve;
-              img.onerror = resolve; // Resolve mesmo com erro para não travar
+          return new Promise((resolve) => {
+              img.onload = () => resolve(null);
+              img.onerror = () => resolve(null); 
           });
       }));
 
-      // Espera extra para renderização final de fontes e estilos
+      // Espera extra para renderização de fontes
       setPdfProgress(30);
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1500));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pages = bookContainer.querySelectorAll('.book-page');
       
-      if (pages.length === 0) throw new Error("Nenhuma página encontrada.");
+      if (pages.length === 0) throw new Error("Nenhuma página encontrada para imprimir.");
 
       for (let i = 0; i < pages.length; i++) {
           setPdfProgress(30 + Math.floor(((i + 1) / pages.length) * 70));
@@ -93,8 +93,14 @@ const StoryReader: React.FC = () => {
               width: 794, 
               height: 1123,
               windowWidth: 1200,
-              // Correção Crítica: Força o html2canvas a ignorar o fato de estar "escondido"
-              ignoreElements: (element) => false
+              // Importante: garante que o html2canvas ignore a posição "fora da tela"
+              onclone: (clonedDoc) => {
+                  const clonedEl = clonedDoc.getElementById('print-layout-container');
+                  if (clonedEl) {
+                      clonedEl.style.visibility = 'visible';
+                      clonedEl.style.position = 'static';
+                  }
+              }
           });
           
           const imgData = canvas.toDataURL('image/jpeg', 0.9);
@@ -106,14 +112,14 @@ const StoryReader: React.FC = () => {
       }
       
       setPdfProgress(100);
-      const safeTitle = story.title ? story.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'historia_cineasta_kids';
+      const safeTitle = story.title ? story.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'livro_cineasta_kids';
       pdf.save(`${safeTitle}.pdf`);
       
       await saveProgress();
 
     } catch (error: any) {
         console.error("Erro PDF:", error);
-        alert(`Erro ao gerar PDF: ${error.message || "Tente novamente."}`);
+        alert(`Erro ao gerar PDF: ${error.message}`);
     } finally {
         setGeneratingPDF(false);
         setPdfProgress(0);
@@ -139,9 +145,12 @@ const StoryReader: React.FC = () => {
           const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
           const combinedBuffer = new Uint8Array(44 + totalLength);
           const view = new DataView(combinedBuffer.buffer);
+          
           const writeString = (offset: number, s: string) => {
               for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
           };
+
+          // Header WAV simples (Mono, 24kHz, 16bit)
           const sampleRate = 24000;
           const numChannels = 1;
           const bitsPerSample = 16;
@@ -172,14 +181,14 @@ const StoryReader: React.FC = () => {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `${story.title}_Audiobook_Completo.wav`;
+          a.download = `${story.title.replace(/[^a-z0-9]/gi, '_')}_Audiobook.wav`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
       } catch (e) {
-          console.error("Erro ao criar arquivo único:", e);
-          alert("Erro ao unificar áudios.");
+          console.error("Erro áudio:", e);
+          alert("Erro ao criar arquivo de áudio.");
       } finally {
           setStitchingAudio(false);
       }
@@ -190,17 +199,14 @@ const StoryReader: React.FC = () => {
       try {
           await dbService.updateStory(user.id, updatedStory);
       } catch (e) {
-          console.error("Erro ao atualizar história no banco:", e);
+          console.error("Erro db:", e);
       }
   };
 
-  // --- LOAD WITH RETRY ---
   useEffect(() => {
     if (!id || !user) return;
     
     let attempts = 0;
-    const maxAttempts = 5;
-
     const loadStory = async () => {
         try {
             const found = await dbService.getStoryById(user.id, id);
@@ -208,7 +214,7 @@ const StoryReader: React.FC = () => {
                 setStory(found);
                 setLoadError(false);
             } else {
-                if (attempts < maxAttempts) {
+                if (attempts < 5) {
                     attempts++;
                     setTimeout(loadStory, 800);
                 } else {
@@ -217,17 +223,13 @@ const StoryReader: React.FC = () => {
             }
         } catch (e) {
             console.error(e);
-            if (attempts < maxAttempts) {
-                attempts++;
-                setTimeout(loadStory, 800);
-            } else {
-                setLoadError(true);
-            }
+            setLoadError(true);
         }
     };
     loadStory();
   }, [id, user]);
 
+  // Auto-gera a imagem se não existir
   useEffect(() => {
     if (story && story.chapters && story.chapters[activeChapterIndex]) {
       const chapter = story.chapters[activeChapterIndex];
@@ -256,17 +258,14 @@ const StoryReader: React.FC = () => {
     setGeneratingAudio(true);
     try {
       const audioBase64 = await generateSpeech(currentChapter.text);
-      
       const updatedChapters = [...story.chapters];
       updatedChapters[activeChapterIndex] = { ...currentChapter, generatedAudio: audioBase64 };
-      
       const updatedStory = { ...story, chapters: updatedChapters };
       setStory(updatedStory);
       updateStoryInDB(updatedStory);
-
     } catch (error) {
       console.error(error);
-      alert("Erro ao gerar áudio.");
+      alert("Erro ao gerar áudio. Verifique sua conexão.");
     } finally {
       setGeneratingAudio(false);
     }
@@ -289,22 +288,22 @@ const StoryReader: React.FC = () => {
     <div className={`max-w-5xl mx-auto px-4 pb-20 ${story.isEducational ? 'font-sans' : ''}`}>
       
       {/* 
-        LAYOUT DE IMPRESSÃO (PDF)
-        Renderizado FORA do condicional de isFinished para garantir que sempre exista no DOM.
-        Usamos left: -5000px para garantir que ele seja renderizado pelo navegador, mas não visível pelo usuário.
-        Opacity 0 às vezes causa problemas no html2canvas.
+        LAYOUT DE IMPRESSÃO (PDF) - INVISÍVEL
+        ID: print-layout-container (Usado como fallback se o Ref falhar)
+        Posição: -5000px (Fora da tela, mas renderizado)
       */}
       <div 
+        id="print-layout-container"
         ref={bookPrintRef} 
         style={{ 
             position: 'fixed', 
             top: 0, 
-            left: '-5000px', // Fora da tela, mas renderizado
-            width: '794px', // A4
+            left: '-5000px', 
+            width: '794px', 
             minHeight: '1123px',
             backgroundColor: 'white',
-            zIndex: -1000, 
-            pointerEvents: 'none'
+            zIndex: -9999,
+            visibility: 'visible' // Garante que não está hidden para o DOM
         }}
       >
          {/* CAPA */}
@@ -340,7 +339,6 @@ const StoryReader: React.FC = () => {
       </div>
 
       {isFinished ? (
-          // TELA DE FIM DA AVENTURA
           <div className="min-h-[80vh] flex items-center justify-center flex-col gap-6 p-4 relative z-50">
                <Card color={story.isEducational ? 'green' : 'yellow'} className="text-center p-8 md:p-12 max-w-2xl w-full border-[6px] shadow-2xl animate-fade-in">
                    <h1 className="font-heading text-4xl md:text-5xl mb-4">Fim da Aventura!</h1>
@@ -350,16 +348,14 @@ const StoryReader: React.FC = () => {
                            {generatingPDF ? `Imprimindo... ${pdfProgress}%` : '📄 Baixar Livro em PDF'}
                        </Button>
                        <Button variant="success" onClick={downloadUnifiedAudio} disabled={stitchingAudio}>
-                            {stitchingAudio ? 'Unificando Áudios...' : '🎧 Baixar Audiobook Completo (.WAV)'}
+                            {stitchingAudio ? 'Unificando Áudios...' : '🎧 Baixar Audiobook (.WAV)'}
                        </Button>
-                       <Button variant="danger" onClick={handleExit}>🚪 Salvar e Ir para Biblioteca</Button>
+                       <Button variant="danger" onClick={handleExit}>🚪 Salvar e Sair</Button>
                    </div>
                </Card>
           </div>
       ) : (
-          // TELA DE LEITURA
           <>
-            {/* BARRA SUPERIOR */}
             <div className="mb-6 bg-white rounded-2xl border-4 border-black p-4 shadow-cartoon flex flex-col md:flex-row items-center justify-between gap-4 relative z-20">
                 <div>
                     <h1 className="font-heading text-3xl text-cartoon-purple">{story.title}</h1>
@@ -370,7 +366,6 @@ const StoryReader: React.FC = () => {
                 </div>
             </div>
 
-            {/* ÁREA DE LEITURA */}
             <div className="grid md:grid-cols-12 gap-8">
                 <div className="md:col-span-12">
                 <Card className="min-h-[500px] flex flex-col bg-white" color="white">
