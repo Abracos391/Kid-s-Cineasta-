@@ -14,7 +14,7 @@ export const authService = {
     
     const existing = await idbService.findUserByWhatsapp(cleanWhatsapp);
     if (existing) {
-        throw new Error('Este número de WhatsApp já está cadastrado.');
+        throw new Error('Este número de WhatsApp já está cadastrado. Tente fazer login.');
     }
 
     const userId = crypto.randomUUID();
@@ -41,16 +41,25 @@ export const authService = {
 
   login: async (whatsapp: string, password: string): Promise<User> => {
     const cleanWhatsapp = whatsapp.replace(/\D/g, '');
+    console.log(`Tentando login para: ${cleanWhatsapp}`);
+    
     const user = await idbService.findUserByWhatsapp(cleanWhatsapp);
     
     // @ts-ignore
-    if (!user || user.password !== password) {
-        throw new Error('WhatsApp ou senha inválidos.');
+    if (!user) {
+         console.error("Usuário não encontrado no DB.");
+         throw new Error('Conta não encontrada. Verifique o número ou cadastre-se.');
+    }
+
+    // @ts-ignore
+    if (user.password !== password) {
+        throw new Error('Senha incorreta.');
     }
     
     const now = new Date();
     const lastReset = user.lastResetDate ? new Date(user.lastResetDate) : new Date(0);
     
+    // Reset mensal de créditos free
     if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
          user.monthlyFreeUsed = 0;
          user.monthlyPremiumTrialUsed = 0;
@@ -126,6 +135,7 @@ export const authService = {
       return { allowed: false, reason: 'Créditos Premium esgotados.' };
     } 
     
+    // Lógica Free
     if ((user.monthlyPremiumTrialUsed || 0) < 1) return { allowed: true, type: 'premium' }; 
     if ((user.monthlyFreeUsed || 0) < 3) return { allowed: true, type: 'free' };
 
