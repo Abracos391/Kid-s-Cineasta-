@@ -4,37 +4,48 @@ import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { Story } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { dbService } from '../services/dbService';
 
 const SchoolLibrary: React.FC = () => {
   const { user } = useAuth();
   const [stories, setStories] = useState<Story[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
-    const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
-    const userStories = allStories[user.id] || [];
-    setStories(userStories.filter((s: Story) => s.isEducational));
+    const loadStories = async () => {
+        setLoading(true);
+        try {
+            const userStories = await dbService.getUserStories(user.id);
+            setStories(userStories.filter((s: Story) => s.isEducational));
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+    loadStories();
   }, [user]);
 
   const deleteStory = async (id: string) => {
     if (!user) return;
     if(confirm('Remover material didático?')) {
-      const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
-      const userStories = allStories[user.id] || [];
-      const newStories = userStories.filter((s: Story) => s.id !== id);
-      
-      allStories[user.id] = newStories;
-      localStorage.setItem('ck_stories', JSON.stringify(allStories));
-      setStories(newStories.filter((s: Story) => s.isEducational));
+      try {
+          await dbService.deleteStory(user.id, id);
+          setStories(prev => prev.filter(s => s.id !== id));
+      } catch (e) {
+          alert("Erro ao deletar.");
+      }
     }
   };
 
   const getStoryStatus = (story: Story) => {
-      const totalChapters = story.chapters?.length || 0;
       const audioCount = story.chapters?.filter(c => !!c.generatedAudio).length || 0;
       const imageCount = story.chapters?.filter(c => !!c.generatedImage).length || 0;
       return { hasAudio: audioCount > 0, hasImages: imageCount > 0 };
   }
+
+  if (loading) return <div className="min-h-screen bg-[#f0f4f1] p-8 flex items-center justify-center font-bold text-[#1a3c28]">Carregando Acervo...</div>;
 
   return (
     <div className="min-h-screen bg-[#f0f4f1] p-8 font-sans">

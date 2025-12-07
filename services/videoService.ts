@@ -11,6 +11,8 @@ interface ShotstackAsset {
     css?: string;
     width?: number;
     height?: number;
+    volume?: number;
+    effect?: 'fadeOut' | 'fadeIn';
 }
 
 interface ShotstackClip {
@@ -28,120 +30,154 @@ interface ShotstackTrack {
     clips: ShotstackClip[];
 }
 
+// Helper para calcular duração do áudio RAW (PCM 24kHz 16bit Mono)
+const calculateAudioDuration = (base64: string | undefined): number => {
+    if (!base64) return 5; // Duração padrão se não houver áudio
+    try {
+        const binaryString = atob(base64);
+        const bytes = binaryString.length;
+        // Taxa: 24000 Hz * 2 bytes (16-bit) * 1 canal = 48000 bytes/segundo
+        const duration = bytes / 48000;
+        return Math.max(3, duration); // Mínimo de 3 segundos
+    } catch (e) {
+        console.warn("Erro ao calcular duração do áudio:", e);
+        return 5;
+    }
+};
+
 export const videoService = {
     renderStoryToVideo: async (story: Story, onProgress: (msg: string) => void): Promise<string> => {
         
         // --- RECUPERAÇÃO DA CHAVE DE API ---
         let apiKey = '';
-
+        
         try {
-            // O Vite substitui 'process.env.SHOTSTACK_API_KEY' pelo valor string durante o build.
+            // 1. Tenta via substituição estática do Vite (define)
+            // O Vite substitui 'process.env.SHOTSTACK_API_KEY' pelo valor string literal durante o build.
+            // Não verificamos 'typeof process' aqui pois o objeto process pode não existir no browser,
+            // mas a substituição da string acontece antes disso.
+            
             // @ts-ignore
-            apiKey = process.env.SHOTSTACK_API_KEY;
+            apiKey = process.env.SHOTSTACK_API_KEY; 
+
         } catch (e) {
-            console.warn("Acesso a process.env falhou, tentando fallback...", e);
+            // Ignora erro se a substituição falhar e process não existir
         }
 
-        // Fallback para import.meta.env caso a substituição falhe ou use prefixo VITE_
-        if (!apiKey) {
-            try {
-                // @ts-ignore
-                if (import.meta && import.meta.env && import.meta.env.VITE_SHOTSTACK_API_KEY) {
-                    // @ts-ignore
-                    apiKey = import.meta.env.VITE_SHOTSTACK_API_KEY;
-                }
-            } catch (e) {
-                // Ignorar erro se import.meta não existir
-            }
+        // 2. Fallback para import.meta.env (Padrão Vite moderno)
+        if (!apiKey || apiKey === 'undefined') {
+             // @ts-ignore
+             apiKey = import.meta.env.VITE_SHOTSTACK_API_KEY || import.meta.env.SHOTSTACK_API_KEY || '';
         }
-
-        // Limpeza de aspas residuais que podem ocorrer na substituição
+        
+        // Limpeza (remove aspas extras se houver, comum em algumas injeções)
         if (apiKey) apiKey = apiKey.replace(/"/g, '').trim();
 
-        // --- VALIDAÇÃO ---
-        if (!apiKey || apiKey.length < 10 || apiKey.includes('undefined')) {
-            console.error("❌ ERRO CRÍTICO: Chave Shotstack inválida.", apiKey);
+        if (!apiKey || apiKey.length < 5) {
+            console.error("❌ ERRO CRÍTICO: Chave Shotstack não encontrada.");
             throw new Error(
-                "A Chave de API (SHOTSTACK_API_KEY) não foi encontrada.\n\n" +
-                "SE VOCÊ ESTÁ NO RENDER:\n" +
-                "1. Vá na aba 'Environment'.\n" +
-                "2. Adicione a chave 'SHOTSTACK_API_KEY'.\n" +
-                "3. IMPORTANTE: Vá em 'Manual Deploy' > 'Clear build cache & deploy' para recompilar o site com a nova chave."
+                "A Chave de API Shotstack não foi detectada.\n\n" +
+                "⚠️ AÇÃO NECESSÁRIA NO RENDER:\n" +
+                "1. Verifique se a chave SHOTSTACK_API_KEY está nas 'Environment Variables'.\n" +
+                "2. Vá em 'Manual Deploy' > 'Clear build cache & deploy'.\n" +
+                "3. Se o erro persistir, verifique se a chave não tem espaços extras."
             );
         }
 
-        console.log("🎬 Iniciando Renderização com Shotstack...");
-        onProgress("Preparando o estúdio de filmagem...");
+        console.log("🎬 Iniciando Renderização Cineasta Kids...");
+        onProgress("Calculando o tempo do filme...");
 
-        const SCENE_DURATION = 5; 
         const tracks: ShotstackTrack[] = [];
+        let currentTime = 0;
 
-        // 1. Faixa de Imagens (Fundo)
+        // Arrays para as faixas
         const imageClips: ShotstackClip[] = [];
+        const subtitleClips: ShotstackClip[] = [];
+
+        // --- CONSTRUÇÃO DA TIMELINE ---
         story.chapters.forEach((chapter, index) => {
+            // 1. Determina duração da cena baseada no áudio (narrativa)
+            const sceneDuration = calculateAudioDuration(chapter.generatedAudio);
+            
+            // 2. CLIP DE IMAGEM (Fundo)
             if (chapter.generatedImage) {
                 imageClips.push({
                     asset: { type: 'image', src: chapter.generatedImage },
-                    start: index * SCENE_DURATION,
-                    length: SCENE_DURATION,
+                    start: currentTime,
+                    length: sceneDuration,
+                    // Efeito Ken Burns alternado (Zoom In / Zoom Out)
                     effect: index % 2 === 0 ? 'zoomIn' : 'zoomOut',
-                    transition: { in: 'fade', out: 'fade' }
+                    transition: { in: 'fade', out: 'fade' },
+                    fit: 'cover'
                 });
             }
-        });
 
-        // 2. Faixa de Legendas (Sobreposição)
-        const textClips: ShotstackClip[] = [];
-        story.chapters.forEach((chapter, index) => {
-            // Sanitização do texto para evitar quebra do JSON/HTML
+            // 3. CLIP DE LEGENDA (Estilo Lúdico)
+            // Limpa e encurta texto para caber na tela
             let cleanText = chapter.text
                 .replace(/"/g, "'")
                 .replace(/\n/g, " ")
-                .substring(0, 130);
-            
-            if (chapter.text.length > 130) cleanText += "...";
+                .substring(0, 140);
+            if (chapter.text.length > 140) cleanText += "...";
 
             const html = `
-                <div class="box">
-                    <p>${cleanText}</p>
+                <div class="subtitle-container">
+                    <div class="subtitle-box">
+                        <p>${cleanText}</p>
+                    </div>
                 </div>
             `;
             
             const css = `
-                .box {
-                    background-color: #FFFACD;
-                    border: 5px solid #000;
-                    color: #000;
-                    font-family: "Verdana", sans-serif;
-                    font-weight: bold;
-                    font-size: 26px;
-                    padding: 20px;
-                    border-radius: 20px;
-                    text-align: center;
-                    width: 600px;
-                    box-shadow: 10px 10px 0px #000;
+                .subtitle-container {
+                    height: 100%;
+                    display: flex;
+                    align-items: flex-end;
+                    justify-content: center;
+                    padding-bottom: 80px;
                 }
-                p { margin: 0; line-height: 1.4; }
+                .subtitle-box {
+                    background-color: #FFD700; /* Cartoon Yellow */
+                    border: 6px solid #000;
+                    border-radius: 30px;
+                    padding: 24px;
+                    width: 800px;
+                    text-align: center;
+                    box-shadow: 10px 10px 0px #000;
+                    transform: rotate(-1deg);
+                }
+                p {
+                    margin: 0;
+                    color: #000;
+                    font-family: 'Verdana', sans-serif;
+                    font-size: 38px;
+                    font-weight: 800;
+                    line-height: 1.4;
+                    text-transform: uppercase;
+                }
             `;
 
-            textClips.push({
-                asset: { type: 'html', html, css, width: 700, height: 300 },
-                start: index * SCENE_DURATION,
-                length: SCENE_DURATION,
-                position: 'bottom',
+            subtitleClips.push({
+                asset: { type: 'html', html, css, width: 1080, height: 1920 }, // Full screen container
+                start: currentTime,
+                length: sceneDuration,
                 transition: { in: 'fade', out: 'fade' }
             });
+
+            // Avança o cursor de tempo
+            currentTime += sceneDuration;
         });
 
-        // Ordem das trilhas: Texto em cima (índice 0), Imagem embaixo (índice 1)
-        tracks.push({ clips: textClips }); // Camada superior
-        tracks.push({ clips: imageClips }); // Camada inferior
+        // Adiciona as faixas na ordem correta (Layers: Top -> Bottom)
+        tracks.push({ clips: subtitleClips }); // Legendas no topo
+        tracks.push({ clips: imageClips });    // Imagens no fundo
 
         // --- MÚSICA DE FUNDO ---
+        // Volume baixo para não brigar com a narração (se houvesse)
         const soundtrack = {
             src: "https://s3.ap-southeast-2.amazonaws.com/shotstack-assets/music/happy.mp3",
             effect: "fadeOut",
-            volume: 0.5
+            volume: 0.2 
         };
 
         const payload = {
@@ -152,14 +188,14 @@ export const videoService = {
             },
             output: {
                 format: "mp4",
-                resolution: "sd", // SD economiza créditos
-                aspectRatio: "9:16", // Formato TikTok/Reels/Stories
+                resolution: "hd",    // 720p (720x1280) - Ideal para mobile e economia de créditos
+                aspectRatio: "9:16", // Vertical (Stories/Reels)
                 fps: 25
             }
         };
 
-        // --- ENVIAR RENDER ---
-        onProgress("Enviando cenas para o editor...");
+        // --- ENVIO PARA API ---
+        onProgress("Enviando rolos de filme...");
         
         let renderId = '';
 
@@ -174,70 +210,52 @@ export const videoService = {
             });
 
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error("Shotstack API Error:", response.status, errorText);
-                
-                if (response.status === 401) throw new Error("Chave de API Inválida (401).");
-                if (response.status === 403) throw new Error("Acesso negado (403). Verifique seus créditos.");
-                if (response.status === 400) throw new Error("Erro nos dados enviados (400).");
-                throw new Error(`Erro na API (${response.status})`);
+                const txt = await response.text();
+                if (response.status === 402) throw new Error("Créditos insuficientes no Shotstack.");
+                if (response.status === 403) throw new Error("Chave de API inválida.");
+                throw new Error(`Erro Shotstack (${response.status}): ${txt}`);
             }
 
             const data = await response.json();
-            if (data.response && data.response.id) {
-                renderId = data.response.id;
-                console.log("Job ID recebido:", renderId);
-            } else {
-                throw new Error("Resposta inesperada da API Shotstack.");
-            }
+            renderId = data.response.id;
+            console.log("Job ID:", renderId);
 
-        } catch (postError: any) {
-            console.error("Falha no POST:", postError);
-            throw postError;
+        } catch (error: any) {
+            console.error("Erro no POST:", error);
+            throw error;
         }
 
-        // --- POLLING (AGUARDAR VÍDEO) ---
+        // --- POLLING ---
         let attempts = 0;
-        const maxAttempts = 60; // ~2 minutos de timeout
-
         return new Promise((resolve, reject) => {
             const interval = setInterval(async () => {
                 attempts++;
-                onProgress(`Renderizando... ${attempts * 2}%`); // Progresso fake visual
+                onProgress(`Renderizando mágica... (${attempts}s)`);
 
                 try {
-                    const statusRes = await fetch(`${API_URL}/${renderId}`, {
+                    const res = await fetch(`${API_URL}/${renderId}`, {
                         headers: { 'x-api-key': apiKey }
                     });
+                    
+                    if (!res.ok) return;
 
-                    if (!statusRes.ok) {
-                        console.warn("Erro ao checar status:", statusRes.status);
-                        // Não rejeita imediatamente, tenta de novo no próximo tick
-                        return;
-                    }
-
-                    const statusData = await statusRes.json();
-                    const status = statusData.response.status;
-
-                    console.log(`Status (${attempts}):`, status);
+                    const data = await res.json();
+                    const status = data.response.status;
 
                     if (status === 'done') {
                         clearInterval(interval);
-                        resolve(statusData.response.url);
+                        resolve(data.response.url);
                     } else if (status === 'failed') {
                         clearInterval(interval);
-                        console.error("Render falhou:", statusData.response.error);
-                        reject(new Error("O Shotstack falhou ao criar o vídeo: " + statusData.response.error));
-                    } else if (attempts >= maxAttempts) {
+                        reject(new Error("Falha na renderização: " + data.response.error));
+                    } else if (attempts > 90) { // Timeout de 3 min
                         clearInterval(interval);
-                        reject(new Error("Timeout: O vídeo demorou muito para renderizar."));
+                        reject(new Error("O vídeo demorou muito para ser criado."));
                     }
-
-                } catch (pollError) {
-                    console.error("Erro no polling:", pollError);
-                    // Continua tentando
+                } catch (e) {
+                    // Ignora erros de rede temporários no polling
                 }
-            }, 2000); // Checa a cada 2 segundos
+            }, 3000);
         });
     }
 };

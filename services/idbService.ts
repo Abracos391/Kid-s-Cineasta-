@@ -139,7 +139,7 @@ export const idbService = {
     });
   },
 
-  // FUNÇÃO ROBUSTA DE BUSCA DE USUÁRIO
+  // FUNÇÃO ROBUSTA DE BUSCA DE USUÁRIO (Indexada + Varredura de Segurança)
   findUserByWhatsapp: async (whatsapp: string): Promise<User | undefined> => {
     const db = await idbService.openDB();
     
@@ -150,7 +150,7 @@ export const idbService = {
             const store = tx.objectStore(STORE_USERS);
             
             if (!store.indexNames.contains('whatsapp')) {
-                resolve(undefined); // Índice falhou, vai para o fallback
+                resolve(undefined); // Índice não existe, vai para o fallback
                 return;
             }
 
@@ -158,7 +158,7 @@ export const idbService = {
             const request = index.get(whatsapp);
 
             request.onsuccess = () => resolve(request.result);
-            request.onerror = () => resolve(undefined); // Erro leve, tenta fallback
+            request.onerror = () => resolve(undefined); 
         });
 
         if (user) return user;
@@ -167,7 +167,8 @@ export const idbService = {
         console.warn("Falha na busca indexada, tentando varredura manual...", e);
     }
 
-    // Tentativa 2: Fallback (Varredura manual) - Garante que acha se existir
+    // Tentativa 2: Fallback (Varredura manual) - Garante que acha se existir no banco
+    // Isso resolve o problema de login falhar mesmo com usuário cadastrado
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE_USERS, 'readonly');
         const store = tx.objectStore(STORE_USERS);
@@ -177,7 +178,11 @@ export const idbService = {
             const cursor = (event.target as IDBRequest).result;
             if (cursor) {
                 const u = cursor.value as User;
-                if (u.whatsapp === whatsapp) {
+                // Compara removendo caracteres não numéricos por segurança
+                const dbPhone = u.whatsapp.replace(/\D/g, '');
+                const searchPhone = whatsapp.replace(/\D/g, '');
+                
+                if (dbPhone === searchPhone) {
                     resolve(u); // ACHOU!
                     return;
                 }

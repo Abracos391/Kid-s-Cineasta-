@@ -149,7 +149,6 @@ const AvatarCreator: React.FC = () => {
         description
       };
       
-      // SALVAR NO DB INTERNO
       await dbService.saveAvatar(user.id, newAvatar);
       
       setGeneratedAvatar(newAvatar);
@@ -315,7 +314,7 @@ const AvatarCreator: React.FC = () => {
              </h2>
           </div>
 
-          {/* Cartão do Avatar em Grande Destaque */}
+          {/* ESTE É O CARTÃO GRANDE COM A FOTO - O QUE VOCÊ QUERIA */}
           <div className="relative transform hover:scale-105 transition-transform duration-300 z-10">
              <Card color="white" className="p-4 rotate-2 shadow-2xl max-w-sm">
                <div className="border-4 border-black rounded-xl overflow-hidden bg-gray-100">

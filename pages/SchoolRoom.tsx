@@ -7,6 +7,7 @@ import { Avatar, SchoolMember, SchoolRole, Story } from '../types';
 import { generatePedagogicalStory } from '../services/geminiService';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
+import { dbService } from '../services/dbService';
 
 const SchoolRoom: React.FC = () => {
   const navigate = useNavigate();
@@ -27,19 +28,24 @@ const SchoolRoom: React.FC = () => {
         navigate('/school-login');
         return;
     }
-    // Carregar dados do LocalStorage
-    if (user) {
-        const allAvatars = JSON.parse(localStorage.getItem('ck_avatars') || '{}');
-        setAvatars(allAvatars[user.id] || []);
-        
-        const savedRoster = JSON.parse(localStorage.getItem('schoolRoster') || '[]');
-        setSchoolRoster(savedRoster);
-    }
+    const loadData = async () => {
+        if (user) {
+            try {
+                const userAvatars = await dbService.getUserAvatars(user.id);
+                setAvatars(userAvatars);
+                const roster = await dbService.getSchoolRoster(user.id);
+                setSchoolRoster(roster);
+            } catch (e) {
+                console.error("Erro ao carregar dados escolares", e);
+            }
+        }
+    };
+    loadData();
   }, [user, navigate]);
 
-  const saveRoster = (newRoster: SchoolMember[]) => {
+  const saveRoster = async (newRoster: SchoolMember[]) => {
     setSchoolRoster(newRoster);
-    localStorage.setItem('schoolRoster', JSON.stringify(newRoster));
+    if (user) await dbService.saveSchoolRoster(user.id, newRoster);
   };
 
   const handleSlotClick = (slotId: string, role: SchoolRole) => {
@@ -103,20 +109,9 @@ const SchoolRoom: React.FC = () => {
       await authService.consumeStoryCredit(user.id, 'premium');
       refreshUser();
 
-      // SAVE LOCALSTORAGE (SAFE)
-      try {
-          const allStories = JSON.parse(localStorage.getItem('ck_stories') || '{}');
-          const userStories = allStories[user.id] || [];
-          userStories.push(fullStory);
-          allStories[user.id] = userStories;
-          localStorage.setItem('ck_stories', JSON.stringify(allStories));
-      } catch (e) {
-          console.warn("Memória cheia. Salvando versão leve da aula.");
-          // Se falhar, tenta salvar sem capítulos pesados só para garantir o registro
-          // (O reader depois cuidará de salvar o que der)
-      }
+      // SALVAR DIRETAMENTE NO BANCO (SEM LOCALSTORAGE LIMITADO)
+      await dbService.saveStory(user.id, fullStory);
       
-      localStorage.setItem('currentStory', JSON.stringify(fullStory));
       navigate(`/story/${storyId}`);
 
     } catch (e: any) {
@@ -129,7 +124,6 @@ const SchoolRoom: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-cartoon-blue via-blue-200 to-cartoon-green relative overflow-x-hidden pb-20">
-      {/* (Mantém o mesmo JSX visual) */}
       <div className="absolute top-10 left-10 text-8xl opacity-80 animate-float">☁️</div>
       <div className="absolute top-20 right-20 text-8xl opacity-60 animate-float" style={{animationDelay: '2s'}}>☁️</div>
       

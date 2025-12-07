@@ -8,6 +8,7 @@ import Button from '../components/ui/Button';
 import { generateSpeech, generateChapterIllustration } from '../services/geminiService';
 import AudioPlayer from '../components/AudioPlayer';
 import { dbService } from '../services/dbService';
+import { videoService } from '../services/videoService';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
@@ -22,6 +23,8 @@ const StoryReader: React.FC = () => {
   const [activeChapterIndex, setActiveChapterIndex] = useState(0);
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [generatingVideo, setGeneratingVideo] = useState(false);
+  const [videoStatus, setVideoStatus] = useState('');
   const [pdfProgress, setPdfProgress] = useState(0); 
   const [loadError, setLoadError] = useState(false);
   
@@ -31,7 +34,6 @@ const StoryReader: React.FC = () => {
 
   const saveProgress = async () => {
       if (!story || !user) return;
-      console.log("Salvando progresso final...");
       try {
         await dbService.updateStory(user.id, story);
       } catch (e) {
@@ -48,20 +50,62 @@ const StoryReader: React.FC = () => {
     }
   };
 
+  const handleGenerateVideo = async () => {
+      console.log("Botão clicado! Iniciando processo...");
+      
+      // 1. Feedback Imediato
+      setGeneratingVideo(true);
+      setVideoStatus("Iniciando...");
+
+      try {
+          if (!story) throw new Error("História não carregada.");
+
+          // 2. Validação
+          const missingImages = story.chapters.some(c => !c.generatedImage);
+          if (missingImages) {
+              alert("⚠️ Faltam imagens! Gere todas as ilustrações antes de criar o vídeo.");
+              setGeneratingVideo(false);
+              setVideoStatus("");
+              return;
+          }
+
+          setVideoStatus("Conectando...");
+
+          // 3. Chamada do Serviço
+          const videoUrl = await videoService.renderStoryToVideo(story, (status) => {
+              console.log("Status Vídeo:", status);
+              setVideoStatus(status);
+          });
+          
+          if (!videoUrl) throw new Error("URL vazia.");
+
+          setVideoStatus("Abrindo Vídeo...");
+          window.open(videoUrl, '_blank');
+
+          setVideoStatus("Pronto! 🎬");
+          setTimeout(() => setVideoStatus(''), 5000);
+
+      } catch (e: any) {
+          console.error("Erro Vídeo:", e);
+          alert(`Erro: ${e.message}`);
+          setVideoStatus("Erro ❌");
+      } finally {
+          setGeneratingVideo(false);
+      }
+  };
+
   const handleFullBookDownload = async () => {
     if (!story) return;
     setGeneratingPDF(true);
     setPdfProgress(1);
 
     try {
-      // Tenta pegar pelo Ref ou pelo ID (Fallback de segurança)
       const bookContainer = bookPrintRef.current || document.getElementById('print-layout-container');
       
       if (!bookContainer) throw new Error("Layout de impressão indisponível. Aguarde a página carregar.");
 
       setPdfProgress(10);
       
-      // Força o navegador a carregar todas as imagens antes de gerar
       const images = Array.from(bookContainer.querySelectorAll('img')) as HTMLImageElement[];
       await Promise.all(images.map(img => {
           if (img.complete) return Promise.resolve();
@@ -71,7 +115,6 @@ const StoryReader: React.FC = () => {
           });
       }));
 
-      // Espera extra para renderização de fontes
       setPdfProgress(30);
       await new Promise(r => setTimeout(r, 1500));
 
@@ -93,7 +136,6 @@ const StoryReader: React.FC = () => {
               width: 794, 
               height: 1123,
               windowWidth: 1200,
-              // Importante: garante que o html2canvas ignore a posição "fora da tela"
               onclone: (clonedDoc) => {
                   const clonedEl = clonedDoc.getElementById('print-layout-container');
                   if (clonedEl) {
@@ -150,7 +192,6 @@ const StoryReader: React.FC = () => {
               for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
           };
 
-          // Header WAV simples (Mono, 24kHz, 16bit)
           const sampleRate = 24000;
           const numChannels = 1;
           const bitsPerSample = 16;
@@ -229,7 +270,6 @@ const StoryReader: React.FC = () => {
     loadStory();
   }, [id, user]);
 
-  // Auto-gera a imagem se não existir
   useEffect(() => {
     if (story && story.chapters && story.chapters[activeChapterIndex]) {
       const chapter = story.chapters[activeChapterIndex];
@@ -287,11 +327,7 @@ const StoryReader: React.FC = () => {
   return (
     <div className={`max-w-5xl mx-auto px-4 pb-20 ${story.isEducational ? 'font-sans' : ''}`}>
       
-      {/* 
-        LAYOUT DE IMPRESSÃO (PDF) - INVISÍVEL
-        ID: print-layout-container (Usado como fallback se o Ref falhar)
-        Posição: -5000px (Fora da tela, mas renderizado)
-      */}
+      {/* LAYOUT DE IMPRESSÃO (PDF) - INVISÍVEL */}
       <div 
         id="print-layout-container"
         ref={bookPrintRef} 
@@ -303,7 +339,7 @@ const StoryReader: React.FC = () => {
             minHeight: '1123px',
             backgroundColor: 'white',
             zIndex: -9999,
-            visibility: 'visible' // Garante que não está hidden para o DOM
+            visibility: 'visible'
         }}
       >
          {/* CAPA */}
@@ -344,13 +380,29 @@ const StoryReader: React.FC = () => {
                    <h1 className="font-heading text-4xl md:text-5xl mb-4">Fim da Aventura!</h1>
                    <div className="flex flex-col gap-4 justify-center">
                        <Button variant="primary" onClick={() => setActiveChapterIndex(0)}>📖 Ler do Início</Button>
-                       <Button variant="secondary" onClick={handleFullBookDownload} disabled={generatingPDF}>
-                           {generatingPDF ? `Imprimindo... ${pdfProgress}%` : '📄 Baixar Livro em PDF'}
-                       </Button>
-                       <Button variant="success" onClick={downloadUnifiedAudio} disabled={stitchingAudio}>
-                            {stitchingAudio ? 'Unificando Áudios...' : '🎧 Baixar Audiobook (.WAV)'}
-                       </Button>
-                       <Button variant="danger" onClick={handleExit}>🚪 Salvar e Sair</Button>
+                       
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                            <Button variant="secondary" onClick={handleFullBookDownload} disabled={generatingPDF}>
+                                {generatingPDF ? `Imprimindo... ${pdfProgress}%` : '📄 Baixar PDF'}
+                            </Button>
+                            
+                            <Button variant="success" onClick={downloadUnifiedAudio} disabled={stitchingAudio}>
+                                    {stitchingAudio ? 'Unificando...' : '🎧 Audiobook'}
+                            </Button>
+                       </div>
+
+                       {/* BOTÃO DE VÍDEO ATUALIZADO */}
+                       <Button 
+                            variant="danger" 
+                            onClick={handleGenerateVideo} 
+                            disabled={generatingVideo}
+                            pulse={!generatingVideo}
+                            className="w-full text-2xl py-4"
+                        >
+                            {generatingVideo ? `🎥 ${videoStatus}` : '🎬 Gerar Filme (Shotstack)'}
+                        </Button>
+
+                       <Button variant="secondary" onClick={handleExit} size="sm" className="mt-4 border-dashed">🚪 Salvar e Sair</Button>
                    </div>
                </Card>
           </div>
