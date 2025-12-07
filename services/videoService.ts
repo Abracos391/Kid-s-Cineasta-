@@ -45,43 +45,36 @@ const calculateAudioDuration = (base64: string | undefined): number => {
     }
 };
 
+// Modificamos a assinatura para aceitar uma chave manual opcional
 export const videoService = {
-    renderStoryToVideo: async (story: Story, onProgress: (msg: string) => void): Promise<string> => {
+    renderStoryToVideo: async (story: Story, onProgress: (msg: string) => void, manualKey?: string): Promise<string> => {
         
         // --- RECUPERAÇÃO DA CHAVE DE API ---
-        let apiKey = '';
-        
-        try {
-            // 1. Tenta via substituição estática do Vite (define)
-            // O Vite substitui 'process.env.SHOTSTACK_API_KEY' pelo valor string literal durante o build.
-            // Não verificamos 'typeof process' aqui pois o objeto process pode não existir no browser,
-            // mas a substituição da string acontece antes disso.
-            
-            // @ts-ignore
-            apiKey = process.env.SHOTSTACK_API_KEY; 
+        // Prioridade: 1. Chave Manual (passada pelo UI), 2. Vite Env, 3. Process Env (injetado)
+        let apiKey = manualKey || '';
 
-        } catch (e) {
-            // Ignora erro se a substituição falhar e process não existir
-        }
-
-        // 2. Fallback para import.meta.env (Padrão Vite moderno)
-        if (!apiKey || apiKey === 'undefined') {
-             // @ts-ignore
-             apiKey = import.meta.env.VITE_SHOTSTACK_API_KEY || import.meta.env.SHOTSTACK_API_KEY || '';
+        if (!apiKey) {
+            try {
+                // Tenta pegar do Vite (maneira padrão moderna)
+                // @ts-ignore
+                apiKey = import.meta.env.VITE_SHOTSTACK_API_KEY || import.meta.env.SHOTSTACK_API_KEY;
+                
+                // Se falhar, tenta pegar do objeto injetado pelo define do vite.config
+                if (!apiKey) {
+                    // @ts-ignore
+                    apiKey = process.env.SHOTSTACK_API_KEY;
+                }
+            } catch (e) {
+                // Silently fail env retrieval
+            }
         }
         
-        // Limpeza (remove aspas extras se houver, comum em algumas injeções)
+        // Limpeza
         if (apiKey) apiKey = apiKey.replace(/"/g, '').trim();
 
-        if (!apiKey || apiKey.length < 5) {
-            console.error("❌ ERRO CRÍTICO: Chave Shotstack não encontrada.");
-            throw new Error(
-                "A Chave de API Shotstack não foi detectada.\n\n" +
-                "⚠️ AÇÃO NECESSÁRIA NO RENDER:\n" +
-                "1. Verifique se a chave SHOTSTACK_API_KEY está nas 'Environment Variables'.\n" +
-                "2. Vá em 'Manual Deploy' > 'Clear build cache & deploy'.\n" +
-                "3. Se o erro persistir, verifique se a chave não tem espaços extras."
-            );
+        if (!apiKey || apiKey.length < 10) {
+            // Lançamos um erro específico que o frontend pode capturar para pedir a chave ao usuário
+            throw new Error("MISSING_KEY");
         }
 
         console.log("🎬 Iniciando Renderização Cineasta Kids...");

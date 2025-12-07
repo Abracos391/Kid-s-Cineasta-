@@ -50,6 +50,50 @@ const StoryReader: React.FC = () => {
     }
   };
 
+  const executeVideoGeneration = async (manualKey?: string) => {
+    if (!story) return;
+    
+    setGeneratingVideo(true);
+    setVideoStatus("Conectando...");
+
+    try {
+        const videoUrl = await videoService.renderStoryToVideo(story, (status) => {
+            setVideoStatus(status);
+        }, manualKey);
+        
+        if (!videoUrl) throw new Error("URL vazia.");
+
+        setVideoStatus("Abrindo Vídeo...");
+        window.open(videoUrl, '_blank');
+
+        setVideoStatus("Pronto! 🎬");
+        setTimeout(() => setVideoStatus(''), 5000);
+
+    } catch (e: any) {
+        if (e.message === 'MISSING_KEY') {
+            // FALLBACK: Pede a chave ao usuário se não encontrar no .env
+            const userKey = window.prompt("⚠️ A chave Shotstack não foi encontrada no sistema.\n\nPara continuar, cole sua SHOTSTACK_API_KEY aqui:");
+            if (userKey && userKey.trim().length > 10) {
+                // Tenta novamente com a chave fornecida
+                executeVideoGeneration(userKey.trim());
+            } else {
+                alert("Operação cancelada. A chave é necessária para gerar o vídeo.");
+                setVideoStatus("Cancelado");
+                setGeneratingVideo(false);
+            }
+        } else {
+            console.error("Erro Vídeo:", e);
+            alert(`Erro: ${e.message}`);
+            setVideoStatus("Erro ❌");
+            setGeneratingVideo(false);
+        }
+    } finally {
+        if (videoStatus !== 'Cancelado' && videoStatus !== 'Erro ❌') {
+             setGeneratingVideo(false);
+        }
+    }
+  };
+
   const handleGenerateVideo = async () => {
       console.log("Botão clicado! Iniciando processo...");
       
@@ -57,41 +101,18 @@ const StoryReader: React.FC = () => {
       setGeneratingVideo(true);
       setVideoStatus("Iniciando...");
 
-      try {
-          if (!story) throw new Error("História não carregada.");
-
-          // 2. Validação
-          const missingImages = story.chapters.some(c => !c.generatedImage);
-          if (missingImages) {
-              alert("⚠️ Faltam imagens! Gere todas as ilustrações antes de criar o vídeo.");
-              setGeneratingVideo(false);
-              setVideoStatus("");
-              return;
-          }
-
-          setVideoStatus("Conectando...");
-
-          // 3. Chamada do Serviço
-          const videoUrl = await videoService.renderStoryToVideo(story, (status) => {
-              console.log("Status Vídeo:", status);
-              setVideoStatus(status);
-          });
-          
-          if (!videoUrl) throw new Error("URL vazia.");
-
-          setVideoStatus("Abrindo Vídeo...");
-          window.open(videoUrl, '_blank');
-
-          setVideoStatus("Pronto! 🎬");
-          setTimeout(() => setVideoStatus(''), 5000);
-
-      } catch (e: any) {
-          console.error("Erro Vídeo:", e);
-          alert(`Erro: ${e.message}`);
-          setVideoStatus("Erro ❌");
-      } finally {
+      // 2. Validação
+      if (!story) { setGeneratingVideo(false); return; }
+      const missingImages = story.chapters.some(c => !c.generatedImage);
+      if (missingImages) {
+          alert("⚠️ Faltam imagens! Gere todas as ilustrações antes de criar o vídeo.");
           setGeneratingVideo(false);
+          setVideoStatus("");
+          return;
       }
+
+      // 3. Execução
+      await executeVideoGeneration();
   };
 
   const handleFullBookDownload = async () => {
