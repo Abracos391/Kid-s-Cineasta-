@@ -45,35 +45,28 @@ const calculateAudioDuration = (base64: string | undefined): number => {
     }
 };
 
-// Modificamos a assinatura para aceitar uma chave manual opcional
 export const videoService = {
     renderStoryToVideo: async (story: Story, onProgress: (msg: string) => void, manualKey?: string): Promise<string> => {
         
-        // --- RECUPERAÇÃO DA CHAVE DE API ---
-        // Prioridade: 1. Chave Manual (passada pelo UI), 2. Vite Env, 3. Process Env (injetado)
+        // --- 1. RESOLUÇÃO DA CHAVE DE API ---
         let apiKey = manualKey || '';
 
         if (!apiKey) {
-            try {
-                // Tenta pegar do Vite (maneira padrão moderna)
-                // @ts-ignore
-                apiKey = import.meta.env.VITE_SHOTSTACK_API_KEY || import.meta.env.SHOTSTACK_API_KEY;
-                
-                // Se falhar, tenta pegar do objeto injetado pelo define do vite.config
-                if (!apiKey) {
-                    // @ts-ignore
-                    apiKey = process.env.SHOTSTACK_API_KEY;
-                }
-            } catch (e) {
-                // Silently fail env retrieval
-            }
+            // Tenta recuperar do ambiente injetado pelo Vite
+            // @ts-ignore
+            apiKey = process.env.SHOTSTACK_API_KEY || import.meta.env.SHOTSTACK_API_KEY || import.meta.env.VITE_SHOTSTACK_API_KEY;
         }
-        
-        // Limpeza
+
+        // Limpeza final
         if (apiKey) apiKey = apiKey.replace(/"/g, '').trim();
 
+        // Debug Log (mostra apenas os primeiros 4 caracteres por segurança)
+        const keyStatus = apiKey ? `Presente (${apiKey.substring(0, 4)}...)` : "AUSENTE";
+        console.log(`[VideoService] Status da Chave Shotstack: ${keyStatus}`);
+
+        // Se após todas as tentativas a chave não existir, lançamos o erro específico
+        // para que o UI (StoryReader) peça a chave manualmente ao usuário.
         if (!apiKey || apiKey.length < 10) {
-            // Lançamos um erro específico que o frontend pode capturar para pedir a chave ao usuário
             throw new Error("MISSING_KEY");
         }
 
@@ -87,26 +80,25 @@ export const videoService = {
         const imageClips: ShotstackClip[] = [];
         const subtitleClips: ShotstackClip[] = [];
 
-        // --- CONSTRUÇÃO DA TIMELINE ---
+        // --- 2. CONSTRUÇÃO DA TIMELINE ---
         story.chapters.forEach((chapter, index) => {
-            // 1. Determina duração da cena baseada no áudio (narrativa)
+            // Duração baseada no áudio
             const sceneDuration = calculateAudioDuration(chapter.generatedAudio);
             
-            // 2. CLIP DE IMAGEM (Fundo)
+            // LAYER 1: IMAGEM (Fundo)
             if (chapter.generatedImage) {
                 imageClips.push({
                     asset: { type: 'image', src: chapter.generatedImage },
                     start: currentTime,
                     length: sceneDuration,
-                    // Efeito Ken Burns alternado (Zoom In / Zoom Out)
+                    // Efeito Ken Burns alternado
                     effect: index % 2 === 0 ? 'zoomIn' : 'zoomOut',
                     transition: { in: 'fade', out: 'fade' },
                     fit: 'cover'
                 });
             }
 
-            // 3. CLIP DE LEGENDA (Estilo Lúdico)
-            // Limpa e encurta texto para caber na tela
+            // LAYER 2: LEGENDA (HTML/CSS)
             let cleanText = chapter.text
                 .replace(/"/g, "'")
                 .replace(/\n/g, " ")
@@ -130,7 +122,7 @@ export const videoService = {
                     padding-bottom: 80px;
                 }
                 .subtitle-box {
-                    background-color: #FFD700; /* Cartoon Yellow */
+                    background-color: #FFD700;
                     border: 6px solid #000;
                     border-radius: 30px;
                     padding: 24px;
@@ -151,22 +143,20 @@ export const videoService = {
             `;
 
             subtitleClips.push({
-                asset: { type: 'html', html, css, width: 1080, height: 1920 }, // Full screen container
+                asset: { type: 'html', html, css, width: 1080, height: 1920 },
                 start: currentTime,
                 length: sceneDuration,
                 transition: { in: 'fade', out: 'fade' }
             });
 
-            // Avança o cursor de tempo
             currentTime += sceneDuration;
         });
 
-        // Adiciona as faixas na ordem correta (Layers: Top -> Bottom)
-        tracks.push({ clips: subtitleClips }); // Legendas no topo
-        tracks.push({ clips: imageClips });    // Imagens no fundo
+        // Adiciona faixas (ordem: topo -> base)
+        tracks.push({ clips: subtitleClips });
+        tracks.push({ clips: imageClips });
 
-        // --- MÚSICA DE FUNDO ---
-        // Volume baixo para não brigar com a narração (se houvesse)
+        // --- 3. MÚSICA E CONFIGURAÇÃO ---
         const soundtrack = {
             src: "https://s3.ap-southeast-2.amazonaws.com/shotstack-assets/music/happy.mp3",
             effect: "fadeOut",
@@ -181,13 +171,13 @@ export const videoService = {
             },
             output: {
                 format: "mp4",
-                resolution: "hd",    // 720p (720x1280) - Ideal para mobile e economia de créditos
-                aspectRatio: "9:16", // Vertical (Stories/Reels)
+                resolution: "hd",
+                aspectRatio: "9:16",
                 fps: 25
             }
         };
 
-        // --- ENVIO PARA API ---
+        // --- 4. ENVIO PARA API (POST) ---
         onProgress("Enviando rolos de filme...");
         
         let renderId = '';
@@ -204,26 +194,31 @@ export const videoService = {
 
             if (!response.ok) {
                 const txt = await response.text();
+                console.error("Erro Shotstack:", response.status, txt);
+                
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error("MISSING_KEY"); // Força o pedido manual se a chave for inválida
+                }
                 if (response.status === 402) throw new Error("Créditos insuficientes no Shotstack.");
-                if (response.status === 403) throw new Error("Chave de API inválida.");
-                throw new Error(`Erro Shotstack (${response.status}): ${txt}`);
+                
+                throw new Error(`Erro na API (${response.status}): ${txt}`);
             }
 
             const data = await response.json();
             renderId = data.response.id;
-            console.log("Job ID:", renderId);
+            console.log("Job ID criado:", renderId);
 
         } catch (error: any) {
-            console.error("Erro no POST:", error);
+            console.error("Erro ao enviar vídeo:", error);
             throw error;
         }
 
-        // --- POLLING ---
+        // --- 5. POLLING (GET) ---
         let attempts = 0;
         return new Promise((resolve, reject) => {
             const interval = setInterval(async () => {
                 attempts++;
-                onProgress(`Renderizando mágica... (${attempts}s)`);
+                onProgress(`Revelando filme... (${attempts}s)`);
 
                 try {
                     const res = await fetch(`${API_URL}/${renderId}`, {
@@ -240,15 +235,15 @@ export const videoService = {
                         resolve(data.response.url);
                     } else if (status === 'failed') {
                         clearInterval(interval);
-                        reject(new Error("Falha na renderização: " + data.response.error));
-                    } else if (attempts > 90) { // Timeout de 3 min
+                        reject(new Error("Falha no Shotstack: " + data.response.error));
+                    } else if (attempts > 120) { // Timeout de 4 min
                         clearInterval(interval);
-                        reject(new Error("O vídeo demorou muito para ser criado."));
+                        reject(new Error("Demorou muito! Tente novamente mais tarde."));
                     }
                 } catch (e) {
                     // Ignora erros de rede temporários no polling
                 }
-            }, 3000);
+            }, 3000); // Checa a cada 3 segundos
         });
     }
 };

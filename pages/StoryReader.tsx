@@ -50,6 +50,7 @@ const StoryReader: React.FC = () => {
     }
   };
 
+  // --- LÓGICA DE GERAÇÃO DE VÍDEO COM FALLBACK ---
   const executeVideoGeneration = async (manualKey?: string) => {
     if (!story) return;
     
@@ -61,51 +62,61 @@ const StoryReader: React.FC = () => {
             setVideoStatus(status);
         }, manualKey);
         
-        if (!videoUrl) throw new Error("URL vazia.");
+        if (!videoUrl) throw new Error("URL vazia recebida.");
 
         setVideoStatus("Abrindo Vídeo...");
-        window.open(videoUrl, '_blank');
+        // Pequeno delay para garantir que o navegador não bloqueie o popup
+        setTimeout(() => window.open(videoUrl, '_blank'), 500);
 
         setVideoStatus("Pronto! 🎬");
         setTimeout(() => setVideoStatus(''), 5000);
 
     } catch (e: any) {
-        if (e.message === 'MISSING_KEY') {
-            // FALLBACK: Pede a chave ao usuário se não encontrar no .env
-            const userKey = window.prompt("⚠️ A chave Shotstack não foi encontrada no sistema.\n\nPara continuar, cole sua SHOTSTACK_API_KEY aqui:");
+        console.error("Falha na geração:", e);
+
+        // SE O ERRO FOR CHAVE FALTANDO OU INVÁLIDA
+        if (e.message === 'MISSING_KEY' || e.message.includes('403') || e.message.includes('401')) {
+            const userKey = window.prompt(
+                "⚠️ CHAVE DE API NECESSÁRIA ⚠️\n\n" +
+                "O sistema não encontrou a chave do Shotstack configurada no servidor.\n" +
+                "Por favor, cole sua SHOTSTACK_API_KEY (Sandbox ou Prod) abaixo para continuar:"
+            );
+
             if (userKey && userKey.trim().length > 10) {
-                // Tenta novamente com a chave fornecida
+                // Tenta novamente recursivamente com a chave fornecida
+                setVideoStatus("Tentando novamente...");
                 executeVideoGeneration(userKey.trim());
+                return;
             } else {
                 alert("Operação cancelada. A chave é necessária para gerar o vídeo.");
                 setVideoStatus("Cancelado");
-                setGeneratingVideo(false);
             }
         } else {
-            console.error("Erro Vídeo:", e);
-            alert(`Erro: ${e.message}`);
+            alert(`Erro ao gerar vídeo: ${e.message}`);
             setVideoStatus("Erro ❌");
-            setGeneratingVideo(false);
         }
     } finally {
-        if (videoStatus !== 'Cancelado' && videoStatus !== 'Erro ❌') {
+        // Se ainda estiver "gerando" mas deu erro ou terminou, reseta o loading
+        if (videoStatus === 'Erro ❌' || videoStatus === 'Cancelado') {
              setGeneratingVideo(false);
+        } else {
+             // Mantém o botão desabilitado por um tempo se deu sucesso
+             setTimeout(() => setGeneratingVideo(false), 2000);
         }
     }
   };
 
   const handleGenerateVideo = async () => {
-      console.log("Botão clicado! Iniciando processo...");
-      
       // 1. Feedback Imediato
       setGeneratingVideo(true);
       setVideoStatus("Iniciando...");
 
       // 2. Validação
       if (!story) { setGeneratingVideo(false); return; }
+      
       const missingImages = story.chapters.some(c => !c.generatedImage);
       if (missingImages) {
-          alert("⚠️ Faltam imagens! Gere todas as ilustrações antes de criar o vídeo.");
+          alert("⚠️ Faltam imagens! O vídeo precisa que todos os capítulos tenham ilustrações. Aguarde elas carregarem.");
           setGeneratingVideo(false);
           setVideoStatus("");
           return;
