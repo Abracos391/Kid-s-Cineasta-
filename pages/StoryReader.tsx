@@ -83,7 +83,9 @@ const StoryReader: React.FC = () => {
             );
 
             if (userKey && userKey.trim().length > 10) {
-                // Tenta novamente recursivamente com a chave fornecida
+                // Tenta novamente recursivamente com a chave fornecida E SALVA NO STORAGE
+                localStorage.setItem('shotstack_key', userKey.trim());
+                
                 setVideoStatus("Tentando novamente...");
                 executeVideoGeneration(userKey.trim());
                 return;
@@ -96,10 +98,10 @@ const StoryReader: React.FC = () => {
             setVideoStatus("Erro ❌");
         }
     } finally {
-        // Se ainda estiver "gerando" mas deu erro ou terminou, reseta o loading
-        if (videoStatus === 'Erro ❌' || videoStatus === 'Cancelado') {
+        // Se ainda estiver "gerando" mas deu erro ou terminou (e não está em retry), reseta
+        if (videoStatus === 'Erro ❌' || videoStatus === 'Cancelado' || videoStatus.includes('Pronto')) {
              setGeneratingVideo(false);
-        } else {
+        } else if (!videoStatus.includes('Tentando')) {
              // Mantém o botão desabilitado por um tempo se deu sucesso
              setTimeout(() => setGeneratingVideo(false), 2000);
         }
@@ -495,4 +497,4 @@ const StoryReader: React.FC = () => {
   );
 };
 
-export default StoryReader;
+export default StoryRead
