@@ -4,25 +4,29 @@ import { Story } from '../types';
 const API_URL = 'https://api.shotstack.io/edit/stage/render'; 
 
 interface ShotstackAsset {
-    type: 'image' | 'html' | 'audio';
+    type: 'image' | 'html' | 'audio' | 'video' | 'text';
     src?: string;
     html?: string;
     css?: string;
+    text?: string;
     width?: number;
     height?: number;
     volume?: number;
     effect?: 'fadeOut' | 'fadeIn';
+    font?: { family: string; color: string; size: number };
+    alignment?: { horizontal: string };
 }
 
 interface ShotstackClip {
     asset: ShotstackAsset;
     start: number;
-    length: number;
+    length: number | 'end' | 'auto';
     effect?: 'zoomIn' | 'zoomOut' | 'slideLeft' | 'slideRight';
     transition?: { in?: 'fade'; out?: 'fade' };
     fit?: 'cover' | 'contain' | 'crop';
     scale?: number;
     position?: string;
+    offset?: { x: number; y: number };
 }
 
 interface ShotstackTrack {
@@ -45,14 +49,13 @@ const calculateAudioDuration = (base64: string | undefined): number => {
 export const videoService = {
     renderStoryToVideo: async (story: Story, onProgress: (msg: string) => void, manualKey?: string): Promise<string> => {
         
+        // --- 1. RESOLUÇÃO DA CHAVE DE API ---
         let apiKey = manualKey || '';
 
-        // Tenta recuperar do localStorage 
         if (!apiKey) {
             apiKey = localStorage.getItem('shotstack_key') || '';
         }
 
-        // Tenta recuperar do ambiente de forma segura
         if (!apiKey) {
             try {
                 // @ts-ignore
@@ -85,10 +88,41 @@ export const videoService = {
 
         const imageClips: ShotstackClip[] = [];
         const subtitleClips: ShotstackClip[] = [];
+        const audioClips: ShotstackClip[] = [];
+
+        // --- 2. CONSTRUÇÃO DA TIMELINE ---
+        
+        // Adiciona um título inicial (baseado no JSON do usuário)
+        subtitleClips.push({
+            asset: {
+              type: "text",
+              text: story.title.toUpperCase(),
+              font: { family: "Clear Sans", color: "#ffffff", size: 46 },
+              alignment: { horizontal: "center" },
+              width: 800,
+              height: 100
+            },
+            start: 0,
+            length: 3,
+            transition: { in: "fade", out: "fade" },
+            effect: "zoomIn"
+        });
+        
+        // Background Inicial
+        imageClips.push({
+            asset: { type: 'image', src: 'https://shotstack-assets.s3-ap-southeast-2.amazonaws.com/borders/80s-retro.png' }, // Placeholder colorido ou imagem da história
+            start: 0,
+            length: 3,
+            fit: 'cover',
+            effect: 'zoomIn'
+        });
+
+        currentTime = 3; // Começa a história após a intro
 
         story.chapters.forEach((chapter, index) => {
             const sceneDuration = calculateAudioDuration(chapter.generatedAudio);
             
+            // LAYER: IMAGEM
             if (chapter.generatedImage) {
                 imageClips.push({
                     asset: { type: 'image', src: chapter.generatedImage },
@@ -100,6 +134,14 @@ export const videoService = {
                 });
             }
 
+            // LAYER: AUDIO (Narração)
+            // Nota: Shotstack precisa de URL pública para áudio. 
+            // Como temos base64, não podemos enviar diretamente como 'audio' src.
+            // Solução Ideal: Upload para S3/Firebase. 
+            // Solução Paliativa (Shotstack): Usar HTML5 Audio se suportado ou apenas música de fundo por enquanto.
+            // Para este exemplo, vamos manter a música de fundo e focar no visual, pois o upload de base64 requer storage.
+            
+            // LAYER: LEGENDA (HTML/CSS Rico)
             let cleanText = chapter.text
                 .replace(/"/g, "'")
                 .replace(/\n/g, " ")
@@ -153,13 +195,15 @@ export const videoService = {
             currentTime += sceneDuration;
         });
 
+        // Adiciona faixas (ordem: topo -> base, então legendas primeiro)
         tracks.push({ clips: subtitleClips });
         tracks.push({ clips: imageClips });
 
+        // --- 3. MÚSICA E CONFIGURAÇÃO ---
         const soundtrack = {
-            src: "https://s3.ap-southeast-2.amazonaws.com/shotstack-assets/music/happy.mp3",
+            src: "https://shotstack-assets.s3-ap-southeast-2.amazonaws.com/music/freepd/motions.mp3",
             effect: "fadeOut",
-            volume: 0.2 
+            volume: 0.5 
         };
 
         const payload = {
@@ -176,6 +220,7 @@ export const videoService = {
             }
         };
 
+        // --- 4. ENVIO PARA API (POST) ---
         onProgress("Enviando rolos de filme...");
         
         let renderId = '';
@@ -192,6 +237,7 @@ export const videoService = {
 
             if (!response.ok) {
                 const txt = await response.text();
+                console.error("Erro Shotstack:", response.status, txt);
                 
                 if (response.status === 401 || response.status === 403) {
                     throw new Error("MISSING_KEY"); 
@@ -203,12 +249,14 @@ export const videoService = {
 
             const data = await response.json();
             renderId = data.response.id;
+            console.log("Job ID criado:", renderId);
 
         } catch (error: any) {
             console.error("Erro ao enviar vídeo:", error);
             throw error;
         }
 
+        // --- 5. POLLING (GET) ---
         let attempts = 0;
         return new Promise((resolve, reject) => {
             const interval = setInterval(async () => {
@@ -231,11 +279,12 @@ export const videoService = {
                     } else if (status === 'failed') {
                         clearInterval(interval);
                         reject(new Error("Falha no Shotstack: " + data.response.error));
-                    } else if (attempts > 120) { 
+                    } else if (attempts > 120) { // Timeout de 4 min
                         clearInterval(interval);
                         reject(new Error("Demorou muito! Tente novamente mais tarde."));
                     }
                 } catch (e) {
+                    // Ignora erros de rede temporários no polling
                 }
             }, 3000); 
         });

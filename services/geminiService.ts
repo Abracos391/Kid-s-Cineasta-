@@ -1,9 +1,31 @@
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Avatar, StoryChapter } from "../types";
 
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
+  let apiKey = '';
+  
+  // Acesso seguro ao process.env para evitar ReferenceError
+  try {
+      // @ts-ignore
+      if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+          // @ts-ignore
+          apiKey = process.env.API_KEY;
+      }
+  } catch(e) {}
+
+  // Fallback para import.meta.env (Vite)
+  if (!apiKey) {
+      try {
+          // @ts-ignore
+          if (import.meta && import.meta.env && import.meta.env.VITE_API_KEY) {
+              // @ts-ignore
+              apiKey = import.meta.env.VITE_API_KEY;
+          }
+      } catch(e) {}
+  }
+
+  // Limpeza de aspas residuais se houver
+  if (apiKey) apiKey = apiKey.replace(/"/g, '').trim();
   
   if (!apiKey || apiKey.length < 10) {
     console.error("API KEY ausente ou inválida. Verifique as configurações do Render.");
@@ -107,132 +129,131 @@ export const generateChapterIllustration = (visualDescription: string, character
 export const generateStory = async (theme: string, characters: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
   const ai = getAiClient();
   const charNames = characters.map(c => c.name).join(", ");
-  const charDescs = characters.map(c => c.description).join("; ");
+  const charDescs = characters.map(c => `${c.name}: ${c.description}`).join("; ");
+
+  const prompt = `
+    Crie uma história infantil divertida e criativa com o tema: "${theme}".
+    
+    Personagens: ${charNames}.
+    Descrições visuais: ${charDescs}.
+    
+    A história deve ter título e ser dividida em 3 a 5 capítulos curtos.
+    Para cada capítulo, forneça:
+    - Um título curto para o capítulo.
+    - O texto narrativo (adequado para crianças).
+    - Uma descrição visual detalhada da cena para gerar uma ilustração (em inglês, focando no estilo cartoon).
+    
+    Retorne APENAS um JSON válido no seguinte formato:
+    {
+      "title": "Título da História",
+      "chapters": [
+        {
+          "title": "Título do Capítulo 1",
+          "text": "Texto do capítulo...",
+          "visualDescription": "Visual description in English..."
+        }
+      ]
+    }
+  `;
 
   try {
-    const prompt = `
-      Você é um autor de livros infantis. Escreva uma história curta (4 partes) sobre "${theme}".
-      Personagens: ${charNames} (${charDescs}).
-      
-      RETORNE APENAS JSON:
-      {
-         "title": "Título",
-         "chapters": [
-            { "title": "Cap 1", "text": "...", "visualDescription": "English scene description" }
-         ]
-      }
-    `;
-
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      config: {
+        responseMimeType: 'application/json',
+      }
     });
 
-    if (response.text) return sanitizeStoryData(extractJSON(response.text));
-    throw new Error("Resposta vazia.");
-
+    const json = extractJSON(response.text || "{}");
+    const sanitized = sanitizeStoryData(json);
+    return { title: sanitized.title, chapters: sanitized.chapters };
   } catch (error) {
-    console.warn("Tentando fallback simplificado...", error);
-    try {
-        const promptSimple = `
-            Crie uma história de 4 parágrafos sobre: ${theme}. Personagens: ${charNames}.
-            Formato JSON: {"title": "X", "chapters": [{"title": "P1", "text": "...", "visualDescription": "English desc"}]}
-        `;
-        const responseSimple = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: promptSimple,
-            config: { responseMimeType: "application/json" }
-        });
-        if (responseSimple.text) return sanitizeStoryData(extractJSON(responseSimple.text));
-    } catch (finalError) {
-        throw new Error("Falha na geração da história.");
-    }
+    console.error("Erro ao gerar história:", error);
+    throw new Error("Não foi possível criar a história agora. Tente novamente.");
   }
-  throw new Error("Erro desconhecido.");
 };
 
-export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, educationalGoal: string, chapters: StoryChapter[] }> => {
-    const ai = getAiClient();
-    const studentDetails = students.map(c => `${c.name} (Visual: ${c.description})`).join("; ");
+export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, chapters: StoryChapter[], educationalGoal: string }> => {
+  const ai = getAiClient();
+  const studentNames = students.map(s => s.name).join(", ");
+  const studentDescs = students.map(s => `${s.name}: ${s.description}`).join("; ");
 
-    try {
-      const promptComplex = `
-        ATUE COMO: Pedagogo/Autor Infantil.
-        CONTEXTO: Aula sobre "${goal}" baseada na situação "${situation}".
-        PERSONAGENS: Prof. ${teacher.name} e alunos: ${studentDetails}.
-  
-        Crie uma história de 4 partes com lição de moral clara.
-        
-        JSON OBRIGATÓRIO:
+  const prompt = `
+    Você é um assistente pedagógico especializado na BNCC.
+    Crie uma fábula educativa ou história social para crianças.
+    
+    Situação/Problema Real: "${situation}"
+    Objetivo Pedagógico (BNCC): "${goal}"
+    
+    Personagens:
+    - Educador(a): ${teacher.name} (que guia e media)
+    - Alunos: ${studentNames} (que vivem a situação)
+    
+    A história deve:
+    1. Apresentar o conflito de forma lúdica.
+    2. Desenvolver a resolução com mediação do educador.
+    3. Ter uma lição de moral ou conclusão alinhada ao objetivo.
+    
+    Estruture em 3 a 5 capítulos.
+    
+    Retorne APENAS um JSON válido:
+    {
+      "title": "Título Sugestivo",
+      "educationalGoal": "${goal}",
+      "chapters": [
         {
-          "title": "Título da Aula",
-          "educationalGoal": "${goal}",
-          "chapters": [
-            {
-              "title": "Título da Parte",
-              "text": "Texto da história...",
-              "visualDescription": "Descrição da cena em INGLÊS."
-            }
-          ]
+          "title": "Título do Capítulo",
+          "text": "Texto narrativo...",
+          "visualDescription": "Detailed visual description in English for image generation..."
         }
-      `;
-  
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: promptComplex,
-        config: { responseMimeType: "application/json" }
-      });
-  
-      if (response.text) return sanitizeStoryData(extractJSON(response.text));
-      throw new Error("Resposta vazia");
-
-    } catch (error) {
-      console.warn("Tentando fallback pedagógico...", error);
-      try {
-        const promptSimple = `
-            Escreva uma história educativa curta (4 partes) sobre "${situation}" ensinando "${goal}".
-            Personagens: Prof ${teacher.name} e alunos ${studentDetails}.
-            JSON: {"title": "X", "educationalGoal": "${goal}", "chapters": [{"title": "1", "text": "...", "visualDescription": "English desc"}]}
-        `;
-
-        const responseSimple = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: promptSimple,
-            config: { responseMimeType: "application/json" }
-        });
-
-        if (responseSimple.text) return sanitizeStoryData(extractJSON(responseSimple.text));
-        
-      } catch (finalError) {
-          throw new Error("Não foi possível gerar a aula. Tente simplificar o objetivo.");
-      }
+      ]
     }
-    throw new Error("Falha desconhecida.");
-  };
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+      }
+    });
+
+    const json = extractJSON(response.text || "{}");
+    return sanitizeStoryData(json);
+  } catch (error) {
+    console.error("Erro ao gerar aula:", error);
+    throw new Error("Erro na geração pedagógica.");
+  }
+};
 
 export const generateSpeech = async (text: string): Promise<string> => {
+  const ai = getAiClient();
+  
   try {
-    const ai = getAiClient();
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text }] }],
+      model: 'gemini-2.5-flash-preview-tts',
+      contents: {
+        parts: [{ text }]
+      },
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' }, 
-          },
-        },
-      },
+            prebuiltVoiceConfig: { voiceName: 'Kore' } // 'Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'
+          }
+        }
+      }
     });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) throw new Error("Falha na geração de áudio");
-    return base64Audio;
+    if (response.candidates && response.candidates[0].content.parts[0].inlineData) {
+        return response.candidates[0].content.parts[0].inlineData.data;
+    }
+    throw new Error("Áudio não gerado.");
 
   } catch (error) {
-    console.error("Erro ao gerar áudio:", error);
-    throw error;
+    console.error("Erro no TTS:", error);
+    throw new Error("Falha ao narrar texto.");
   }
 };
