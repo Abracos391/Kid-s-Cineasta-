@@ -56,27 +56,36 @@ export const videoService = {
             apiKey = localStorage.getItem('shotstack_key') || '';
         }
 
+        // Recuperação robusta priorizando VITE_SHOTSTACK_API_KEY
         if (!apiKey) {
             try {
                 // @ts-ignore
-                if (typeof process !== 'undefined' && process.env && process.env.SHOTSTACK_API_KEY) {
+                if (typeof process !== 'undefined' && process.env) {
                     // @ts-ignore
-                    apiKey = process.env.SHOTSTACK_API_KEY;
+                    apiKey = process.env.VITE_SHOTSTACK_API_KEY || process.env.SHOTSTACK_API_KEY;
                 }
             } catch (e) {}
 
-            try {
-                // @ts-ignore
-                if (!apiKey && import.meta && import.meta.env) {
+            if (!apiKey) {
+                try {
                     // @ts-ignore
-                    apiKey = import.meta.env.SHOTSTACK_API_KEY || import.meta.env.VITE_SHOTSTACK_API_KEY;
-                }
-            } catch (e) {}
+                    if (import.meta && import.meta.env) {
+                        // @ts-ignore
+                        apiKey = import.meta.env.VITE_SHOTSTACK_API_KEY || import.meta.env.SHOTSTACK_API_KEY;
+                    }
+                } catch (e) {}
+            }
         }
 
         if (apiKey) apiKey = apiKey.replace(/"/g, '').trim();
 
         if (!apiKey || apiKey.length < 10) {
+            console.error("Chaves encontradas (debug): ", { 
+                // @ts-ignore
+                proc: typeof process !== 'undefined' ? process.env : 'N/A',
+                // @ts-ignore 
+                meta: import.meta?.env 
+            });
             throw new Error("MISSING_KEY");
         }
 
@@ -88,11 +97,10 @@ export const videoService = {
 
         const imageClips: ShotstackClip[] = [];
         const subtitleClips: ShotstackClip[] = [];
-        const audioClips: ShotstackClip[] = [];
 
         // --- 2. CONSTRUÇÃO DA TIMELINE ---
         
-        // Adiciona um título inicial (baseado no JSON do usuário)
+        // Adiciona um título inicial
         subtitleClips.push({
             asset: {
               type: "text",
@@ -110,7 +118,7 @@ export const videoService = {
         
         // Background Inicial
         imageClips.push({
-            asset: { type: 'image', src: 'https://shotstack-assets.s3-ap-southeast-2.amazonaws.com/borders/80s-retro.png' }, // Placeholder colorido ou imagem da história
+            asset: { type: 'image', src: 'https://shotstack-assets.s3-ap-southeast-2.amazonaws.com/borders/80s-retro.png' },
             start: 0,
             length: 3,
             fit: 'cover',
@@ -133,13 +141,6 @@ export const videoService = {
                     fit: 'cover'
                 });
             }
-
-            // LAYER: AUDIO (Narração)
-            // Nota: Shotstack precisa de URL pública para áudio. 
-            // Como temos base64, não podemos enviar diretamente como 'audio' src.
-            // Solução Ideal: Upload para S3/Firebase. 
-            // Solução Paliativa (Shotstack): Usar HTML5 Audio se suportado ou apenas música de fundo por enquanto.
-            // Para este exemplo, vamos manter a música de fundo e focar no visual, pois o upload de base64 requer storage.
             
             // LAYER: LEGENDA (HTML/CSS Rico)
             let cleanText = chapter.text

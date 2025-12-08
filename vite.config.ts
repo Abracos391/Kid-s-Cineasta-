@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
     return '';
   };
 
-  // 3. Busca robusta das chaves
+  // 3. Busca robusta das chaves (aceita ambos os formatos)
   const shotstackKey = getKey('SHOTSTACK_API_KEY') || getKey('VITE_SHOTSTACK_API_KEY');
   const geminiKey = getKey('API_KEY') || getKey('VITE_API_KEY');
 
@@ -38,8 +38,11 @@ export default defineConfig(({ mode }) => {
       // Injeta as variáveis no código final do navegador como strings literais
       'process.env.API_KEY': JSON.stringify(geminiKey),
       'process.env.SHOTSTACK_API_KEY': JSON.stringify(shotstackKey),
-      // Fallback para import.meta.env
-      'import.meta.env.SHOTSTACK_API_KEY': JSON.stringify(shotstackKey)
+      'process.env.VITE_SHOTSTACK_API_KEY': JSON.stringify(shotstackKey), // Injeta com prefixo VITE
+      
+      // Fallbacks para import.meta.env
+      'import.meta.env.SHOTSTACK_API_KEY': JSON.stringify(shotstackKey),
+      'import.meta.env.VITE_SHOTSTACK_API_KEY': JSON.stringify(shotstackKey) // Injeta com prefixo VITE
     }
   };
 });
