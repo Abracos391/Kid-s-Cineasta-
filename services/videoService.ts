@@ -51,8 +51,13 @@ export const videoService = {
         // --- 1. RESOLUÇÃO DA CHAVE DE API ---
         let apiKey = manualKey || '';
 
+        // Tenta recuperar do localStorage (Fallback manual do usuário)
         if (!apiKey) {
-            // Tenta recuperar do ambiente injetado pelo Vite
+            apiKey = localStorage.getItem('shotstack_key') || '';
+        }
+
+        // Tenta recuperar do ambiente injetado pelo Vite
+        if (!apiKey) {
             // @ts-ignore
             apiKey = process.env.SHOTSTACK_API_KEY || import.meta.env.SHOTSTACK_API_KEY || import.meta.env.VITE_SHOTSTACK_API_KEY;
         }
