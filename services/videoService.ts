@@ -1,50 +1,7 @@
 
 import { Story } from '../types';
 
-const API_URL = 'https://api.shotstack.io/edit/stage/render'; 
-
-interface ShotstackAsset {
-    type: 'image' | 'html' | 'audio' | 'video' | 'text';
-    src?: string;
-    html?: string;
-    css?: string;
-    text?: string;
-    width?: number;
-    height?: number;
-    volume?: number;
-    effect?: 'fadeOut' | 'fadeIn';
-    font?: { family: string; color: string; size: number };
-    alignment?: { horizontal: string };
-}
-
-interface ShotstackClip {
-    asset: ShotstackAsset;
-    start: number;
-    length: number | 'end' | 'auto';
-    effect?: 'zoomIn' | 'zoomOut' | 'slideLeft' | 'slideRight';
-    transition?: { in?: 'fade'; out?: 'fade' };
-    fit?: 'cover' | 'contain' | 'crop';
-    scale?: number;
-    position?: string;
-    offset?: { x: number; y: number };
-}
-
-interface ShotstackTrack {
-    clips: ShotstackClip[];
-}
-
-const calculateAudioDuration = (base64: string | undefined): number => {
-    if (!base64) return 5; 
-    try {
-        const binaryString = atob(base64);
-        const bytes = binaryString.length;
-        const duration = bytes / 48000;
-        return Math.max(3, duration); 
-    } catch (e) {
-        console.warn("Erro ao calcular duração do áudio:", e);
-        return 5;
-    }
-};
+const API_URL = 'https://api.json2video.com/v2/movies';
 
 export const videoService = {
     renderStoryToVideo: async (story: Story, onProgress: (msg: string) => void, manualKey?: string): Promise<string> => {
@@ -53,16 +10,15 @@ export const videoService = {
         let apiKey = manualKey || '';
 
         if (!apiKey) {
-            apiKey = localStorage.getItem('shotstack_key') || '';
+            apiKey = localStorage.getItem('json2video_key') || '';
         }
 
-        // Recuperação robusta priorizando VITE_SHOTSTACK_API_KEY
         if (!apiKey) {
             try {
                 // @ts-ignore
                 if (typeof process !== 'undefined' && process.env) {
                     // @ts-ignore
-                    apiKey = process.env.VITE_SHOTSTACK_API_KEY || process.env.SHOTSTACK_API_KEY;
+                    apiKey = process.env.VITE_JSON2VIDEO_API_KEY || process.env.JSON2VIDEO_API_KEY;
                 }
             } catch (e) {}
 
@@ -71,7 +27,7 @@ export const videoService = {
                     // @ts-ignore
                     if (import.meta && import.meta.env) {
                         // @ts-ignore
-                        apiKey = import.meta.env.VITE_SHOTSTACK_API_KEY || import.meta.env.SHOTSTACK_API_KEY;
+                        apiKey = import.meta.env.VITE_JSON2VIDEO_API_KEY || import.meta.env.JSON2VIDEO_API_KEY;
                     }
                 } catch (e) {}
             }
@@ -79,215 +35,206 @@ export const videoService = {
 
         if (apiKey) apiKey = apiKey.replace(/"/g, '').trim();
 
-        if (!apiKey || apiKey.length < 10) {
-            console.error("Chaves encontradas (debug): ", { 
-                // @ts-ignore
-                proc: typeof process !== 'undefined' ? process.env : 'N/A',
-                // @ts-ignore 
-                meta: import.meta?.env 
-            });
+        if (!apiKey || apiKey.length < 5) {
             throw new Error("MISSING_KEY");
         }
 
-        console.log("🎬 Iniciando Renderização Cineasta Kids...");
-        onProgress("Calculando o tempo do filme...");
+        console.log("🎬 Iniciando Renderização JSON2Video...");
+        onProgress("Escrevendo roteiro para o diretor...");
 
-        const tracks: ShotstackTrack[] = [];
-        let currentTime = 0;
+        // --- 2. CONSTRUÇÃO DAS CENAS (Baseado no JSON enviado) ---
+        const scenes: any[] = [];
 
-        const imageClips: ShotstackClip[] = [];
-        const subtitleClips: ShotstackClip[] = [];
-
-        // --- 2. CONSTRUÇÃO DA TIMELINE ---
-        
-        // Adiciona um título inicial
-        subtitleClips.push({
-            asset: {
-              type: "text",
-              text: story.title.toUpperCase(),
-              font: { family: "Clear Sans", color: "#ffffff", size: 46 },
-              alignment: { horizontal: "center" },
-              width: 800,
-              height: 100
-            },
-            start: 0,
-            length: 3,
-            transition: { in: "fade", out: "fade" },
-            effect: "zoomIn"
+        // Cena 1: Intro
+        scenes.push({
+            duration: 4,
+            background_color: "#40E0D0",
+            elements: [
+                {
+                    type: "text",
+                    text: "CINEASTA KID'S APRESENTA",
+                    style: {
+                        font_size: 30,
+                        color: "#ffffff",
+                        font_family: "Verdana",
+                        text_align: "center"
+                    },
+                    position: { y: "20%" }
+                },
+                {
+                    type: "text",
+                    text: story.title.toUpperCase(),
+                    style: {
+                        font_size: 50,
+                        color: "#FFD700", // Gold
+                        font_family: "Verdana",
+                        font_weight: "bold",
+                        stroke_color: "#000000",
+                        stroke_width: 2,
+                        text_align: "center"
+                    },
+                    effect: "zoom-in"
+                }
+            ]
         });
-        
-        // Background Inicial
-        imageClips.push({
-            asset: { type: 'image', src: 'https://shotstack-assets.s3-ap-southeast-2.amazonaws.com/borders/80s-retro.png' },
-            start: 0,
-            length: 3,
-            fit: 'cover',
-            effect: 'zoomIn'
-        });
 
-        currentTime = 3; // Começa a história após a intro
-
+        // Cena 2..N: Capítulos
         story.chapters.forEach((chapter, index) => {
-            const sceneDuration = calculateAudioDuration(chapter.generatedAudio);
+            // Limpa o texto para caber na legenda
+            let cleanText = chapter.text
+                .replace(/\n/g, " ")
+                .substring(0, 120);
+            if (chapter.text.length > 120) cleanText += "...";
+
+            // Se tiver imagem gerada (URL pública do Pollinations)
+            const elements: any[] = [];
             
-            // LAYER: IMAGEM
             if (chapter.generatedImage) {
-                imageClips.push({
-                    asset: { type: 'image', src: chapter.generatedImage },
-                    start: currentTime,
-                    length: sceneDuration,
-                    effect: index % 2 === 0 ? 'zoomIn' : 'zoomOut',
-                    transition: { in: 'fade', out: 'fade' },
-                    fit: 'cover'
+                elements.push({
+                    type: "image",
+                    src: chapter.generatedImage,
+                    fit: "cover", // Garante tela cheia
+                    transition: { in: "fade", out: "fade" },
+                    pan_zoom: { // Efeito Ken Burns (movimento suave)
+                        start: index % 2 === 0 ? "100%" : "120%",
+                        end: index % 2 === 0 ? "120%" : "100%",
+                        origin: "center"
+                    }
+                });
+            } else {
+                // Fallback se não tiver imagem: Fundo colorido
+                elements.push({
+                    type: "component",
+                    component: "shape",
+                    fill: index % 2 === 0 ? "#FF69B4" : "#40E0D0",
+                    width: "100%",
+                    height: "100%"
                 });
             }
-            
-            // LAYER: LEGENDA (HTML/CSS Rico)
-            let cleanText = chapter.text
-                .replace(/"/g, "'")
-                .replace(/\n/g, " ")
-                .substring(0, 140);
-            if (chapter.text.length > 140) cleanText += "...";
 
-            const html = `
-                <div class="subtitle-container">
-                    <div class="subtitle-box">
-                        <p>${cleanText}</p>
-                    </div>
-                </div>
-            `;
-            
-            const css = `
-                .subtitle-container {
-                    height: 100%;
-                    display: flex;
-                    align-items: flex-end;
-                    justify-content: center;
-                    padding-bottom: 80px;
-                }
-                .subtitle-box {
-                    background-color: #FFD700;
-                    border: 6px solid #000;
-                    border-radius: 30px;
-                    padding: 24px;
-                    width: 800px;
-                    text-align: center;
-                    box-shadow: 10px 10px 0px #000;
-                    transform: rotate(-1deg);
-                }
-                p {
-                    margin: 0;
-                    color: #000;
-                    font-family: 'Verdana', sans-serif;
-                    font-size: 38px;
-                    font-weight: 800;
-                    line-height: 1.4;
-                    text-transform: uppercase;
-                }
-            `;
-
-            subtitleClips.push({
-                asset: { type: 'html', html, css, width: 1080, height: 1920 },
-                start: currentTime,
-                length: sceneDuration,
-                transition: { in: 'fade', out: 'fade' }
+            // Legenda Estilizada (Como no exemplo do usuário)
+            elements.push({
+                type: "text",
+                text: cleanText,
+                style: {
+                    font_size: 28,
+                    color: "#000000",
+                    background_color: "#FFFACD", // Lemon Chiffon
+                    padding: "20px",
+                    border_radius: "15px",
+                    border: "3px solid #000000",
+                    font_family: "Verdana",
+                    width: "90%" // Margem lateral
+                },
+                position: { y: "80%", x: "center" },
+                transition: { in: "slide-up" }
             });
 
-            currentTime += sceneDuration;
+            // Adiciona áudio de fundo (loop) em cada cena pois não temos timeline global fácil aqui
+            // Usando uma música royalty free genérica
+            elements.push({
+                type: "audio",
+                src: "https://assets.mixkit.co/music/preview/mixkit-happy-days-getting-older-885.mp3",
+                volume: 0.3,
+                fade_out: true
+            });
+
+            scenes.push({
+                duration: 6, // Tempo de leitura
+                elements: elements,
+                transition: { type: "wipe", duration: 1 }
+            });
         });
 
-        // Adiciona faixas (ordem: topo -> base, então legendas primeiro)
-        tracks.push({ clips: subtitleClips });
-        tracks.push({ clips: imageClips });
-
-        // --- 3. MÚSICA E CONFIGURAÇÃO ---
-        const soundtrack = {
-            src: "https://shotstack-assets.s3-ap-southeast-2.amazonaws.com/music/freepd/motions.mp3",
-            effect: "fadeOut",
-            volume: 0.5 
-        };
+        // Cena Final: Créditos
+        scenes.push({
+            duration: 5,
+            background_color: "#000000",
+            elements: [
+                {
+                    type: "text",
+                    text: "FIM",
+                    style: { font_size: 80, color: "#ffffff" },
+                    effect: "zoom-out"
+                },
+                {
+                    type: "text",
+                    text: "Criado com Cineasta Kids",
+                    style: { font_size: 20, color: "#cccccc" },
+                    position: { y: "80%" }
+                }
+            ]
+        });
 
         const payload = {
-            timeline: {
-                soundtrack: soundtrack,
-                background: "#000000",
-                tracks: tracks
-            },
-            output: {
-                format: "mp4",
-                resolution: "hd",
-                aspectRatio: "9:16",
-                fps: 25
+            movie: {
+                resolution: "720p", // HD Vertical
+                quality: "high",
+                draft: false,
+                scenes: scenes
             }
         };
 
-        // --- 4. ENVIO PARA API (POST) ---
-        onProgress("Enviando rolos de filme...");
+        // --- 3. ENVIO PARA API (POST) ---
+        onProgress("Enviando para o estúdio...");
         
-        let renderId = '';
+        let projectId = '';
 
         try {
             const response = await fetch(API_URL, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': apiKey
+                    'x-api-key': apiKey,
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
                 const txt = await response.text();
-                console.error("Erro Shotstack:", response.status, txt);
-                
-                if (response.status === 401 || response.status === 403) {
-                    throw new Error("MISSING_KEY"); 
-                }
-                if (response.status === 402) throw new Error("Créditos insuficientes no Shotstack.");
-                
-                throw new Error(`Erro na API (${response.status}): ${txt}`);
+                console.error("Erro JSON2Video:", response.status, txt);
+                if (response.status === 401 || response.status === 403) throw new Error("MISSING_KEY");
+                throw new Error(`Erro API: ${txt}`);
             }
 
             const data = await response.json();
-            renderId = data.response.id;
-            console.log("Job ID criado:", renderId);
+            if (!data.success) throw new Error(data.message);
+            
+            projectId = data.project.id;
+            console.log("Projeto criado:", projectId);
 
         } catch (error: any) {
-            console.error("Erro ao enviar vídeo:", error);
+            console.error(error);
             throw error;
         }
 
-        // --- 5. POLLING (GET) ---
+        // --- 4. POLLING (GET) ---
         let attempts = 0;
         return new Promise((resolve, reject) => {
             const interval = setInterval(async () => {
                 attempts++;
-                onProgress(`Revelando filme... (${attempts}s)`);
+                onProgress(`Renderizando mágica... (${attempts}s)`);
 
                 try {
-                    const res = await fetch(`${API_URL}/${renderId}`, {
+                    const res = await fetch(`${API_URL}/${projectId}`, {
                         headers: { 'x-api-key': apiKey }
                     });
-                    
-                    if (!res.ok) return;
-
                     const data = await res.json();
-                    const status = data.response.status;
 
-                    if (status === 'done') {
+                    if (data.project.status === 'done') {
                         clearInterval(interval);
-                        resolve(data.response.url);
-                    } else if (status === 'failed') {
+                        resolve(data.movie.url);
+                    } else if (data.project.status === 'failed') {
                         clearInterval(interval);
-                        reject(new Error("Falha no Shotstack: " + data.response.error));
-                    } else if (attempts > 120) { // Timeout de 4 min
+                        reject(new Error("Renderização falhou."));
+                    } else if (attempts > 60) {
                         clearInterval(interval);
-                        reject(new Error("Demorou muito! Tente novamente mais tarde."));
+                        reject(new Error("Tempo limite excedido."));
                     }
                 } catch (e) {
-                    // Ignora erros de rede temporários no polling
+                    // Ignora erros de rede momentâneos
                 }
-            }, 3000); 
+            }, 5000); // Checa a cada 5s
         });
     }
 };

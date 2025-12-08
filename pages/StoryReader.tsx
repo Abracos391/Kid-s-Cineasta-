@@ -50,7 +50,7 @@ const StoryReader: React.FC = () => {
     }
   };
 
-  // --- LÓGICA DE GERAÇÃO DE VÍDEO COM FALLBACK ---
+  // --- LÓGICA DE GERAÇÃO DE VÍDEO (JSON2VIDEO) ---
   const executeVideoGeneration = async (manualKey?: string) => {
     if (!story) return;
     
@@ -65,7 +65,6 @@ const StoryReader: React.FC = () => {
         if (!videoUrl) throw new Error("URL vazia recebida.");
 
         setVideoStatus("Abrindo Vídeo...");
-        // Pequeno delay para garantir que o navegador não bloqueie o popup
         setTimeout(() => window.open(videoUrl, '_blank'), 500);
 
         setVideoStatus("Pronto! 🎬");
@@ -77,20 +76,20 @@ const StoryReader: React.FC = () => {
         // SE O ERRO FOR CHAVE FALTANDO OU INVÁLIDA
         if (e.message === 'MISSING_KEY' || e.message.includes('403') || e.message.includes('401')) {
             const userKey = window.prompt(
-                "⚠️ CHAVE DE API NECESSÁRIA ⚠️\n\n" +
-                "O sistema não encontrou a chave do Shotstack configurada no servidor.\n" +
-                "Por favor, cole sua SHOTSTACK_API_KEY (Sandbox ou Prod) abaixo para continuar:"
+                "⚠️ CHAVE DE API NECESSÁRIA (JSON2Video) ⚠️\n\n" +
+                "O sistema não encontrou a chave do JSON2Video configurada.\n" +
+                "Por favor, cole sua API KEY abaixo:"
             );
 
-            if (userKey && userKey.trim().length > 10) {
-                // Tenta novamente recursivamente com a chave fornecida E SALVA NO STORAGE
-                localStorage.setItem('shotstack_key', userKey.trim());
+            if (userKey && userKey.trim().length > 5) {
+                // Tenta novamente recursivamente
+                localStorage.setItem('json2video_key', userKey.trim());
                 
                 setVideoStatus("Tentando novamente...");
                 executeVideoGeneration(userKey.trim());
                 return;
             } else {
-                alert("Operação cancelada. A chave é necessária para gerar o vídeo.");
+                alert("Operação cancelada.");
                 setVideoStatus("Cancelado");
             }
         } else {
@@ -98,11 +97,9 @@ const StoryReader: React.FC = () => {
             setVideoStatus("Erro ❌");
         }
     } finally {
-        // Se ainda estiver "gerando" mas deu erro ou terminou (e não está em retry), reseta
         if (videoStatus === 'Erro ❌' || videoStatus === 'Cancelado' || videoStatus.includes('Pronto')) {
              setGeneratingVideo(false);
         } else if (!videoStatus.includes('Tentando')) {
-             // Mantém o botão desabilitado por um tempo se deu sucesso
              setTimeout(() => setGeneratingVideo(false), 2000);
         }
     }
@@ -425,7 +422,6 @@ const StoryReader: React.FC = () => {
                             </Button>
                        </div>
 
-                       {/* BOTÃO DE VÍDEO ATUALIZADO */}
                        <Button 
                             variant="danger" 
                             onClick={handleGenerateVideo} 
@@ -433,7 +429,7 @@ const StoryReader: React.FC = () => {
                             pulse={!generatingVideo}
                             className="w-full text-2xl py-4"
                         >
-                            {generatingVideo ? `🎥 ${videoStatus}` : '🎬 Gerar Filme (Shotstack)'}
+                            {generatingVideo ? `🎥 ${videoStatus}` : '🎬 Gerar Filme (Novo)'}
                         </Button>
 
                        <Button variant="secondary" onClick={handleExit} size="sm" className="mt-4 border-dashed">🚪 Salvar e Sair</Button>
