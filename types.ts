@@ -3,6 +3,7 @@ export interface User {
   id: string;
   name: string;
   whatsapp: string; // Alterado de email para whatsapp
+  password?: string; // Adicionado para autenticação
   plan: 'free' | 'premium' | 'enterprise';
   credits: number; 
   
