@@ -2,7 +2,7 @@
 import { User, Story, Avatar, SchoolMember } from '../types';
 
 const DB_NAME = 'CineastaDB';
-const DB_VERSION = 7; // VERSÃO 7: Garante reestruturação e índices robustos
+const DB_VERSION = 8; // Incrementado para forçar atualização de schema limpa
 
 const STORE_USERS = 'users';
 const STORE_STORIES = 'stories';
@@ -13,6 +13,13 @@ export const idbService = {
   
   openDB: (): Promise<IDBDatabase> => {
     return new Promise((resolve, reject) => {
+      // Proteção para navegadores sem IndexedDB
+      if (!window.indexedDB) {
+          console.error("Seu navegador não suporta IndexedDB.");
+          reject(new Error("IndexedDB não suportado"));
+          return;
+      }
+
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onupgradeneeded = (event) => {
@@ -28,13 +35,11 @@ export const idbService = {
         }
 
         if (userStore) {
-            // Garante que o índice whatsapp exista e remove antigos conflitantes
+            // Limpa índices antigos para evitar conflitos de schema
             if (userStore.indexNames.contains('email')) userStore.deleteIndex('email');
+            if (userStore.indexNames.contains('whatsapp')) userStore.deleteIndex('whatsapp');
             
-            // Recria o índice para garantir integridade na V7
-            if (userStore.indexNames.contains('whatsapp')) {
-                userStore.deleteIndex('whatsapp');
-            }
+            // Cria índice novo e limpo
             userStore.createIndex('whatsapp', 'whatsapp', { unique: true });
         }
 
@@ -81,13 +86,13 @@ export const idbService = {
     try {
         const db = await idbService.openDB();
         return new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readwrite');
-        const store = tx.objectStore(storeName);
-        const request = store.put(item); 
+            const tx = db.transaction(storeName, 'readwrite');
+            const store = tx.objectStore(storeName);
+            const request = store.put(item); 
 
-        tx.oncomplete = () => resolve(); 
-        request.onerror = () => reject(request.error);
-        tx.onerror = () => reject(tx.error);
+            tx.oncomplete = () => resolve(); 
+            request.onerror = () => reject(request.error);
+            tx.onerror = () => reject(tx.error);
         });
     } catch (e) {
         console.error(`Erro ao salvar em ${storeName}:`, e);
@@ -96,35 +101,43 @@ export const idbService = {
   },
 
   get: async (storeName: string, key: string) => {
-    const db = await idbService.openDB();
-    return new Promise<any>((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readonly');
-      const store = tx.objectStore(storeName);
-      const request = store.get(key);
+    try {
+        const db = await idbService.openDB();
+        return new Promise<any>((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            const request = store.get(key);
 
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        return null; // Falha graciosa
+    }
   },
 
   getAllByIndex: async (storeName: string, indexName: string, value: string) => {
-    const db = await idbService.openDB();
-    return new Promise<any[]>((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readonly');
-      const store = tx.objectStore(storeName);
-      
-      if (!store.indexNames.contains(indexName)) {
-          console.warn(`Índice ${indexName} não encontrado em ${storeName}. Retornando array vazio.`);
-          resolve([]);
-          return;
-      }
+    try {
+        const db = await idbService.openDB();
+        return new Promise<any[]>((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            
+            if (!store.indexNames.contains(indexName)) {
+                console.warn(`Índice ${indexName} não encontrado em ${storeName}. Retornando array vazio.`);
+                resolve([]);
+                return;
+            }
 
-      const index = store.index(indexName);
-      const request = index.getAll(value);
+            const index = store.index(indexName);
+            const request = index.getAll(value);
 
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        return [];
+    }
   },
 
   delete: async (storeName: string, key: string) => {
@@ -139,59 +152,61 @@ export const idbService = {
     });
   },
 
-  // FUNÇÃO ROBUSTA DE BUSCA DE USUÁRIO (Indexada + Varredura de Segurança)
   findUserByWhatsapp: async (whatsapp: string): Promise<User | undefined> => {
-    const db = await idbService.openDB();
-    
-    // Tentativa 1: Busca rápida pelo Índice
     try {
-        const user = await new Promise<User | undefined>((resolve, reject) => {
-            const tx = db.transaction(STORE_USERS, 'readonly');
-            const store = tx.objectStore(STORE_USERS);
-            
-            if (!store.indexNames.contains('whatsapp')) {
-                resolve(undefined); // Índice não existe, vai para o fallback
-                return;
-            }
-
-            const index = store.index('whatsapp');
-            const request = index.get(whatsapp);
-
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => resolve(undefined); 
-        });
-
-        if (user) return user;
-
-    } catch (e) {
-        console.warn("Falha na busca indexada, tentando varredura manual...", e);
-    }
-
-    // Tentativa 2: Fallback (Varredura manual) - Garante que acha se existir no banco
-    // Isso resolve o problema de login falhar mesmo com usuário cadastrado
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_USERS, 'readonly');
-        const store = tx.objectStore(STORE_USERS);
-        const request = store.openCursor();
-
-        request.onsuccess = (event) => {
-            const cursor = (event.target as IDBRequest).result;
-            if (cursor) {
-                const u = cursor.value as User;
-                // Compara removendo caracteres não numéricos por segurança
-                const dbPhone = u.whatsapp.replace(/\D/g, '');
-                const searchPhone = whatsapp.replace(/\D/g, '');
+        const db = await idbService.openDB();
+        
+        // Tentativa 1: Busca rápida pelo Índice
+        try {
+            const user = await new Promise<User | undefined>((resolve, reject) => {
+                const tx = db.transaction(STORE_USERS, 'readonly');
+                const store = tx.objectStore(STORE_USERS);
                 
-                if (dbPhone === searchPhone) {
-                    resolve(u); // ACHOU!
+                if (!store.indexNames.contains('whatsapp')) {
+                    resolve(undefined); 
                     return;
                 }
-                cursor.continue();
-            } else {
-                resolve(undefined); // Realmente não existe
-            }
-        };
-        request.onerror = () => reject(request.error);
-    });
+
+                const index = store.index('whatsapp');
+                const request = index.get(whatsapp);
+
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => resolve(undefined); 
+            });
+
+            if (user) return user;
+
+        } catch (e) {
+            console.warn("Falha na busca indexada, tentando varredura manual...", e);
+        }
+
+        // Tentativa 2: Fallback (Varredura manual)
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_USERS, 'readonly');
+            const store = tx.objectStore(STORE_USERS);
+            const request = store.openCursor();
+
+            request.onsuccess = (event) => {
+                const cursor = (event.target as IDBRequest).result;
+                if (cursor) {
+                    const u = cursor.value as User;
+                    const dbPhone = u.whatsapp ? u.whatsapp.replace(/\D/g, '') : '';
+                    const searchPhone = whatsapp.replace(/\D/g, '');
+                    
+                    if (dbPhone === searchPhone) {
+                        resolve(u);
+                        return;
+                    }
+                    cursor.continue();
+                } else {
+                    resolve(undefined);
+                }
+            };
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error("Erro ao buscar usuário:", e);
+        return undefined;
+    }
   }
 };

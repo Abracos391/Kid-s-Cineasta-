@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
 import { authService } from '../services/authService';
@@ -20,17 +21,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     const initAuth = async () => {
         try {
-            const currentUser = await authService.getCurrentUser();
-            setUser(currentUser);
+            // Timeout de 2 segundos para não travar a tela se o DB falhar
+            const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000));
+            const userPromise = authService.getCurrentUser();
+            
+            const result = await Promise.race([userPromise, timeoutPromise]);
+            
+            if (mounted) {
+                if (result && (result as User).id) {
+                    setUser(result as User);
+                }
+            }
         } catch (e) {
-            console.error(e);
+            console.error("Auth Init Error:", e);
         } finally {
-            setLoading(false);
+            if (mounted) setLoading(false);
         }
     };
     initAuth();
+    return () => { mounted = false; };
   }, []);
 
   const refreshUser = async () => {

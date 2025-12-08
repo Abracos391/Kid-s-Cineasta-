@@ -497,4 +497,4 @@ const StoryReader: React.FC = () => {
   );
 };
 
-export default StoryRead
+export default StoryReader;

@@ -14,69 +14,72 @@ import Library from './pages/Library';
 import SchoolRoom from './pages/SchoolRoom';
 import SchoolLogin from './pages/SchoolLogin';
 import SchoolLibrary from './pages/SchoolLibrary';
-import Tutorial from './pages/Tutorial'; // Importação
+import Tutorial from './pages/Tutorial';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="min-h-screen pb-12">
-          <Navbar />
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            
-            {/* Rota Pública (Porteiro da Escola) */}
-            <Route path="/school-login" element={<SchoolLogin />} />
-            
-            {/* Rota Pública (Manual/Tutorial) */}
-            <Route path="/tutorial" element={<Tutorial />} />
+    <ErrorBoundary>
+        <AuthProvider>
+        <Router>
+            <div className="min-h-screen pb-12">
+            <Navbar />
+            <Routes>
+                <Route path="/auth" element={<Auth />} />
+                
+                {/* Rota Pública (Porteiro da Escola) */}
+                <Route path="/school-login" element={<SchoolLogin />} />
+                
+                {/* Rota Pública (Manual/Tutorial) */}
+                <Route path="/tutorial" element={<Tutorial />} />
 
-            {/* Página Inicial agora é protegida (redireciona para login se não logado) */}
-            <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-            
-            <Route path="/pricing" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
-            
-            <Route path="/avatars" element={
-              <ProtectedRoute>
-                <AvatarCreator />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/create-story" element={
-              <ProtectedRoute>
-                <StoryWizard />
-              </ProtectedRoute>
-            } />
-            
-            {/* Rota Protegida (Modo Escola) */}
-            <Route path="/school" element={
-              <ProtectedRoute>
-                <SchoolRoom />
-              </ProtectedRoute>
-            } />
-            
-            {/* Rota Protegida (Biblioteca Escolar) */}
-            <Route path="/school-library" element={
-              <ProtectedRoute>
-                <SchoolLibrary />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/story/:id" element={
-              <ProtectedRoute>
-                <StoryReader />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/library" element={
-              <ProtectedRoute>
-                <Library />
-              </ProtectedRoute>
-            } />
-          </Routes>
-        </div>
-      </Router>
-    </AuthProvider>
+                {/* Página Inicial agora é protegida (redireciona para login se não logado) */}
+                <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+                
+                <Route path="/pricing" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
+                
+                <Route path="/avatars" element={
+                <ProtectedRoute>
+                    <AvatarCreator />
+                </ProtectedRoute>
+                } />
+                
+                <Route path="/create-story" element={
+                <ProtectedRoute>
+                    <StoryWizard />
+                </ProtectedRoute>
+                } />
+                
+                {/* Rota Protegida (Modo Escola) */}
+                <Route path="/school" element={
+                <ProtectedRoute>
+                    <SchoolRoom />
+                </ProtectedRoute>
+                } />
+                
+                {/* Rota Protegida (Biblioteca Escolar) */}
+                <Route path="/school-library" element={
+                <ProtectedRoute>
+                    <SchoolLibrary />
+                </ProtectedRoute>
+                } />
+                
+                <Route path="/story/:id" element={
+                <ProtectedRoute>
+                    <StoryReader />
+                </ProtectedRoute>
+                } />
+                
+                <Route path="/library" element={
+                <ProtectedRoute>
+                    <Library />
+                </ProtectedRoute>
+                } />
+            </Routes>
+            </div>
+        </Router>
+        </AuthProvider>
+    </ErrorBoundary>
   );
 };
 
