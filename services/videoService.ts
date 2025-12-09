@@ -4,12 +4,12 @@ import { Story } from '../types';
 // Usando o ambiente de STAGE para testes (gratuito/dev)
 const API_URL = 'https://api.shotstack.io/edit/stage/render'; 
 
-// Interfaces baseadas na documentação enviada pelos engenheiros
+// Interfaces simplificadas para garantir compatibilidade
 interface ShotstackAsset {
     type: 'text' | 'image' | 'audio' | 'video' | 'text-to-speech';
-    src?: string; // Para imagens/videos
-    text?: string; // Para text e text-to-speech
-    voice?: string; // Para text-to-speech
+    src?: string;
+    text?: string;
+    voice?: string;
     font?: {
         family: string;
         size: number;
@@ -18,7 +18,7 @@ interface ShotstackAsset {
     background?: {
         color: string;
         opacity: number;
-        borderRadius: number;
+        // borderRadius removido pois pode causar erro 400 se a API for estrita
     };
     volume?: number;
 }
@@ -26,7 +26,7 @@ interface ShotstackAsset {
 interface ShotstackClip {
     asset: ShotstackAsset;
     start: number;
-    length: number | 'end' | 'auto'; // 'auto' é util para TTS
+    length: number; // Forçamos number para evitar ambiguidades
     effect?: 'zoomIn' | 'zoomOut' | 'slideLeft' | 'slideRight' | 'fadeInFadeOut';
     transition?: { 
         in?: 'fade' | 'wipeRight' | 'slideLeft' | 'slideUp'; 
@@ -44,7 +44,6 @@ interface ShotstackTrack {
 // Estima a duração da leitura (aprox 3 palavras por segundo + margem)
 const estimateReadingTime = (text: string): number => {
     const wordCount = text.split(' ').length;
-    // Garante pelo menos 4 segundos
     return Math.max(4, Math.ceil(wordCount / 2.5)); 
 };
 
@@ -84,12 +83,9 @@ export const videoService = {
             throw new Error("MISSING_KEY");
         }
 
-        console.log("🎬 Iniciando Renderização Shotstack (Multi-Track)...");
+        console.log("🎬 Iniciando Renderização Shotstack (Safe Mode)...");
         onProgress("Diretor organizando as cenas...");
 
-        // --- 2. PREPARAÇÃO DAS TRILHAS (TRACKS) ---
-        // Seguindo o exemplo: Track Texto (Overlay), Track Imagem, Track Áudio (TTS), Track Música
-        
         const textClips: ShotstackClip[] = [];
         const imageClips: ShotstackClip[] = [];
         const narrationClips: ShotstackClip[] = [];
@@ -103,9 +99,9 @@ export const videoService = {
         textClips.push({
             asset: {
                 type: "text",
-                text: story.title.toUpperCase(),
+                text: story.title.toUpperCase().substring(0, 50), // Limite de segurança
                 font: { family: "Montserrat ExtraBold", size: 48, color: "#FFFFFF" },
-                background: { color: "#000000", opacity: 0.7, borderRadius: 15 }
+                background: { color: "#000000", opacity: 0.7 }
             },
             start: 0,
             length: introDuration,
@@ -114,11 +110,11 @@ export const videoService = {
             effect: "zoomIn"
         });
 
-        // Imagem Intro (Background genérico ou primeira imagem)
+        // Imagem Intro - URL Estável
         imageClips.push({
             asset: { 
                 type: 'image', 
-                src: 'https://shotstack-assets.s3-ap-southeast-2.amazonaws.com/borders/80s-retro.png' 
+                src: 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/borders/80s-retro.png' 
             },
             start: 0,
             length: introDuration,
@@ -132,39 +128,37 @@ export const videoService = {
         story.chapters.forEach((chapter, index) => {
             const duration = estimateReadingTime(chapter.text);
             
-            // 1. IMAGEM (Visual)
+            // 1. IMAGEM
             if (chapter.generatedImage) {
                 imageClips.push({
                     asset: { type: 'image', src: chapter.generatedImage },
                     start: currentTime,
                     length: duration,
                     fit: 'cover',
-                    // Alterna efeitos para dinamismo
                     effect: index % 2 === 0 ? 'zoomIn' : 'slideRight',
                     transition: { in: 'fade', out: 'fade' }
                 });
             } else {
-                 // Fallback se não tiver imagem (URL corrigida)
+                 // Fallback seguro
                  imageClips.push({
-                    asset: { type: 'image', src: 'https://shotstack-assets.s3-ap-southeast-2.amazonaws.com/images/colors/black.jpg' }, 
+                    asset: { type: 'image', src: 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/images/colors/black.jpg' }, 
                     start: currentTime,
                     length: duration,
                     fit: 'cover',
                 });
             }
 
-            // 2. LEGENDA (Texto)
-            // Corta texto longo para caber na tela
-            let cleanText = chapter.text.replace(/\n/g, " ").substring(0, 100).trim();
-            if (!cleanText) cleanText = "Cena sem texto."; // Evita erro de validação com string vazia
-            if (chapter.text.length > 100) cleanText += "...";
+            // 2. LEGENDA
+            let cleanText = chapter.text.replace(/\n/g, " ").substring(0, 90).trim();
+            if (!cleanText) cleanText = "Cena sem texto.";
+            if (chapter.text.length > 90) cleanText += "...";
 
             textClips.push({
                 asset: {
                     type: "text",
                     text: cleanText,
                     font: { family: "Open Sans", size: 28, color: "#FFFFFF" },
-                    background: { color: "#000000", opacity: 0.6, borderRadius: 12 }
+                    background: { color: "#000000", opacity: 0.6 } // Sem borderRadius para evitar erro 400
                 },
                 start: currentTime,
                 length: duration,
@@ -173,16 +167,15 @@ export const videoService = {
                 transition: { in: "slideUp", out: "fade" }
             });
 
-            // 3. NARRAÇÃO (Áudio IA Nativa do Shotstack)
-            // IMPORTANTE: Usamos 'text-to-speech' do Shotstack, não o áudio base64 do Gemini
+            // 3. NARRAÇÃO
             narrationClips.push({
                 asset: {
                     type: "text-to-speech",
                     text: cleanText,
-                    voice: "Camila" // Voz PT-BR disponível no Shotstack
+                    voice: "Camila"
                 },
                 start: currentTime,
-                length: duration // Shotstack vai tentar encaixar ou cortar.
+                length: duration
             });
 
             currentTime += duration;
@@ -193,8 +186,8 @@ export const videoService = {
             clips: [{
                 asset: {
                     type: "audio",
-                    src: "https://shotstack-assets.s3-ap-southeast-2.amazonaws.com/music/freepd/motions.mp3",
-                    volume: 0.2 // Volume baixo para não cobrir a narração
+                    src: "https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/music/freepd/motions.mp3",
+                    volume: 0.2
                 },
                 start: 0,
                 length: currentTime,
@@ -202,31 +195,27 @@ export const videoService = {
             }]
         };
 
-        // MONTAGEM DA TIMELINE (Ordem: Texto (topo) -> Imagem -> Audio -> Música)
         const timeline = {
             background: "#000000",
             tracks: [
-                { clips: textClips },      // Track 0: Textos (Ficam por cima)
-                { clips: imageClips },     // Track 1: Imagens
-                { clips: narrationClips }, // Track 2: Narração
-                musicTrack                 // Track 3: Música Fundo
+                { clips: textClips },
+                { clips: imageClips },
+                { clips: narrationClips },
+                musicTrack
             ]
         };
 
+        // Output com configurações mais padrão para evitar erro
         const payload = {
             timeline: timeline,
             output: {
                 format: "mp4",
-                resolution: "sd", // SD para ser mais rápido na conta free/stage
-                aspectRatio: "9:16", // Vertical para celular (Shorts/Reels)
+                resolution: "sd",
+                aspectRatio: "9:16",
                 fps: 25
             }
         };
 
-        // Log do Payload para debug no console do navegador (F12)
-        console.log("Shotstack Payload:", JSON.stringify(payload, null, 2));
-
-        // --- 3. ENVIO PARA API (POST) ---
         onProgress("Enviando rolos de filme...");
         
         let renderId = '';
@@ -243,24 +232,26 @@ export const videoService = {
 
             if (!response.ok) {
                 const txt = await response.text();
-                console.error("Erro Shotstack Detalhado:", response.status, txt);
+                console.error("Erro Shotstack:", response.status, txt);
                 
-                if (response.status === 401 || response.status === 403) {
-                    throw new Error("MISSING_KEY"); 
-                }
+                if (response.status === 401 || response.status === 403) throw new Error("MISSING_KEY"); 
                 
-                // Tenta extrair a mensagem de erro exata do JSON
                 let errorDetails = txt;
                 try {
                     const jsonError = JSON.parse(txt);
+                    // Tenta capturar mensagens de validação aninhadas
                     if (jsonError.response && jsonError.response.error) {
-                        errorDetails = JSON.stringify(jsonError.response.error);
+                        if (Array.isArray(jsonError.response.error.details)) {
+                            errorDetails = jsonError.response.error.details.join(', ');
+                        } else {
+                            errorDetails = JSON.stringify(jsonError.response.error);
+                        }
                     } else if (jsonError.message) {
-                         errorDetails = jsonError.message;
+                        errorDetails = jsonError.message;
                     }
                 } catch(e) {}
 
-                throw new Error(`Erro Shotstack (${response.status}): ${errorDetails}`);
+                throw new Error(`Erro Shotstack: ${errorDetails}`);
             }
 
             const data = await response.json();
@@ -268,11 +259,10 @@ export const videoService = {
             console.log("Job ID criado:", renderId);
 
         } catch (error: any) {
-            console.error("Erro ao enviar vídeo:", error);
+            console.error("Erro envio:", error);
             throw error;
         }
 
-        // --- 4. POLLING (GET) ---
         let attempts = 0;
         return new Promise((resolve, reject) => {
             const interval = setInterval(async () => {
@@ -294,15 +284,12 @@ export const videoService = {
                         resolve(data.response.url);
                     } else if (status === 'failed') {
                         clearInterval(interval);
-                        const errorMsg = data.response.error ? JSON.stringify(data.response.error) : "Erro desconhecido";
-                        reject(new Error(`Falha no Shotstack: ${errorMsg}`));
-                    } else if (attempts > 120) { // Timeout de 4 min
+                        reject(new Error("Falha no Shotstack: " + JSON.stringify(data.response.error)));
+                    } else if (attempts > 120) {
                         clearInterval(interval);
-                        reject(new Error("Demorou muito! Tente novamente mais tarde."));
+                        reject(new Error("Timeout."));
                     }
-                } catch (e) {
-                    // Ignora erros de rede temporários no polling
-                }
+                } catch (e) {}
             }, 3000); 
         });
     }
