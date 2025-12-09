@@ -44,7 +44,8 @@ interface ShotstackTrack {
 // Estima a duração da leitura (aprox 3 palavras por segundo + margem)
 const estimateReadingTime = (text: string): number => {
     const wordCount = text.split(' ').length;
-    return Math.max(5, Math.ceil(wordCount / 2.5)); 
+    // Garante pelo menos 4 segundos
+    return Math.max(4, Math.ceil(wordCount / 2.5)); 
 };
 
 export const videoService = {
@@ -143,9 +144,9 @@ export const videoService = {
                     transition: { in: 'fade', out: 'fade' }
                 });
             } else {
-                 // Fallback se não tiver imagem
+                 // Fallback se não tiver imagem (URL corrigida)
                  imageClips.push({
-                    asset: { type: 'image', src: 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/images/colors/black.jpg' }, // Placeholder
+                    asset: { type: 'image', src: 'https://shotstack-assets.s3-ap-southeast-2.amazonaws.com/images/colors/black.jpg' }, 
                     start: currentTime,
                     length: duration,
                     fit: 'cover',
@@ -154,7 +155,8 @@ export const videoService = {
 
             // 2. LEGENDA (Texto)
             // Corta texto longo para caber na tela
-            let cleanText = chapter.text.replace(/\n/g, " ").substring(0, 100);
+            let cleanText = chapter.text.replace(/\n/g, " ").substring(0, 100).trim();
+            if (!cleanText) cleanText = "Cena sem texto."; // Evita erro de validação com string vazia
             if (chapter.text.length > 100) cleanText += "...";
 
             textClips.push({
@@ -221,6 +223,9 @@ export const videoService = {
             }
         };
 
+        // Log do Payload para debug no console do navegador (F12)
+        console.log("Shotstack Payload:", JSON.stringify(payload, null, 2));
+
         // --- 3. ENVIO PARA API (POST) ---
         onProgress("Enviando rolos de filme...");
         
@@ -238,15 +243,24 @@ export const videoService = {
 
             if (!response.ok) {
                 const txt = await response.text();
-                console.error("Erro Shotstack:", response.status, txt);
+                console.error("Erro Shotstack Detalhado:", response.status, txt);
                 
                 if (response.status === 401 || response.status === 403) {
                     throw new Error("MISSING_KEY"); 
                 }
-                if (response.status === 402) throw new Error("Créditos insuficientes no Shotstack.");
-                if (response.status === 400) throw new Error("Erro de Validação: Verifique os dados.");
                 
-                throw new Error(`Erro na API (${response.status}): ${txt}`);
+                // Tenta extrair a mensagem de erro exata do JSON
+                let errorDetails = txt;
+                try {
+                    const jsonError = JSON.parse(txt);
+                    if (jsonError.response && jsonError.response.error) {
+                        errorDetails = JSON.stringify(jsonError.response.error);
+                    } else if (jsonError.message) {
+                         errorDetails = jsonError.message;
+                    }
+                } catch(e) {}
+
+                throw new Error(`Erro Shotstack (${response.status}): ${errorDetails}`);
             }
 
             const data = await response.json();
@@ -280,7 +294,8 @@ export const videoService = {
                         resolve(data.response.url);
                     } else if (status === 'failed') {
                         clearInterval(interval);
-                        reject(new Error("Falha no Shotstack: " + JSON.stringify(data.response.error)));
+                        const errorMsg = data.response.error ? JSON.stringify(data.response.error) : "Erro desconhecido";
+                        reject(new Error(`Falha no Shotstack: ${errorMsg}`));
                     } else if (attempts > 120) { // Timeout de 4 min
                         clearInterval(interval);
                         reject(new Error("Demorou muito! Tente novamente mais tarde."));
