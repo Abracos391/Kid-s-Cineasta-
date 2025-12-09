@@ -1,12 +1,13 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { analyzeFaceForAvatar, generateCaricatureImage } from '../services/geminiService';
 import { dbService } from '../services/dbService';
 import { Avatar } from '../types';
 import { useAuth } from '../context/AuthContext';
+
+const { useNavigate, useSearchParams } = ReactRouterDOM;
 
 const AvatarCreator: React.FC = () => {
   const navigate = useNavigate();

@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { Avatar, SchoolMember, SchoolRole, Story } from '../types';
@@ -8,6 +7,8 @@ import { generatePedagogicalStory } from '../services/geminiService';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
 import { dbService } from '../services/dbService';
+
+const { useNavigate } = ReactRouterDOM;
 
 const SchoolRoom: React.FC = () => {
   const navigate = useNavigate();

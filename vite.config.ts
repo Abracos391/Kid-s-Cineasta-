@@ -17,14 +17,14 @@ export default defineConfig(({ mode }) => {
   };
 
   // 3. Busca robusta das chaves
-  // Mudamos de SHOTSTACK para JSON2VIDEO
-  const videoKey = getKey('JSON2VIDEO_API_KEY') || getKey('VITE_JSON2VIDEO_API_KEY');
+  // Voltamos para SHOTSTACK baseado na documentação recebida
+  const shotstackKey = getKey('SHOTSTACK_API_KEY') || getKey('VITE_SHOTSTACK_API_KEY');
   const geminiKey = getKey('API_KEY') || getKey('VITE_API_KEY');
 
   // Logs visíveis apenas no terminal de build do Render
   console.log('--- VITE BUILD CONFIG ---');
   console.log(`Mode: ${mode}`);
-  console.log(`Video API Key detected: ${videoKey ? 'YES' : 'NO'}`);
+  console.log(`Shotstack Key detected: ${shotstackKey ? 'YES' : 'NO'}`);
   console.log(`Gemini Key detected: ${geminiKey ? 'YES' : 'NO'}`);
   console.log('-------------------------');
 
@@ -38,12 +38,12 @@ export default defineConfig(({ mode }) => {
     define: {
       // Injeta as variáveis no código final
       'process.env.API_KEY': JSON.stringify(geminiKey),
-      'process.env.JSON2VIDEO_API_KEY': JSON.stringify(videoKey),
-      'process.env.VITE_JSON2VIDEO_API_KEY': JSON.stringify(videoKey),
+      'process.env.SHOTSTACK_API_KEY': JSON.stringify(shotstackKey),
+      'process.env.VITE_SHOTSTACK_API_KEY': JSON.stringify(shotstackKey),
       
       // Fallbacks
-      'import.meta.env.JSON2VIDEO_API_KEY': JSON.stringify(videoKey),
-      'import.meta.env.VITE_JSON2VIDEO_API_KEY': JSON.stringify(videoKey)
+      'import.meta.env.SHOTSTACK_API_KEY': JSON.stringify(shotstackKey),
+      'import.meta.env.VITE_SHOTSTACK_API_KEY': JSON.stringify(shotstackKey)
     }
   };
 });

@@ -1,11 +1,12 @@
-
 import React, { useEffect, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { Avatar, Story } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { dbService } from '../services/dbService';
+
+const { Link } = ReactRouterDOM;
 
 type FilterType = 'all' | 'adventure' | 'educational';
 

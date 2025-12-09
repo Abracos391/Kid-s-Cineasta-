@@ -1,8 +1,9 @@
-
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+
+const { Link, useNavigate } = ReactRouterDOM;
 
 const Tutorial: React.FC = () => {
   const navigate = useNavigate();

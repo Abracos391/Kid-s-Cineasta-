@@ -1,10 +1,11 @@
-
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import { useNavigate } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
+
+const { useNavigate } = ReactRouterDOM;
 
 const Pricing: React.FC = () => {
   const { user, refreshUser } = useAuth();

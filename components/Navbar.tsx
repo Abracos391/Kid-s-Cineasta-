@@ -1,8 +1,9 @@
-
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Button from './ui/Button';
+
+const { Link, useLocation } = ReactRouterDOM;
 
 const Navbar: React.FC = () => {
   const location = useLocation();

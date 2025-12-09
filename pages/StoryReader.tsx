@@ -1,6 +1,5 @@
-
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import { Story } from '../types';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
@@ -11,6 +10,8 @@ import { dbService } from '../services/dbService';
 import { videoService } from '../services/videoService';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+
+const { useParams, useNavigate } = ReactRouterDOM;
 
 const StoryReader: React.FC = () => {
   const { id } = useParams();
@@ -50,7 +51,7 @@ const StoryReader: React.FC = () => {
     }
   };
 
-  // --- LÓGICA DE GERAÇÃO DE VÍDEO (JSON2VIDEO) ---
+  // --- LÓGICA DE GERAÇÃO DE VÍDEO (SHOTSTACK) ---
   const executeVideoGeneration = async (manualKey?: string) => {
     if (!story) return;
     
@@ -76,14 +77,14 @@ const StoryReader: React.FC = () => {
         // SE O ERRO FOR CHAVE FALTANDO OU INVÁLIDA
         if (e.message === 'MISSING_KEY' || e.message.includes('403') || e.message.includes('401')) {
             const userKey = window.prompt(
-                "⚠️ CHAVE DE API NECESSÁRIA (JSON2Video) ⚠️\n\n" +
-                "O sistema não encontrou a chave do JSON2Video configurada.\n" +
+                "⚠️ CHAVE DE API NECESSÁRIA (Shotstack) ⚠️\n\n" +
+                "O sistema não encontrou a chave do Shotstack configurada.\n" +
                 "Por favor, cole sua API KEY abaixo:"
             );
 
             if (userKey && userKey.trim().length > 5) {
                 // Tenta novamente recursivamente
-                localStorage.setItem('json2video_key', userKey.trim());
+                localStorage.setItem('shotstack_key', userKey.trim());
                 
                 setVideoStatus("Tentando novamente...");
                 executeVideoGeneration(userKey.trim());

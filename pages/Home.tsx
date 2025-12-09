@@ -1,8 +1,9 @@
-
 import React from 'react';
-import { Link } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+
+const { Link } = ReactRouterDOM;
 
 const Home: React.FC = () => {
   return (
