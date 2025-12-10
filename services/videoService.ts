@@ -1,1 +1,1 @@
-// Funcionalidade de vídeo removida.
+// Funcionalidade de vídeo desativada para manter o app leve e funcional.
