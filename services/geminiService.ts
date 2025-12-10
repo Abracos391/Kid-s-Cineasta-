@@ -10,28 +10,44 @@ const getAiClient = () => {
   
   if (!apiKey) {
       console.error("API Key inválida ou não encontrada.");
-      throw new Error("Chave de API do Google não configurada.");
+      throw new Error("Chave de API do Google não configurada no arquivo .env");
   }
   return new GoogleGenAI({ apiKey });
 };
 
-// --- HELPER ROBUSTO DE PARSING ---
+// --- TRATAMENTO DE ERROS DA API ---
+const handleGenAIError = (error: any) => {
+  const errStr = JSON.stringify(error || {});
+  
+  // Erro específico de chave vazada/bloqueada
+  if (errStr.includes("leaked") || errStr.includes("PERMISSION_DENIED") || errStr.includes("API key not valid")) {
+    throw new Error("🚨 SUA CHAVE API FOI BLOQUEADA PELO GOOGLE. O Google detectou que sua chave vazou. Crie uma nova chave em aistudio.google.com e atualize seu .env");
+  }
+  
+  // Erro de cota
+  if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED")) {
+      throw new Error("⏳ Cota de uso da IA excedida. Aguarde alguns minutos e tente novamente.");
+  }
+
+  // Erro de rede ou desconhecido
+  console.error("Gemini Error Raw:", error);
+  throw error;
+};
+
+// --- HELPER DE PARSING ---
 const cleanAndParseJSON = (text: string | undefined): any => {
   if (!text) throw new Error("A IA retornou uma resposta vazia.");
 
   try {
-    // 1. Tenta parse direto (caso ideal)
     return JSON.parse(text);
   } catch (e) {
-    // 2. Limpeza de Markdown (caso comum: ```json ... ```)
-    // Remove ```json, ``` e espaços extras
+    // Limpeza agressiva de Markdown
     const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-    
     try {
       return JSON.parse(cleanText);
     } catch (e2) {
-      console.error("Falha fatal ao ler JSON. Texto recebido:", text);
-      throw new Error("A IA não gerou um formato válido. Tente novamente.");
+      console.error("Falha ao ler JSON:", text);
+      throw new Error("Erro de formatação da IA. Tente novamente.");
     }
   }
 };
@@ -52,8 +68,8 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
     });
     return response.text || "Cute cartoon character";
   } catch (error) {
-    console.error("Erro analyzeFace:", error);
-    return "Happy child cartoon character";
+    handleGenAIError(error);
+    return "Happy child cartoon character"; // Fallback seguro
   }
 };
 
@@ -71,7 +87,7 @@ export const generateChapterIllustration = (visualDescription: string, character
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
 };
 
-// SCHEMA PARA HISTÓRIA
+// SCHEMA OTIMIZADO PARA HISTÓRIA
 const storySchema: Schema = {
   type: Type.OBJECT,
   properties: {
@@ -98,13 +114,13 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
   const charContext = characters.map(c => `${c.name} (${c.description})`).join("; ");
 
   const prompt = `
-    Crie uma história infantil divertida e criativa.
+    Crie uma história infantil curta e divertida.
     Tema: "${theme}".
     Personagens: ${charContext}.
     
-    A história deve ter um Título e exatamente 3 capítulos curtos.
-    O texto deve ser em Português do Brasil.
-    A descrição visual (visualDescription) deve ser em Inglês para geração de imagem.
+    Estrutura: Título e exatamente 3 capítulos curtos.
+    Idioma: Português do Brasil.
+    VisualDescription: Em Inglês (prompt para imagem).
   `;
 
   try {
@@ -119,15 +135,15 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
 
     const json = cleanAndParseJSON(response.text);
     
-    if (!json.title || !json.chapters) {
-        throw new Error("Estrutura de história incompleta.");
+    if (!json.title || !json.chapters || !Array.isArray(json.chapters)) {
+        throw new Error("A IA gerou uma história incompleta. Tente outro tema.");
     }
 
     return { title: json.title, chapters: json.chapters };
 
   } catch (error) {
-    console.error("generateStory Error:", error);
-    throw error; // Repassa o erro original para mostrar no Wizard
+    handleGenAIError(error);
+    throw error;
   }
 };
 
@@ -136,12 +152,10 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
   const names = students.map(s => s.name).join(", ");
 
   const prompt = `
-    Crie uma fábula educativa escolar curta.
+    Crie uma fábula educativa escolar.
     Situação: "${situation}".
-    Objetivo Pedagógico: "${goal}".
+    Objetivo Pedagógico (BNCC): "${goal}".
     Professor: ${teacher.name}. Alunos: ${names}.
-    
-    A história deve ensinar o objetivo através da situação.
   `;
 
   try {
@@ -155,7 +169,6 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
     });
 
     const json = cleanAndParseJSON(response.text);
-    
     return { 
         title: json.title, 
         chapters: json.chapters, 
@@ -163,14 +176,14 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
     };
 
   } catch (error) {
-    console.error("generatePedagogicalStory Error:", error);
-    throw new Error("Erro ao gerar conteúdo escolar.");
+    handleGenAIError(error);
+    throw error;
   }
 };
 
 export const generateSpeech = async (text: string): Promise<string> => {
-  const ai = getAiClient();
   try {
+    const ai = getAiClient();
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-preview-tts',
       contents: { parts: [{ text }] },
@@ -184,10 +197,10 @@ export const generateSpeech = async (text: string): Promise<string> => {
 
     const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (audioData) return audioData;
-    throw new Error("A IA não retornou áudio.");
+    throw new Error("Áudio não gerado.");
 
   } catch (error) {
-    console.error("TTS Error:", error);
-    throw new Error("Falha na narração.");
+    handleGenAIError(error);
+    throw error;
   }
 };

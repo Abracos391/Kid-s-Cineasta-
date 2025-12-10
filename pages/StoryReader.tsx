@@ -82,15 +82,19 @@ const StoryReader: React.FC = () => {
       const chapter = story.chapters[activeChapterIndex];
       if (!chapter.generatedImage) {
         const genImage = async () => {
-            const charsDesc = story.characters ? story.characters.map(c => `${c.name} (${c.description})`).join(', ') : '';
-            const imageUrl = generateChapterIllustration(chapter.visualDescription, charsDesc);
-            
-            const updatedChapters = [...story.chapters];
-            updatedChapters[activeChapterIndex] = { ...chapter, generatedImage: imageUrl };
-            
-            const updatedStory = { ...story, chapters: updatedChapters };
-            setStory(updatedStory);
-            updateStoryInDB(updatedStory);
+            try {
+                const charsDesc = story.characters ? story.characters.map(c => `${c.name} (${c.description})`).join(', ') : '';
+                const imageUrl = generateChapterIllustration(chapter.visualDescription, charsDesc);
+                
+                const updatedChapters = [...story.chapters];
+                updatedChapters[activeChapterIndex] = { ...chapter, generatedImage: imageUrl };
+                
+                const updatedStory = { ...story, chapters: updatedChapters };
+                setStory(updatedStory);
+                updateStoryInDB(updatedStory);
+            } catch (e) {
+                console.error("Erro ao gerar imagem (não crítico):", e);
+            }
         }
         genImage();
       }
@@ -110,9 +114,9 @@ const StoryReader: React.FC = () => {
       const updatedStory = { ...story, chapters: updatedChapters };
       setStory(updatedStory);
       updateStoryInDB(updatedStory);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Erro ao gerar áudio. Tente novamente.");
+      alert(`Erro na narração: ${error.message || 'Falha na conexão com IA'}`);
     } finally {
       setGeneratingAudio(false);
     }

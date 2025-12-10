@@ -21,31 +21,23 @@ const StoryWizard: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [canCreate, setCanCreate] = useState(true);
 
-  // Carrega avatares com retry simples
   useEffect(() => {
     const loadAvatars = async () => {
         if (!user) return;
         try {
-            console.log("Carregando avatares para o wizard...");
             const userAvatars = await dbService.getUserAvatars(user.id);
-            console.log("Avatares carregados:", userAvatars.length);
             setAvatars(userAvatars);
             
-            // Verifica créditos sem bloquear navegação
             const check = authService.canCreateStory(user);
             setCanCreate(check.allowed);
             if (!check.allowed) {
                 setErrorMsg(`⚠️ ${check.reason}`);
             }
-
         } catch (e) {
             console.error("Erro ao carregar avatares:", e);
         }
     };
-    
     loadAvatars();
-
-    // Listener para recarregar caso o usuário volte de outra aba/janela
     const onFocus = () => loadAvatars();
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
@@ -65,17 +57,10 @@ const StoryWizard: React.FC = () => {
 
   const handleGenerate = async () => {
     setErrorMsg('');
-    if (!theme.trim()) {
-        alert("Por favor, digite sobre o que será a história!");
-        return;
-    }
-    if (selectedAvatarIds.length === 0) {
-        alert("Selecione pelo menos um personagem!");
-        return;
-    }
+    if (!theme.trim()) { alert("Por favor, digite sobre o que será a história!"); return; }
+    if (selectedAvatarIds.length === 0) { alert("Selecione pelo menos um personagem!"); return; }
     if (!user) return;
 
-    // Verificação final no momento do clique
     const check = authService.canCreateStory(user);
     if (!check.allowed) {
         if (confirm(`${check.reason}\n\n✨ Seus créditos acabaram por hoje. Deseja ver os planos Premium ou ir para sua Biblioteca?`)) {
@@ -88,9 +73,8 @@ const StoryWizard: React.FC = () => {
     const selectedChars = avatars.filter(a => selectedAvatarIds.includes(a.id));
 
     try {
-      console.log("Iniciando geração de história...");
+      // GERAÇÃO DA HISTÓRIA
       const storyData = await generateStory(theme, selectedChars);
-      console.log("História gerada com sucesso:", storyData.title);
       
       const storyId = crypto.randomUUID();
       const fullStory = {
@@ -105,19 +89,16 @@ const StoryWizard: React.FC = () => {
 
       await authService.consumeStoryCredit(user.id, check.type || 'free');
       refreshUser();
-
-      // SALVAR NO BANCO
       await dbService.saveStory(user.id, fullStory);
 
-      // DELAY DE SEGURANÇA: Espera 500ms para garantir que o banco gravou os dados antes de navegar
       setTimeout(() => {
           navigate(`/story/${storyId}`);
       }, 500);
 
     } catch (error: any) {
       console.error("Erro na integração:", error);
-      const msg = error?.message || "Erro desconhecido";
-      setErrorMsg(`Ops! O robô escritor teve um problema: ${msg}`);
+      // Exibe a mensagem de erro formatada do geminiService
+      setErrorMsg(error.message || "Erro desconhecido ao criar história.");
     } finally {
       setLoading(false);
     }
@@ -203,8 +184,8 @@ const StoryWizard: React.FC = () => {
 
           <div className="transform hover:scale-105 transition-transform relative group">
              {errorMsg && (
-                 <div className="bg-white border-4 border-black text-black p-4 rounded-xl mb-4 shadow-doodle text-center">
-                     <p className="font-heading text-xl mb-2 text-red-500">{errorMsg}</p>
+                 <div className="bg-white border-4 border-red-500 text-black p-4 rounded-xl mb-4 shadow-doodle text-center animate-wobble-slow">
+                     <p className="font-heading text-xl text-red-600 leading-tight">{errorMsg}</p>
                  </div>
              )}
              
