@@ -20,6 +20,9 @@ const StoryWizard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [canCreate, setCanCreate] = useState(true);
+  
+  // Estado específico para o erro de chave vazada
+  const [isKeyLeaked, setIsKeyLeaked] = useState(false);
 
   useEffect(() => {
     const loadAvatars = async () => {
@@ -57,6 +60,8 @@ const StoryWizard: React.FC = () => {
 
   const handleGenerate = async () => {
     setErrorMsg('');
+    setIsKeyLeaked(false);
+    
     if (!theme.trim()) { alert("Por favor, digite sobre o que será a história!"); return; }
     if (selectedAvatarIds.length === 0) { alert("Selecione pelo menos um personagem!"); return; }
     if (!user) return;
@@ -97,12 +102,55 @@ const StoryWizard: React.FC = () => {
 
     } catch (error: any) {
       console.error("Erro na integração:", error);
-      // Exibe a mensagem de erro formatada do geminiService
-      setErrorMsg(error.message || "Erro desconhecido ao criar história.");
+      
+      const errStr = JSON.stringify(error, Object.getOwnPropertyNames(error)).toLowerCase();
+      const msg = (error.message || '').toLowerCase();
+      
+      // Detecção agressiva do erro de chave vazada
+      if (
+          msg.includes("leaked") || 
+          msg.includes("critical_api_key_leaked") || 
+          errStr.includes("leaked") ||
+          errStr.includes("permission_denied")
+         ) {
+          setIsKeyLeaked(true);
+      } else {
+          setErrorMsg(error.message || "Erro desconhecido ao criar história.");
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  // UI Especial para quando a chave vazou
+  if (isKeyLeaked) {
+      return (
+          <div className="max-w-3xl mx-auto px-4 py-12 text-center">
+              <Card color="orange" className="animate-wobble-slow border-red-500 border-4">
+                  <div className="text-6xl mb-4">🚨</div>
+                  <h1 className="font-heading text-3xl mb-4 text-red-600">Ação Necessária: Chave de API Bloqueada</h1>
+                  <p className="font-sans text-xl font-bold text-gray-800 mb-6">
+                      O Google detectou que a chave de API (API Key) usada neste projeto vazou publicamente e a desativou por segurança.
+                  </p>
+                  
+                  <div className="bg-white p-6 rounded-xl border-2 border-black text-left space-y-4 mb-6">
+                      <p className="font-bold">Como resolver (para o desenvolvedor):</p>
+                      <ol className="list-decimal pl-5 space-y-2">
+                          <li>Acesse o <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-600 underline">Google AI Studio</a>.</li>
+                          <li>Delete a chave antiga que vazou.</li>
+                          <li>Crie uma nova API Key.</li>
+                          <li>Volte ao código e atualize o arquivo <code>.env</code> com a nova chave.</li>
+                          <li>Reinicie o servidor do projeto.</li>
+                      </ol>
+                  </div>
+                  
+                  <Button onClick={() => setIsKeyLeaked(false)} variant="secondary">
+                      Tentar Novamente (Após trocar a chave)
+                  </Button>
+              </Card>
+          </div>
+      );
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 pb-20">

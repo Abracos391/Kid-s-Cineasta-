@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
+import { jsPDF } from "jspdf";
 import { Story } from '../types';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
@@ -20,6 +21,7 @@ const StoryReader: React.FC = () => {
   const [activeChapterIndex, setActiveChapterIndex] = useState(0);
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [processingDownload, setProcessingDownload] = useState(false);
 
   // --- ACTIONS ---
 
@@ -122,6 +124,195 @@ const StoryReader: React.FC = () => {
     }
   };
 
+  // --- DOWNLOAD FUNCIONALITIES ---
+
+  const decodeBase64ToBytes = (base64: string): Uint8Array => {
+      const binaryString = atob(base64);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+      }
+      return bytes;
+  };
+
+  const downloadFullAudio = async () => {
+    if (!story || !story.chapters) return;
+
+    setProcessingDownload(true);
+    try {
+        const audioBuffers: Uint8Array[] = [];
+        let totalLength = 0;
+
+        // 1. Gather all audio
+        for (const chapter of story.chapters) {
+            if (!chapter.generatedAudio) {
+                alert("Alguns capítulos ainda não têm áudio. Gerando agora...");
+                const newAudio = await generateSpeech(chapter.text);
+                chapter.generatedAudio = newAudio;
+            }
+            const bytes = decodeBase64ToBytes(chapter.generatedAudio!);
+            audioBuffers.push(bytes);
+            totalLength += bytes.length;
+        }
+
+        // 2. Concatenate raw PCM
+        const mergedBuffer = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const buffer of audioBuffers) {
+            mergedBuffer.set(buffer, offset);
+            offset += buffer.length;
+        }
+
+        // 3. Create WAV Header
+        const wavHeader = new ArrayBuffer(44);
+        const view = new DataView(wavHeader);
+        const writeString = (offset: number, string: string) => {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        };
+
+        const sampleRate = 24000;
+        const numChannels = 1;
+        const bitsPerSample = 16;
+        const fileSize = 36 + mergedBuffer.length;
+
+        writeString(0, 'RIFF');
+        view.setUint32(4, fileSize, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true);
+        view.setUint16(32, numChannels * (bitsPerSample / 8), true);
+        view.setUint16(34, bitsPerSample, true);
+        writeString(36, 'data');
+        view.setUint32(40, mergedBuffer.length, true);
+
+        // 4. Download
+        const blob = new Blob([wavHeader, mergedBuffer], { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `CineastaKids_${story.title.replace(/\s+/g, '_')}_AudioCompleto.wav`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+    } catch (e) {
+        console.error("Erro ao gerar áudio completo:", e);
+        alert("Erro ao criar o áudio completo.");
+    } finally {
+        setProcessingDownload(false);
+    }
+  };
+
+  const downloadPDF = async () => {
+    if (!story || !story.chapters) return;
+    setProcessingDownload(true);
+
+    try {
+        // Inicializa PDF em formato Paisagem A4
+        const doc = new jsPDF({
+            orientation: "landscape",
+            unit: "mm",
+            format: "a4"
+        });
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        // --- CAPA ---
+        doc.setFillColor(255, 250, 205); // Cream color
+        doc.rect(0, 0, pageWidth, pageHeight, "F");
+        
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(40);
+        doc.setTextColor(255, 69, 0); // Orange
+        doc.text(story.title, pageWidth / 2, 60, { align: "center", maxWidth: pageWidth - 40 });
+
+        doc.setFontSize(20);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Um filme de: ${user?.name || 'Autor Cineasta Kids'}`, pageWidth / 2, pageHeight - 40, { align: "center" });
+
+        // Tenta colocar imagem do primeiro personagem na capa se existir
+        if (story.characters && story.characters[0]) {
+             try {
+                const imgData = await fetchImageAsBase64(story.characters[0].imageUrl);
+                doc.addImage(imgData, 'JPEG', (pageWidth/2) - 30, 80, 60, 60);
+             } catch(e) {}
+        }
+
+        // --- CAPÍTULOS ---
+        for (let i = 0; i < story.chapters.length; i++) {
+            const chapter = story.chapters[i];
+            doc.addPage();
+            
+            // Fundo
+            doc.setFillColor(255, 255, 255);
+            doc.rect(0, 0, pageWidth, pageHeight, "F");
+            
+            // Moldura
+            doc.setLineWidth(2);
+            doc.setDrawColor(0,0,0);
+            doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
+
+            // Imagem (Lado Esquerdo ou Topo)
+            if (chapter.generatedImage) {
+                try {
+                    const imgBase64 = await fetchImageAsBase64(chapter.generatedImage);
+                    // Imagem centralizada ocupando metade superior
+                    const imgW = 120;
+                    const imgH = 80;
+                    const imgX = (pageWidth - imgW) / 2;
+                    doc.addImage(imgBase64, "JPEG", imgX, 20, imgW, imgH);
+                } catch (e) {
+                    doc.text("[Imagem não carregada]", pageWidth/2, 60, {align: "center"});
+                }
+            }
+
+            // Texto (Abaixo)
+            doc.setFontSize(24);
+            doc.setTextColor(128, 0, 128); // Purple title
+            doc.text(chapter.title, pageWidth / 2, 120, { align: "center" });
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(16);
+            doc.setTextColor(0, 0, 0);
+            
+            const splitText = doc.splitTextToSize(chapter.text, pageWidth - 60);
+            doc.text(splitText, 30, 140);
+            
+            // Paginação
+            doc.setFontSize(10);
+            doc.text(`${i + 1}`, pageWidth - 15, pageHeight - 15);
+        }
+
+        doc.save(`Livro_${story.title.replace(/\s+/g, '_')}.pdf`);
+
+    } catch (e) {
+        console.error("Erro ao gerar PDF:", e);
+        alert("Erro ao criar o PDF. Tente novamente.");
+    } finally {
+        setProcessingDownload(false);
+    }
+  };
+
+  const fetchImageAsBase64 = async (url: string): Promise<string> => {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+      });
+  };
+
   if (loadError) return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center font-heading gap-4">
           <div className="text-4xl text-cartoon-orange">Ops!</div>
@@ -142,9 +333,30 @@ const StoryReader: React.FC = () => {
           <div className="min-h-[80vh] flex items-center justify-center flex-col gap-6 p-4 relative z-50">
                <Card color={story.isEducational ? 'green' : 'yellow'} className="text-center p-8 md:p-12 max-w-2xl w-full border-[6px] shadow-2xl animate-fade-in">
                    <h1 className="font-heading text-4xl md:text-5xl mb-4">Fim da Aventura!</h1>
-                   <div className="flex flex-col gap-4 justify-center">
-                       <Button variant="primary" onClick={() => setActiveChapterIndex(0)}>📖 Ler Novamente</Button>
-                       <Button variant="secondary" onClick={handleExit} size="sm" className="mt-4 border-dashed">🚪 Salvar e Sair</Button>
+                   
+                   <div className="grid grid-cols-1 gap-4 w-full max-w-md mx-auto mb-8">
+                       <Button 
+                            variant="primary" 
+                            onClick={downloadPDF} 
+                            disabled={processingDownload}
+                            className="w-full text-xl py-4 flex items-center justify-center gap-2"
+                        >
+                            {processingDownload ? 'Criando livro...' : '📚 Baixar Livro em PDF'}
+                       </Button>
+                       
+                       <Button 
+                            variant="secondary" 
+                            onClick={downloadFullAudio} 
+                            disabled={processingDownload}
+                            className="w-full text-xl py-4 flex items-center justify-center gap-2"
+                       >
+                            {processingDownload ? 'Processando áudio...' : '🎵 Baixar Áudio Completo'}
+                       </Button>
+                   </div>
+
+                   <div className="flex flex-col gap-4 justify-center border-t-2 border-black/10 pt-6">
+                       <Button variant="secondary" onClick={() => setActiveChapterIndex(0)}>📖 Ler Novamente</Button>
+                       <Button variant="danger" onClick={handleExit} size="sm" className="mt-2 border-dashed">🚪 Salvar e Sair</Button>
                    </div>
                </Card>
           </div>

@@ -17,38 +17,30 @@ const getAiClient = () => {
 
 // --- TRATAMENTO DE ERROS DA API ---
 const handleGenAIError = (error: any) => {
-  // Concatena mensagem e corpo do erro para garantir que pegamos o texto, 
-  // mesmo que venha em JSON dentro da message
+  // Tenta extrair texto de vários lugares do objeto de erro
+  const errorString = JSON.stringify(error, Object.getOwnPropertyNames(error)).toLowerCase();
   const msg = (error?.message || '').toLowerCase();
-  const body = JSON.stringify(error || {}).toLowerCase();
-  const combined = msg + body;
+  const combined = errorString + msg;
   
-  // Erro específico de chave vazada/bloqueada (403 Permission Denied)
-  if (combined.includes("leaked") || combined.includes("permission_denied") || combined.includes("api key not valid")) {
-    throw new Error("🚨 SUA CHAVE API FOI BLOQUEADA. O Google detectou vazamento da chave. Crie uma nova em aistudio.google.com e atualize seu arquivo .env.");
+  // 1. Erro CRÍTICO: Chave vazada ou inválida (403)
+  if (combined.includes("leaked") || combined.includes("permission_denied") || combined.includes("api key not valid") || combined.includes("403")) {
+    // Lançamos um erro com prefixo específico para a UI interceptar
+    throw new Error("CRITICAL_API_KEY_LEAKED: Sua chave de API foi bloqueada pelo Google por segurança.");
   }
   
-  // Erro de cota (429)
+  // 2. Erro de Cota (429)
   if (combined.includes("429") || combined.includes("quota") || combined.includes("resource_exhausted")) {
       throw new Error("⏳ Cota de uso da IA excedida. Aguarde alguns minutos e tente novamente.");
   }
 
-  // Erro de rede ou desconhecido
-  console.error("Gemini Error Raw:", error);
-  
-  // Se a mensagem for um JSON, tenta extrair algo legível, senão repassa o erro original
-  try {
-      if (msg.trim().startsWith('{')) {
-          const parsed = JSON.parse(error.message);
-          if (parsed.error && parsed.error.message) {
-              throw new Error(`Erro da IA: ${parsed.error.message}`);
-          }
-      }
-  } catch (e) {
-      // Falha ao parsear, ignora
+  // 3. Erro de JSON na resposta (conteúdo bloqueado ou formato inválido)
+  if (combined.includes("syntaxerror") || combined.includes("json")) {
+      throw new Error("A IA não conseguiu gerar a história neste momento. O tema pode ter sido bloqueado pelos filtros de segurança.");
   }
 
-  throw error;
+  // Erro genérico
+  console.error("Gemini Error Raw:", error);
+  throw new Error("Ocorreu um erro na comunicação com a IA. Tente novamente.");
 };
 
 // --- HELPER DE PARSING ---
@@ -85,8 +77,11 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
     });
     return response.text || "Cute cartoon character";
   } catch (error) {
-    // Não lançamos erro aqui para não travar a criação do avatar, usamos fallback
-    console.error("AnalyzeFace falhou, usando fallback. Erro:", error);
+    console.error("AnalyzeFace falhou, usando fallback.", error);
+    // Se for erro de chave, repassa
+    const strErr = JSON.stringify(error || {}).toLowerCase();
+    if (strErr.includes("leaked") || strErr.includes("403")) throw error;
+    
     return "Happy child cartoon character"; 
   }
 };
@@ -136,7 +131,7 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
     Tema: "${theme}".
     Personagens: ${charContext}.
     
-    Estrutura: Título e exatamente 3 capítulos curtos.
+    Estrutura: Título e exatamente 4 capítulos curtos.
     Idioma: Português do Brasil.
     VisualDescription: Em Inglês (prompt para imagem).
   `;
@@ -170,7 +165,7 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
   const names = students.map(s => s.name).join(", ");
 
   const prompt = `
-    Crie uma fábula educativa escolar.
+    Crie uma fábula educativa escolar com 4 capítulos.
     Situação: "${situation}".
     Objetivo Pedagógico (BNCC): "${goal}".
     Professor: ${teacher.name}. Alunos: ${names}.
