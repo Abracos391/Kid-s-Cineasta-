@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Avatar, StoryChapter } from "../types";
 
@@ -38,6 +39,7 @@ const extractJSON = (text: string): any => {
   try {
     return JSON.parse(text);
   } catch (e) {
+    // Fallback para tentar limpar markdown se o schema falhar (raro com structured output)
     let clean = text.replace(/```json/g, '').replace(/```/g, '');
     const start = clean.indexOf('{');
     const end = clean.lastIndexOf('}');
@@ -142,18 +144,6 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
     - Um título curto para o capítulo.
     - O texto narrativo (adequado para crianças).
     - Uma descrição visual detalhada da cena para gerar uma ilustração (em inglês, focando no estilo cartoon).
-    
-    Retorne APENAS um JSON válido no seguinte formato:
-    {
-      "title": "Título da História",
-      "chapters": [
-        {
-          "title": "Título do Capítulo 1",
-          "text": "Texto do capítulo...",
-          "visualDescription": "Visual description in English..."
-        }
-      ]
-    }
   `;
 
   try {
@@ -162,6 +152,25 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            chapters: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  text: { type: Type.STRING },
+                  visualDescription: { type: Type.STRING }
+                },
+                required: ["title", "text", "visualDescription"]
+              }
+            }
+          },
+          required: ["title", "chapters"]
+        }
       }
     });
 
@@ -196,19 +205,6 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
     3. Ter uma lição de moral ou conclusão alinhada ao objetivo.
     
     Estruture em 3 a 5 capítulos.
-    
-    Retorne APENAS um JSON válido:
-    {
-      "title": "Título Sugestivo",
-      "educationalGoal": "${goal}",
-      "chapters": [
-        {
-          "title": "Título do Capítulo",
-          "text": "Texto narrativo...",
-          "visualDescription": "Detailed visual description in English for image generation..."
-        }
-      ]
-    }
   `;
 
   try {
@@ -217,6 +213,26 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
+        responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+                title: { type: Type.STRING },
+                educationalGoal: { type: Type.STRING },
+                chapters: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            title: { type: Type.STRING },
+                            text: { type: Type.STRING },
+                            visualDescription: { type: Type.STRING }
+                        },
+                        required: ["title", "text", "visualDescription"]
+                    }
+                }
+            },
+            required: ["title", "educationalGoal", "chapters"]
+        }
       }
     });
 
