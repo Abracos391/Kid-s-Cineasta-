@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, Schema, Type } from "@google/genai";
 import { Avatar, StoryChapter } from "../types";
 
 // --- CONFIGURAÇÃO DO CLIENTE ---
@@ -13,72 +13,6 @@ const getAiClient = () => {
       throw new Error("Chave de API do Google não configurada.");
   }
   return new GoogleGenAI({ apiKey });
-};
-
-// --- FUNÇÕES AUXILIARES DE PARSING ---
-
-const extractJSON = (text: string): any => {
-  if (!text) return {};
-  
-  try {
-    // 1. Tenta parse direto
-    return JSON.parse(text);
-  } catch (e) {
-    // 2. Remove blocos de código Markdown
-    let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-    try {
-      return JSON.parse(clean);
-    } catch (e2) {
-      // 3. Busca substring entre { e }
-      const start = text.indexOf('{');
-      const end = text.lastIndexOf('}');
-      
-      if (start !== -1 && end !== -1 && end > start) {
-        const jsonSubstring = text.substring(start, end + 1);
-        try {
-          return JSON.parse(jsonSubstring);
-        } catch (e3) {
-           console.error("Falha ao extrair JSON:", e3);
-        }
-      }
-      throw new Error("A IA não gerou um formato válido de história. Tente novamente.");
-    }
-  }
-};
-
-const sanitizeStoryData = (rawData: any): { title: string, chapters: StoryChapter[], educationalGoal: string } => {
-  const title = rawData.title || "Minha História Mágica";
-  const educationalGoal = rawData.educationalGoal || "";
-  
-  let chapters: any[] = [];
-  
-  if (Array.isArray(rawData.chapters)) chapters = rawData.chapters;
-  else if (Array.isArray(rawData.parts)) chapters = rawData.parts;
-  else if (Array.isArray(rawData.story)) chapters = rawData.story;
-  
-  // Fallback
-  if (!chapters || chapters.length === 0) {
-      if (rawData.text || rawData.content) {
-          chapters = [rawData];
-      }
-  }
-  
-  if (chapters.length === 0) {
-      // Cria um capítulo genérico se falhar
-      chapters = [{
-          title: "Início",
-          text: typeof rawData === 'string' ? rawData : JSON.stringify(rawData),
-          visualDescription: "Funny cartoon scene"
-      }];
-  }
-
-  const cleanChapters: StoryChapter[] = chapters.map((c: any, index: number) => ({
-    title: c.title || `Capítulo ${index + 1}`,
-    text: c.text || c.content || c.story || "Texto indisponível.",
-    visualDescription: c.visualDescription || c.imagePrompt || "Children story illustration, cartoon style, colorful"
-  }));
-
-  return { title, chapters: cleanChapters, educationalGoal };
 };
 
 // --- SERVIÇOS EXPORTADOS ---
@@ -116,6 +50,28 @@ export const generateChapterIllustration = (visualDescription: string, character
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
 };
 
+// SCHEMA PARA HISTÓRIA
+const storySchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    title: { type: Type.STRING },
+    chapters: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          title: { type: Type.STRING },
+          text: { type: Type.STRING },
+          visualDescription: { type: Type.STRING },
+        },
+        required: ["title", "text", "visualDescription"],
+      },
+    },
+    educationalGoal: { type: Type.STRING },
+  },
+  required: ["title", "chapters"],
+};
+
 export const generateStory = async (theme: string, characters: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
   const ai = getAiClient();
   const charContext = characters.map(c => `${c.name} (${c.description})`).join("; ");
@@ -126,30 +82,27 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
     Personagens: ${charContext}.
     
     A história deve ter um Título e exatamente 3 capítulos curtos.
-    
-    Responda APENAS com o JSON no formato abaixo (sem texto antes ou depois):
-    {
-      "title": "Título da História",
-      "chapters": [
-        {
-          "title": "Título do Capítulo",
-          "text": "Texto do capítulo em português...",
-          "visualDescription": "Description of the scene in English for image generation (cartoon style)"
-        }
-      ]
-    }
+    O texto deve ser em Português do Brasil.
+    A descrição visual (visualDescription) deve ser em Inglês para geração de imagem.
   `;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: prompt
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: storySchema,
+      }
     });
 
-    const json = extractJSON(response.text || "{}");
-    const data = sanitizeStoryData(json);
+    const json = JSON.parse(response.text || "{}");
     
-    return { title: data.title, chapters: data.chapters };
+    if (!json.title || !json.chapters) {
+        throw new Error("Resposta inválida da IA");
+    }
+
+    return { title: json.title, chapters: json.chapters };
 
   } catch (error) {
     console.error("generateStory Error:", error);
@@ -164,31 +117,28 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
   const prompt = `
     Crie uma fábula educativa escolar curta.
     Situação: "${situation}".
-    Objetivo: "${goal}".
+    Objetivo Pedagógico: "${goal}".
     Professor: ${teacher.name}. Alunos: ${names}.
     
-    Responda APENAS com o JSON:
-    {
-      "title": "Título da Aula",
-      "educationalGoal": "${goal}",
-      "chapters": [
-        {
-          "title": "Parte 1",
-          "text": "Narrativa em português...",
-          "visualDescription": "Scene description in English"
-        }
-      ]
-    }
+    A história deve ensinar o objetivo através da situação.
   `;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: prompt
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: storySchema,
+      }
     });
 
-    const json = extractJSON(response.text || "{}");
-    return sanitizeStoryData(json);
+    const json = JSON.parse(response.text || "{}");
+    return { 
+        title: json.title, 
+        chapters: json.chapters, 
+        educationalGoal: json.educationalGoal || goal 
+    };
 
   } catch (error) {
     console.error("generatePedagogicalStory Error:", error);

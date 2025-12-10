@@ -1,1 +1,2 @@
-// Funcionalidade de vídeo desativada para manter o app leve e funcional.
+// Funcionalidade de vídeo desativada.
+export const videoService = {};
