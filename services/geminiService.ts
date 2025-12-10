@@ -1,11 +1,12 @@
 
-import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 import { Avatar, StoryChapter } from "../types";
+
+// --- CONFIGURAÇÃO DO CLIENTE ---
 
 const getAiClient = () => {
   let apiKey = '';
   
-  // Acesso seguro ao process.env para evitar ReferenceError
   try {
       // @ts-ignore
       if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
@@ -14,7 +15,6 @@ const getAiClient = () => {
       }
   } catch(e) {}
 
-  // Fallback para import.meta.env (Vite)
   if (!apiKey) {
       try {
           // @ts-ignore
@@ -25,72 +25,72 @@ const getAiClient = () => {
       } catch(e) {}
   }
 
-  // Limpeza de aspas residuais se houver
   if (apiKey) apiKey = apiKey.replace(/"/g, '').trim();
   
   if (!apiKey || apiKey.length < 10) {
-    console.error("API KEY ausente ou inválida. Verifique as configurações do Render.");
-    throw new Error("Chave de API não configurada na aplicação.");
+    console.error("API KEY ausente.");
+    throw new Error("Chave de API não configurada.");
   }
   return new GoogleGenAI({ apiKey });
 };
 
-const extractJSON = (text: string): any => {
-  if (!text) return {};
-  
-  let clean = text.trim();
-  
-  // 1. Remove blocos de código Markdown
-  clean = clean.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '');
-  
-  // 2. Tenta encontrar os limites do JSON
-  const start = clean.indexOf('{');
-  const end = clean.lastIndexOf('}');
-  
-  if (start !== -1 && end !== -1) {
-    clean = clean.substring(start, end + 1);
-  } else {
-    // Se não achar chaves, talvez seja um erro ou texto plano
-    throw new Error("Formato de resposta inválido (não é JSON).");
-  }
+// --- FUNÇÕES AUXILIARES ---
 
+const cleanJsonString = (text: string): string => {
+  if (!text) return "{}";
+  let clean = text.trim();
+  // Remove markdown code blocks
+  clean = clean.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '');
+  return clean;
+};
+
+const extractJSON = (text: string): any => {
   try {
+    const clean = cleanJsonString(text);
     return JSON.parse(clean);
   } catch (e) {
-    console.error("Erro ao parsear JSON:", e);
-    // Tentativa desesperada: limpar caracteres de controle
-    try {
-        clean = clean.replace(/[\u0000-\u001F]+/g, " ");
-        return JSON.parse(clean);
-    } catch (e2) {
-         throw new Error("Não foi possível ler a resposta da IA.");
+    console.warn("Falha no parse direto, tentando encontrar chaves...", e);
+    const clean = cleanJsonString(text);
+    const start = clean.indexOf('{');
+    const end = clean.lastIndexOf('}');
+    if (start !== -1 && end !== -1) {
+      try {
+        return JSON.parse(clean.substring(start, end + 1));
+      } catch (e2) {
+        throw new Error("A IA gerou um texto que não é um JSON válido.");
+      }
     }
+    throw new Error("Formato inválido recebido da IA.");
   }
 };
 
 const sanitizeStoryData = (rawData: any): { title: string, chapters: StoryChapter[], educationalGoal: string } => {
-  const title = rawData.title || rawData.storyTitle || "Sem Título";
+  const title = rawData.title || "Minha História";
   const educationalGoal = rawData.educationalGoal || "";
   
   let chapters: any[] = [];
-  
   if (Array.isArray(rawData.chapters)) chapters = rawData.chapters;
   else if (Array.isArray(rawData.parts)) chapters = rawData.parts;
-  else if (Array.isArray(rawData.story)) chapters = rawData.story;
   
-  // Validação dos capítulos
-  const cleanChapters: StoryChapter[] = chapters.map((c: any, index: number) => ({
-    title: c.title || c.chapterTitle || `Capítulo ${index + 1}`,
-    text: c.text || c.content || c.storyText || "Texto indisponível.",
-    visualDescription: c.visualDescription || c.imagePrompt || c.description || "Scene from a children's story cartoon style"
-  }));
-
-  if (cleanChapters.length === 0) {
-      throw new Error("A história foi gerada vazia. Tente novamente.");
+  if (chapters.length === 0) {
+      // Fallback para estrutura plana se a IA errar feio
+      if (rawData.text && rawData.visualDescription) {
+          chapters = [rawData];
+      } else {
+          throw new Error("História vazia.");
+      }
   }
+  
+  const cleanChapters: StoryChapter[] = chapters.map((c: any, index: number) => ({
+    title: c.title || `Capítulo ${index + 1}`,
+    text: c.text || c.content || "Texto indisponível.",
+    visualDescription: c.visualDescription || c.imagePrompt || "Cute cartoon scene"
+  }));
 
   return { title, chapters: cleanChapters, educationalGoal };
 };
+
+// --- SERVIÇOS EXPORTADOS ---
 
 export const analyzeFaceForAvatar = async (base64Image: string): Promise<string> => {
   try {
@@ -99,245 +99,138 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
       model: 'gemini-2.5-flash',
       contents: {
         parts: [
-          {
-            inlineData: {
-              mimeType: 'image/jpeg',
-              data: base64Image
-            }
-          },
-          {
-            text: "Descreva as características físicas principais desta pessoa (cabelo, olhos, cor da pele, óculos, sorriso) em inglês para um prompt de IA. Seja breve. Exemplo: 'Little boy with curly dark hair, glasses, big smile'."
-          }
+          { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
+          { text: "Describe the physical appearance of this person (hair, eyes, skin, accessories) in English. Be brief. Ex: 'Little boy with curly hair'." }
         ]
       }
     });
-    return response.text || "A happy child";
+    return response.text || "Cute cartoon character";
   } catch (error) {
-    console.error("Erro ao analisar rosto:", error);
-    return "Cute child cartoon character";
+    return "Cute child character";
   }
 };
 
 export const generateCaricatureImage = async (description: string): Promise<string> => {
-  const seed = Math.floor(Math.random() * 10000);
-  const safeDesc = description && description.trim().length > 0 ? description : "cute 3d character";
-  const prompt = `cute 3d disney pixar character, ${safeDesc}, white background, soft studio lighting, 4k render, vibrant colors, --no text`;
-  const encodedPrompt = encodeURIComponent(prompt);
-  return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=800&seed=${seed}&nologo=true&model=flux`;
+  const seed = Math.floor(Math.random() * 9999);
+  const safeDesc = description ? description : "cute character";
+  const prompt = `cute 3d disney pixar character, ${safeDesc}, white background, soft lighting, 4k, --no text`;
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=800&height=800&seed=${seed}&nologo=true&model=flux`;
 };
 
 export const generateChapterIllustration = (visualDescription: string, charactersDescription: string = ''): string => {
-  const seed = Math.floor(Math.random() * 10000);
-  const safeDesc = visualDescription && visualDescription.length > 5 ? visualDescription : "happy children learning and playing together in a colorful environment";
-  
-  const fullPrompt = `children book illustration, vector art, colorful, cute, flat style, ${safeDesc}, featuring ${charactersDescription}, --no text`;
-  const encodedPrompt = encodeURIComponent(fullPrompt);
-  
-  return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
+  const seed = Math.floor(Math.random() * 9999);
+  // Garante que a descrição não seja vazia
+  const desc = visualDescription || "happy children playing";
+  const prompt = `children book illustration, vector art, colorful, cute, flat style, ${desc}, featuring ${charactersDescription}, --no text`;
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
 };
 
 export const generateStory = async (theme: string, characters: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
   const ai = getAiClient();
-  const charNames = characters.map(c => c.name).join(", ");
-  const charDescs = characters.map(c => `${c.name}: ${c.description}`).join("; ");
+  const charContext = characters.map(c => `${c.name} (${c.description})`).join("; ");
 
-  const basePrompt = `
-    Crie uma história infantil divertida e criativa com o tema: "${theme}".
+  // Prompt simplificado e direto para JSON. Sem schemas complexos que quebram o fluxo.
+  const prompt = `
+    Crie uma história infantil curta e divertida.
+    Tema: "${theme}".
+    Personagens: ${charContext}.
     
-    Personagens: ${charNames}.
-    Descrições visuais: ${charDescs}.
+    A história deve ter um Título e 3 a 4 capítulos curtos.
     
-    A história deve ter título e ser dividida em 3 a 5 capítulos curtos.
-    Para cada capítulo, forneça:
-    - Um título curto para o capítulo.
-    - O texto narrativo (adequado para crianças, em português).
-    - Uma descrição visual detalhada da cena para gerar uma ilustração (em inglês, focando no estilo cartoon).
+    IMPORTANTE: Responda APENAS com um JSON válido seguindo exatamente este modelo:
+    {
+      "title": "Título da História",
+      "chapters": [
+        {
+          "title": "Título do Capítulo 1",
+          "text": "Texto da narrativa em português...",
+          "visualDescription": "Description of the scene in English for image generation (cartoon style)"
+        }
+      ]
+    }
   `;
 
-  // Configuração Schema (Método Preferido)
-  const schemaConfig = {
-    responseMimeType: 'application/json',
-    responseSchema: {
-      type: Type.OBJECT,
-      properties: {
-        title: { type: Type.STRING },
-        chapters: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              text: { type: Type.STRING },
-              visualDescription: { type: Type.STRING }
-            },
-            required: ["title", "text", "visualDescription"]
-          }
-        }
-      },
-      required: ["title", "chapters"]
-    }
-  };
-
   try {
-    // TENTATIVA 1: Schema Rígido
-    console.log("Gerando história (Método 1 - Schema)...");
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: basePrompt,
-      config: schemaConfig
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json', // Força JSON simples
+      }
     });
 
     const json = extractJSON(response.text || "{}");
-    const sanitized = sanitizeStoryData(json);
-    return { title: sanitized.title, chapters: sanitized.chapters };
+    const data = sanitizeStoryData(json);
+    return { title: data.title, chapters: data.chapters };
 
   } catch (error) {
-    console.warn("Método 1 falhou, tentando fallback (Método 2 - Texto)...", error);
-
-    // TENTATIVA 2: Fallback (Texto Livre formatado como JSON)
-    try {
-        const fallbackPrompt = `
-            ${basePrompt}
-            
-            IMPORTANTE: Sua resposta DEVE ser estritamente um JSON válido, sem markdown, seguindo este formato:
-            {
-                "title": "Título da História",
-                "chapters": [
-                    {
-                        "title": "Título do Capítulo",
-                        "text": "Texto da história...",
-                        "visualDescription": "Visual description in English..."
-                    }
-                ]
-            }
-        `;
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: fallbackPrompt,
-            config: { responseMimeType: 'application/json' }
-        });
-
-        const json = extractJSON(response.text || "{}");
-        const sanitized = sanitizeStoryData(json);
-        return { title: sanitized.title, chapters: sanitized.chapters };
-        
-    } catch (finalError) {
-        console.error("Erro fatal na geração:", finalError);
-        throw new Error("A IA não conseguiu criar a história agora. Tente um tema diferente ou mais simples.");
-    }
+    console.error("Erro generateStory:", error);
+    throw new Error("Não foi possível criar a história. Tente novamente.");
   }
 };
 
 export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, chapters: StoryChapter[], educationalGoal: string }> => {
   const ai = getAiClient();
-  const studentNames = students.map(s => s.name).join(", ");
-  
-  const basePrompt = `
-    Você é um assistente pedagógico especializado na BNCC.
-    Crie uma fábula educativa ou história social para crianças.
+  const names = students.map(s => s.name).join(", ");
+
+  const prompt = `
+    Crie uma fábula educativa escolar (BNCC).
+    Situação: "${situation}".
+    Objetivo: "${goal}".
+    Educador: ${teacher.name}. Alunos: ${names}.
     
-    Situação/Problema Real: "${situation}"
-    Objetivo Pedagógico (BNCC): "${goal}"
-    
-    Personagens:
-    - Educador(a): ${teacher.name} (que guia e media)
-    - Alunos: ${studentNames} (que vivem a situação)
-    
-    A história deve:
-    1. Apresentar o conflito de forma lúdica.
-    2. Desenvolver a resolução com mediação do educador.
-    3. Ter uma lição de moral ou conclusão alinhada ao objetivo.
-    
-    Estruture em 3 a 5 capítulos curtos.
+    Responda APENAS com JSON:
+    {
+      "title": "Título da Aula",
+      "educationalGoal": "${goal}",
+      "chapters": [
+        {
+          "title": "Capítulo 1",
+          "text": "Narrativa em português...",
+          "visualDescription": "Scene description in English"
+        }
+      ]
+    }
   `;
 
-  const schemaConfig = {
-    responseMimeType: 'application/json',
-    responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-            title: { type: Type.STRING },
-            educationalGoal: { type: Type.STRING },
-            chapters: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        title: { type: Type.STRING },
-                        text: { type: Type.STRING },
-                        visualDescription: { type: Type.STRING }
-                    },
-                    required: ["title", "text", "visualDescription"]
-                }
-            }
-        },
-        required: ["title", "educationalGoal", "chapters"]
-    }
-  };
-
   try {
-    // TENTATIVA 1
-    console.log("Gerando aula (Método 1)...");
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: basePrompt,
-      config: schemaConfig
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json'
+      }
     });
 
     const json = extractJSON(response.text || "{}");
     return sanitizeStoryData(json);
 
   } catch (error) {
-    console.warn("Método 1 falhou, tentando fallback...", error);
-    
-    // TENTATIVA 2
-    try {
-        const fallbackPrompt = `
-            ${basePrompt}
-            Responda APENAS em JSON válido:
-            { "title": "...", "educationalGoal": "...", "chapters": [{ "title": "...", "text": "...", "visualDescription": "..." }] }
-        `;
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: fallbackPrompt,
-            config: { responseMimeType: 'application/json' }
-        });
-        const json = extractJSON(response.text || "{}");
-        return sanitizeStoryData(json);
-    } catch (e) {
-        console.error("Erro fatal aula:", e);
-        throw new Error("Erro na geração pedagógica.");
-    }
+    console.error("Erro generatePedagogicalStory:", error);
+    throw new Error("Erro ao gerar aula.");
   }
 };
 
 export const generateSpeech = async (text: string): Promise<string> => {
   const ai = getAiClient();
-  
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-preview-tts',
-      contents: {
-        parts: [{ text }]
-      },
+      contents: { parts: [{ text }] },
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' } // 'Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'
-          }
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
         }
       }
     });
 
-    if (response.candidates && response.candidates[0].content.parts[0].inlineData) {
-        return response.candidates[0].content.parts[0].inlineData.data;
-    }
-    throw new Error("Áudio não gerado.");
+    const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (audioData) return audioData;
+    throw new Error("Dados de áudio vazios.");
 
   } catch (error) {
-    console.error("Erro no TTS:", error);
-    throw new Error("Falha ao narrar texto.");
+    console.error("Erro TTS:", error);
+    throw new Error("Falha na narração.");
   }
 };
