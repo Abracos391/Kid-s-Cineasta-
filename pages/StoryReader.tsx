@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Story } from '../types';
@@ -7,7 +8,6 @@ import Button from '../components/ui/Button';
 import { generateSpeech, generateChapterIllustration } from '../services/geminiService';
 import AudioPlayer from '../components/AudioPlayer';
 import { dbService } from '../services/dbService';
-import { videoService } from '../services/videoService';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
@@ -24,8 +24,6 @@ const StoryReader: React.FC = () => {
   const [activeChapterIndex, setActiveChapterIndex] = useState(0);
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
-  const [generatingVideo, setGeneratingVideo] = useState(false);
-  const [videoStatus, setVideoStatus] = useState('');
   const [pdfProgress, setPdfProgress] = useState(0); 
   const [loadError, setLoadError] = useState(false);
   
@@ -49,81 +47,6 @@ const StoryReader: React.FC = () => {
     } else {
         navigate('/library');
     }
-  };
-
-  // --- LÓGICA DE GERAÇÃO DE VÍDEO (SHOTSTACK) ---
-  const executeVideoGeneration = async (manualKey?: string) => {
-    if (!story) return;
-    
-    setGeneratingVideo(true);
-    setVideoStatus("Conectando...");
-
-    try {
-        const videoUrl = await videoService.renderStoryToVideo(story, (status) => {
-            setVideoStatus(status);
-        }, manualKey);
-        
-        if (!videoUrl) throw new Error("URL vazia recebida.");
-
-        setVideoStatus("Abrindo Vídeo...");
-        setTimeout(() => window.open(videoUrl, '_blank'), 500);
-
-        setVideoStatus("Pronto! 🎬");
-        setTimeout(() => setVideoStatus(''), 5000);
-
-    } catch (e: any) {
-        console.error("Falha na geração:", e);
-
-        // SE O ERRO FOR CHAVE FALTANDO OU INVÁLIDA
-        if (e.message === 'MISSING_KEY' || e.message.includes('403') || e.message.includes('401')) {
-            const userKey = window.prompt(
-                "⚠️ CHAVE DE API NECESSÁRIA (Shotstack) ⚠️\n\n" +
-                "O sistema não encontrou a chave do Shotstack configurada.\n" +
-                "Por favor, cole sua API KEY abaixo:"
-            );
-
-            if (userKey && userKey.trim().length > 5) {
-                // Tenta novamente recursivamente
-                localStorage.setItem('shotstack_key', userKey.trim());
-                
-                setVideoStatus("Tentando novamente...");
-                executeVideoGeneration(userKey.trim());
-                return;
-            } else {
-                alert("Operação cancelada.");
-                setVideoStatus("Cancelado");
-            }
-        } else {
-            alert(`Erro ao gerar vídeo: ${e.message}`);
-            setVideoStatus("Erro ❌");
-        }
-    } finally {
-        if (videoStatus === 'Erro ❌' || videoStatus === 'Cancelado' || videoStatus.includes('Pronto')) {
-             setGeneratingVideo(false);
-        } else if (!videoStatus.includes('Tentando')) {
-             setTimeout(() => setGeneratingVideo(false), 2000);
-        }
-    }
-  };
-
-  const handleGenerateVideo = async () => {
-      // 1. Feedback Imediato
-      setGeneratingVideo(true);
-      setVideoStatus("Iniciando...");
-
-      // 2. Validação
-      if (!story) { setGeneratingVideo(false); return; }
-      
-      const missingImages = story.chapters.some(c => !c.generatedImage);
-      if (missingImages) {
-          alert("⚠️ Faltam imagens! O vídeo precisa que todos os capítulos tenham ilustrações. Aguarde elas carregarem.");
-          setGeneratingVideo(false);
-          setVideoStatus("");
-          return;
-      }
-
-      // 3. Execução
-      await executeVideoGeneration();
   };
 
   const handleFullBookDownload = async () => {
@@ -422,16 +345,6 @@ const StoryReader: React.FC = () => {
                                     {stitchingAudio ? 'Unificando...' : '🎧 Audiobook'}
                             </Button>
                        </div>
-
-                       <Button 
-                            variant="danger" 
-                            onClick={handleGenerateVideo} 
-                            disabled={generatingVideo}
-                            pulse={!generatingVideo}
-                            className="w-full text-2xl py-4"
-                        >
-                            {generatingVideo ? `🎥 ${videoStatus}` : '🎬 Gerar Filme (Novo)'}
-                        </Button>
 
                        <Button variant="secondary" onClick={handleExit} size="sm" className="mt-4 border-dashed">🚪 Salvar e Sair</Button>
                    </div>

@@ -15,36 +15,41 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-// --- FUNÇÕES AUXILIARES DE PARSING ---
+// --- FUNÇÕES AUXILIARES DE PARSING (MODO CLÁSSICO) ---
 
 const extractJSON = (text: string): any => {
   if (!text) return {};
   
+  let clean = text.trim();
+
+  // 1. Tenta extrair de blocos de código Markdown (Padrão do Gemini)
+  // Procura por ```json ... ``` ou apenas ``` ... ```
+  const jsonBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
+  const match = clean.match(jsonBlockRegex);
+  
+  if (match && match[1]) {
+    clean = match[1];
+  }
+
   try {
-    // 1. Tentar parse direto (caso venha limpo devido ao responseMimeType)
-    return JSON.parse(text);
+    return JSON.parse(clean);
   } catch (e) {
-    // 2. Se falhar, limpar blocos de código Markdown (```json ... ```)
-    let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    // 2. Método "Força Bruta": Encontrar o primeiro '{' e o último '}'
+    // Isso resolve casos onde a IA coloca texto antes ou depois do JSON
+    const start = clean.indexOf('{');
+    const end = clean.lastIndexOf('}');
     
-    try {
-        return JSON.parse(clean);
-    } catch (e2) {
-        // 3. Método "Cirúrgico": Encontrar o primeiro '{' e o último '}'
-        const firstOpen = text.indexOf('{');
-        const lastClose = text.lastIndexOf('}');
-        
-        if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
-            const jsonSubstring = text.substring(firstOpen, lastClose + 1);
-            try {
-                return JSON.parse(jsonSubstring);
-            } catch (e3) {
-                console.error("Falha final no parsing JSON:", e3);
-                throw new Error("A IA gerou um conteúdo que não consegui ler. Tente novamente.");
-            }
-        }
-        throw new Error("Formato de resposta inválido.");
+    if (start !== -1 && end !== -1 && end > start) {
+      const jsonSubstring = clean.substring(start, end + 1);
+      try {
+        return JSON.parse(jsonSubstring);
+      } catch (e2) {
+        // Ignora erro aqui para lançar o principal
+      }
     }
+    
+    console.error("Falha no parsing JSON. Texto recebido:", text);
+    throw new Error("A IA gerou um formato inválido. Tente novamente.");
   }
 };
 
@@ -54,25 +59,21 @@ const sanitizeStoryData = (rawData: any): { title: string, chapters: StoryChapte
   
   let chapters: any[] = [];
   
-  // Tenta encontrar o array de capítulos em várias propriedades comuns
   if (Array.isArray(rawData.chapters)) chapters = rawData.chapters;
   else if (Array.isArray(rawData.parts)) chapters = rawData.parts;
   else if (Array.isArray(rawData.story)) chapters = rawData.story;
   
-  // Fallback: Se não achou array, mas tem texto direto
-  if (chapters.length === 0) {
+  // Fallback para história de capítulo único
+  if (!chapters || chapters.length === 0) {
       if (rawData.text || rawData.content) {
           chapters = [rawData];
-      } else {
-          // Última tentativa: verificar se o próprio objeto raiz é um capítulo
-          chapters = [{
-              title: "Início",
-              text: JSON.stringify(rawData),
-              visualDescription: "Scene description"
-          }];
       }
   }
   
+  if (chapters.length === 0) {
+      throw new Error("História sem capítulos identificados.");
+  }
+
   const cleanChapters: StoryChapter[] = chapters.map((c: any, index: number) => ({
     title: c.title || `Capítulo ${index + 1}`,
     text: c.text || c.content || c.story || "Texto indisponível.",
@@ -121,6 +122,7 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
   const ai = getAiClient();
   const charContext = characters.map(c => `${c.name} (${c.description})`).join("; ");
 
+  // Prompt sem formatação rígida de schema, usando linguagem natural para pedir JSON
   const prompt = `
     Crie uma história infantil divertida.
     Tema: "${theme}".
@@ -128,7 +130,9 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
     
     A história deve ter um Título e 3 capítulos curtos.
     
-    RETORNE APENAS JSON neste formato exato:
+    IMPORTANTE: Responda APENAS com um objeto JSON válido.
+    Use o seguinte formato:
+    \`\`\`json
     {
       "title": "Título da História",
       "chapters": [
@@ -139,27 +143,24 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
         }
       ]
     }
+    \`\`\`
   `;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
-      config: {
-        responseMimeType: 'application/json', // Garante que a IA retorne JSON
-      }
+      // Removido config responseMimeType para evitar erros de API em contas não suportadas
     });
 
     const json = extractJSON(response.text || "{}");
     const data = sanitizeStoryData(json);
     
-    if (data.chapters.length === 0) throw new Error("História gerada sem capítulos válidos.");
-    
     return { title: data.title, chapters: data.chapters };
 
   } catch (error) {
     console.error("generateStory Error:", error);
-    throw new Error("Erro ao criar história. Tente novamente.");
+    throw new Error("Erro ao criar história. A IA não conseguiu gerar o roteiro.");
   }
 };
 
@@ -173,7 +174,8 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
     Objetivo: "${goal}".
     Professor: ${teacher.name}. Alunos: ${names}.
     
-    RETORNE APENAS JSON neste formato:
+    Responda APENAS com JSON:
+    \`\`\`json
     {
       "title": "Título da Aula",
       "educationalGoal": "${goal}",
@@ -185,15 +187,13 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
         }
       ]
     }
+    \`\`\`
   `;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      }
+      contents: prompt
     });
 
     const json = extractJSON(response.text || "{}");
@@ -208,7 +208,6 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
 export const generateSpeech = async (text: string): Promise<string> => {
   const ai = getAiClient();
   try {
-    // Usando o modelo TTS dedicado
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-preview-tts',
       contents: { parts: [{ text }] },
