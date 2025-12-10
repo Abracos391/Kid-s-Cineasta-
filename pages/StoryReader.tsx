@@ -226,70 +226,127 @@ const StoryReader: React.FC = () => {
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
 
-        // --- CAPA ---
-        doc.setFillColor(255, 250, 205); // Cream color
-        doc.rect(0, 0, pageWidth, pageHeight, "F");
+        // --- CAPA DIVERTIDA ---
         
+        // Fundo Azul Turquesa
+        doc.setFillColor(64, 224, 208); // Cartoon Blue
+        doc.rect(0, 0, pageWidth, pageHeight, "F");
+
+        // Bolinhas Decorativas (Polka Dots)
+        doc.setFillColor(255, 255, 255); // Branco
+        for(let x=0; x<pageWidth; x+=30) {
+            for(let y=0; y<pageHeight; y+=30) {
+                if((x+y)%60 === 0) doc.circle(x, y, 3, "F");
+            }
+        }
+
+        // Cartão Central Branco (Moldura)
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(1.5);
+        doc.setFillColor(255, 255, 255);
+        // Rounded Rect simulado
+        doc.roundedRect(30, 20, pageWidth - 60, pageHeight - 40, 10, 10, "FD");
+
+        // Título
         doc.setFont("helvetica", "bold");
         doc.setFontSize(40);
-        doc.setTextColor(255, 69, 0); // Orange
-        doc.text(story.title, pageWidth / 2, 60, { align: "center", maxWidth: pageWidth - 40 });
+        doc.setTextColor(255, 69, 0); // Cartoon Orange
+        
+        // Quebra título se for muito grande
+        const splitTitle = doc.splitTextToSize(story.title.toUpperCase(), pageWidth - 80);
+        doc.text(splitTitle, pageWidth / 2, 70, { align: "center" });
 
-        doc.setFontSize(20);
+        // Autor
+        doc.setFontSize(18);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Uma produção de:`, pageWidth / 2, pageHeight - 65, { align: "center" });
+        
+        doc.setFontSize(24);
         doc.setTextColor(0, 0, 0);
-        doc.text(`Um filme de: ${user?.name || 'Autor Cineasta Kids'}`, pageWidth / 2, pageHeight - 40, { align: "center" });
+        doc.text(`${user?.name || 'Cineasta Kids'}`, pageWidth / 2, pageHeight - 55, { align: "center" });
 
-        // Tenta colocar imagem do primeiro personagem na capa se existir
+        // Imagem Central da Capa (se houver)
         if (story.characters && story.characters[0]) {
              try {
                 const imgData = await fetchImageAsBase64(story.characters[0].imageUrl);
-                doc.addImage(imgData, 'JPEG', (pageWidth/2) - 30, 80, 60, 60);
+                // Moldura de foto polaroid
+                doc.setFillColor(255, 255, 255);
+                doc.rect((pageWidth/2) - 35, 90, 70, 85, "F"); // Fundo branco
+                doc.addImage(imgData, 'JPEG', (pageWidth/2) - 30, 95, 60, 60);
+                // "Clip" tape visual decoration (retângulo simples inclinado seria complexo aqui, vamos simplificar)
              } catch(e) {}
         }
+        
+        // Selo Cineasta Kids
+        doc.setFontSize(12);
+        doc.setTextColor(150, 150, 150);
+        doc.text("Criado com Cineasta Kids App", pageWidth / 2, pageHeight - 30, { align: "center" });
 
-        // --- CAPÍTULOS ---
+        // --- PÁGINAS DA HISTÓRIA ---
+        
         for (let i = 0; i < story.chapters.length; i++) {
             const chapter = story.chapters[i];
             doc.addPage();
             
-            // Fundo
-            doc.setFillColor(255, 255, 255);
+            // Fundo Amarelo Pastel (Cream)
+            doc.setFillColor(255, 250, 205); 
             doc.rect(0, 0, pageWidth, pageHeight, "F");
             
-            // Moldura
-            doc.setLineWidth(2);
-            doc.setDrawColor(0,0,0);
-            doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
+            // Moldura Tracejada
+            doc.setDrawColor(255, 105, 180); // Hot Pink
+            doc.setLineWidth(1);
+            doc.setLineDashPattern([5, 5], 0);
+            doc.rect(10, 10, pageWidth - 20, pageHeight - 20);
+            doc.setLineDashPattern([], 0); // Reset
 
-            // Imagem (Lado Esquerdo ou Topo)
+            // Layout: Imagem Esquerda, Texto Direita (ou vice-versa dependendo do indice para dinamismo)
+            const isEven = i % 2 === 0;
+            
+            // Áreas
+            const margin = 25;
+            const contentWidth = (pageWidth - (margin * 3)) / 2;
+            
+            const imgX = isEven ? margin : margin * 2 + contentWidth;
+            const textX = isEven ? margin * 2 + contentWidth : margin;
+            const centerY = pageHeight / 2;
+
+            // Imagem "Polaroid"
             if (chapter.generatedImage) {
                 try {
                     const imgBase64 = await fetchImageAsBase64(chapter.generatedImage);
-                    // Imagem centralizada ocupando metade superior
-                    const imgW = 120;
-                    const imgH = 80;
-                    const imgX = (pageWidth - imgW) / 2;
-                    doc.addImage(imgBase64, "JPEG", imgX, 20, imgW, imgH);
+                    // Fundo branco da polaroid
+                    doc.setFillColor(255, 255, 255);
+                    doc.setDrawColor(0,0,0);
+                    doc.setLineWidth(0.5);
+                    doc.rect(imgX - 5, 40 - 5, contentWidth + 10, 100 + 20, "FD"); // Borda branca
+                    
+                    doc.addImage(imgBase64, "JPEG", imgX, 40, contentWidth, 100);
                 } catch (e) {
-                    doc.text("[Imagem não carregada]", pageWidth/2, 60, {align: "center"});
+                    doc.text("Imagem...", imgX + 20, 80);
                 }
             }
 
-            // Texto (Abaixo)
-            doc.setFontSize(24);
-            doc.setTextColor(128, 0, 128); // Purple title
-            doc.text(chapter.title, pageWidth / 2, 120, { align: "center" });
+            // Título do Capítulo
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(22);
+            doc.setTextColor(128, 0, 128); // Roxo
+            doc.text(chapter.title, textX + (contentWidth/2), 50, { align: "center", maxWidth: contentWidth });
 
-            doc.setFont("helvetica", "normal");
+            // Texto da História
+            doc.setFont("courier", "normal"); // Fonte mais "máquina de escrever" ou livro
             doc.setFontSize(16);
             doc.setTextColor(0, 0, 0);
             
-            const splitText = doc.splitTextToSize(chapter.text, pageWidth - 60);
-            doc.text(splitText, 30, 140);
+            const splitText = doc.splitTextToSize(chapter.text, contentWidth);
+            doc.text(splitText, textX, 75);
             
-            // Paginação
+            // Paginação (Bolinha colorida no canto)
+            doc.setFillColor(255, 215, 0); // Gold
+            doc.circle(pageWidth - 20, pageHeight - 20, 8, "F");
+            doc.setTextColor(0,0,0);
+            doc.setFont("helvetica", "bold");
             doc.setFontSize(10);
-            doc.text(`${i + 1}`, pageWidth - 15, pageHeight - 15);
+            doc.text(`${i + 1}`, pageWidth - 20, pageHeight - 19, { align: "center" });
         }
 
         doc.save(`Livro_${story.title.replace(/\s+/g, '_')}.pdf`);
