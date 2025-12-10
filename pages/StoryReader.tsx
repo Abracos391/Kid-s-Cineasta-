@@ -238,7 +238,7 @@ const StoryReader: React.FC = () => {
 
         // Título no topo (Ciano com borda preta simulada ou apenas texto escuro forte)
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(36);
+        doc.setFontSize(48); // AUMENTADO (antes 36)
         doc.setTextColor(0, 139, 139); // Dark Cyan (próximo ao print) ou Preto
         
         const splitTitle = doc.splitTextToSize(story.title.toUpperCase(), pageWidth - 40);
@@ -269,7 +269,7 @@ const StoryReader: React.FC = () => {
         doc.setLineWidth(1.5);
         doc.roundedRect(30, pageHeight - 50, pageWidth - 60, 20, 3, 3, "FD");
         
-        doc.setFontSize(16);
+        doc.setFontSize(20); // AUMENTADO
         doc.setTextColor(0, 0, 0);
         const authorName = user?.name || 'Cineasta Kids';
         doc.text(`AUTOR: ${authorName.toUpperCase()}`, pageWidth / 2, pageHeight - 38, { align: "center" });
@@ -307,9 +307,9 @@ const StoryReader: React.FC = () => {
             doc.rect(0, imgHeight, pageWidth, pageHeight - imgHeight, "F");
 
             // Título do Capítulo (Roxo/Lilás e sublinhado simples)
-            const textStartY = imgHeight + 20;
+            const textStartY = imgHeight + 25; // Mais espaço
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(22);
+            doc.setFontSize(30); // AUMENTADO (antes 22)
             doc.setTextColor(147, 112, 219); // Medium Purple
             doc.text(chapter.title, pageWidth / 2, textStartY, { align: "center" });
             
@@ -321,17 +321,17 @@ const StoryReader: React.FC = () => {
             // Texto da História
             // Fonte Grande e Escura
             doc.setFont("helvetica", "normal");
-            doc.setFontSize(16); // Fonte maior para crianças
+            doc.setFontSize(24); // AUMENTADO 150% (antes 16)
             doc.setTextColor(50, 50, 50); // Cinza escuro/Preto suave
             
             const margin = 20;
             const maxWidth = pageWidth - (margin * 2);
-            const textY = textStartY + 15;
+            const textY = textStartY + 20;
             
             const splitText = doc.splitTextToSize(chapter.text, maxWidth);
             
             // Espaçamento entre linhas (line height)
-            doc.text(splitText, margin, textY, { lineHeightFactor: 1.5, align: "justify", maxWidth: maxWidth });
+            doc.text(splitText, margin, textY, { lineHeightFactor: 1.3, align: "justify", maxWidth: maxWidth });
 
             // Paginação discreta no fundo
             // doc.setFontSize(10);
