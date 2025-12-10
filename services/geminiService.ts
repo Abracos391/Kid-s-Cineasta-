@@ -15,6 +15,27 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+// --- HELPER ROBUSTO DE PARSING ---
+const cleanAndParseJSON = (text: string | undefined): any => {
+  if (!text) throw new Error("A IA retornou uma resposta vazia.");
+
+  try {
+    // 1. Tenta parse direto (caso ideal)
+    return JSON.parse(text);
+  } catch (e) {
+    // 2. Limpeza de Markdown (caso comum: ```json ... ```)
+    // Remove ```json, ``` e espaços extras
+    const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    
+    try {
+      return JSON.parse(cleanText);
+    } catch (e2) {
+      console.error("Falha fatal ao ler JSON. Texto recebido:", text);
+      throw new Error("A IA não gerou um formato válido. Tente novamente.");
+    }
+  }
+};
+
 // --- SERVIÇOS EXPORTADOS ---
 
 export const analyzeFaceForAvatar = async (base64Image: string): Promise<string> => {
@@ -96,17 +117,17 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
       }
     });
 
-    const json = JSON.parse(response.text || "{}");
+    const json = cleanAndParseJSON(response.text);
     
     if (!json.title || !json.chapters) {
-        throw new Error("Resposta inválida da IA");
+        throw new Error("Estrutura de história incompleta.");
     }
 
     return { title: json.title, chapters: json.chapters };
 
   } catch (error) {
     console.error("generateStory Error:", error);
-    throw new Error("Erro ao criar história. Tente novamente.");
+    throw error; // Repassa o erro original para mostrar no Wizard
   }
 };
 
@@ -133,7 +154,8 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
       }
     });
 
-    const json = JSON.parse(response.text || "{}");
+    const json = cleanAndParseJSON(response.text);
+    
     return { 
         title: json.title, 
         chapters: json.chapters, 

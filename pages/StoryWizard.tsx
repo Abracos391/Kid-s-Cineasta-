@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import Button from '../components/ui/Button';
@@ -87,7 +88,9 @@ const StoryWizard: React.FC = () => {
     const selectedChars = avatars.filter(a => selectedAvatarIds.includes(a.id));
 
     try {
+      console.log("Iniciando geração de história...");
       const storyData = await generateStory(theme, selectedChars);
+      console.log("História gerada com sucesso:", storyData.title);
       
       const storyId = crypto.randomUUID();
       const fullStory = {
@@ -112,9 +115,9 @@ const StoryWizard: React.FC = () => {
       }, 500);
 
     } catch (error: any) {
-      console.error(error);
+      console.error("Erro na integração:", error);
       const msg = error?.message || "Erro desconhecido";
-      setErrorMsg(`Ops! Ocorreu um problema: ${msg}`);
+      setErrorMsg(`Ops! O robô escritor teve um problema: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -199,14 +202,9 @@ const StoryWizard: React.FC = () => {
           </div>
 
           <div className="transform hover:scale-105 transition-transform relative group">
-             {errorMsg && !canCreate && (
+             {errorMsg && (
                  <div className="bg-white border-4 border-black text-black p-4 rounded-xl mb-4 shadow-doodle text-center">
-                     <p className="font-heading text-xl mb-2">Poxa, seus créditos acabaram! 😢</p>
-                     <p className="mb-4">Mas você ainda pode ler suas histórias antigas.</p>
-                     <div className="flex gap-2 justify-center">
-                        <Button onClick={() => navigate('/library')} variant="primary" size="sm">Minha Biblioteca</Button>
-                        <Button onClick={() => navigate('/pricing')} variant="success" size="sm">Ver Planos</Button>
-                     </div>
+                     <p className="font-heading text-xl mb-2 text-red-500">{errorMsg}</p>
                  </div>
              )}
              
