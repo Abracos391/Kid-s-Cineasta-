@@ -17,20 +17,37 @@ const getAiClient = () => {
 
 // --- TRATAMENTO DE ERROS DA API ---
 const handleGenAIError = (error: any) => {
-  const errStr = JSON.stringify(error || {});
+  // Concatena mensagem e corpo do erro para garantir que pegamos o texto, 
+  // mesmo que venha em JSON dentro da message
+  const msg = (error?.message || '').toLowerCase();
+  const body = JSON.stringify(error || {}).toLowerCase();
+  const combined = msg + body;
   
-  // Erro específico de chave vazada/bloqueada
-  if (errStr.includes("leaked") || errStr.includes("PERMISSION_DENIED") || errStr.includes("API key not valid")) {
-    throw new Error("🚨 SUA CHAVE API FOI BLOQUEADA PELO GOOGLE. O Google detectou que sua chave vazou. Crie uma nova chave em aistudio.google.com e atualize seu .env");
+  // Erro específico de chave vazada/bloqueada (403 Permission Denied)
+  if (combined.includes("leaked") || combined.includes("permission_denied") || combined.includes("api key not valid")) {
+    throw new Error("🚨 SUA CHAVE API FOI BLOQUEADA. O Google detectou vazamento da chave. Crie uma nova em aistudio.google.com e atualize seu arquivo .env.");
   }
   
-  // Erro de cota
-  if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED")) {
+  // Erro de cota (429)
+  if (combined.includes("429") || combined.includes("quota") || combined.includes("resource_exhausted")) {
       throw new Error("⏳ Cota de uso da IA excedida. Aguarde alguns minutos e tente novamente.");
   }
 
   // Erro de rede ou desconhecido
   console.error("Gemini Error Raw:", error);
+  
+  // Se a mensagem for um JSON, tenta extrair algo legível, senão repassa o erro original
+  try {
+      if (msg.trim().startsWith('{')) {
+          const parsed = JSON.parse(error.message);
+          if (parsed.error && parsed.error.message) {
+              throw new Error(`Erro da IA: ${parsed.error.message}`);
+          }
+      }
+  } catch (e) {
+      // Falha ao parsear, ignora
+  }
+
   throw error;
 };
 
@@ -68,8 +85,9 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
     });
     return response.text || "Cute cartoon character";
   } catch (error) {
-    handleGenAIError(error);
-    return "Happy child cartoon character"; // Fallback seguro
+    // Não lançamos erro aqui para não travar a criação do avatar, usamos fallback
+    console.error("AnalyzeFace falhou, usando fallback. Erro:", error);
+    return "Happy child cartoon character"; 
   }
 };
 
