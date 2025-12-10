@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { jsPDF } from "jspdf";
 import { Story } from '../types';
@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { generateSpeech, generateChapterIllustration } from '../services/geminiService';
+import { videoService } from '../services/videoService';
 import AudioPlayer from '../components/AudioPlayer';
 import { dbService } from '../services/dbService';
 
@@ -22,6 +23,21 @@ const StoryReader: React.FC = () => {
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [processingDownload, setProcessingDownload] = useState(false);
+
+  // VIDEO STATE
+  const [videoStatus, setVideoStatus] = useState<'idle' | 'queued' | 'rendering' | 'done' | 'failed'>('idle');
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const pollingRef = useRef<number | null>(null);
+
+  // Limpeza do intervalo ao desmontar
+  useEffect(() => {
+    return () => {
+        if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+        }
+    };
+  }, []);
 
   // --- ACTIONS ---
 
@@ -124,6 +140,60 @@ const StoryReader: React.FC = () => {
     }
   };
 
+  // --- VIDEO GENERATION ---
+
+  const handleGenerateVideo = async () => {
+    if (!story) return;
+    
+    // Evita múltiplos cliques
+    if (videoStatus === 'queued' || videoStatus === 'rendering') return;
+
+    setVideoStatus('queued');
+    
+    try {
+        const renderId = await videoService.generateStoryVideo(story);
+        
+        // Inicia Polling
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        
+        pollingRef.current = window.setInterval(async () => {
+            try {
+                const result = await videoService.checkStatus(renderId);
+                console.log("Video Status:", result.status);
+                
+                if (result.status === 'done' && result.url) {
+                    setVideoStatus('done');
+                    setVideoUrl(result.url);
+                    if (pollingRef.current) {
+                        clearInterval(pollingRef.current);
+                        pollingRef.current = null;
+                    }
+                } else if (result.status === 'failed') {
+                    setVideoStatus('failed');
+                    if (pollingRef.current) {
+                        clearInterval(pollingRef.current);
+                        pollingRef.current = null;
+                    }
+                } else {
+                    setVideoStatus('rendering');
+                }
+            } catch (e) {
+                console.error("Polling error", e);
+                setVideoStatus('failed');
+                if (pollingRef.current) {
+                    clearInterval(pollingRef.current);
+                    pollingRef.current = null;
+                }
+            }
+        }, 4000); // Checa a cada 4s
+
+    } catch (e) {
+        console.error("Video start error", e);
+        alert("Erro ao iniciar criação do vídeo. Verifique a chave API do Shotstack.");
+        setVideoStatus('idle');
+    }
+  };
+
   // --- DOWNLOAD FUNCIONALITIES ---
 
   const decodeBase64ToBytes = (base64: string): Uint8Array => {
@@ -216,7 +286,6 @@ const StoryReader: React.FC = () => {
     setProcessingDownload(true);
 
     try {
-        // MUDANÇA: Formato PORTRAIT (Retrato - Vertical) para ficar igual aos screenshots
         const doc = new jsPDF({
             orientation: "portrait",
             unit: "mm",
@@ -226,34 +295,27 @@ const StoryReader: React.FC = () => {
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
 
-        // --- CAPA IGUAL AO PRINT ---
-        // Fundo Amarelo Ouro (#FFD700)
+        // --- CAPA ---
         doc.setFillColor(255, 215, 0); 
         doc.rect(0, 0, pageWidth, pageHeight, "F");
 
-        // Borda preta interna na capa (opcional, igual ao print "Lateral")
         doc.setDrawColor(0,0,0);
         doc.setLineWidth(3);
-        // doc.rect(5, 5, pageWidth - 10, pageHeight - 10); // Opcional
 
-        // Título no topo (Ciano com borda preta simulada ou apenas texto escuro forte)
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(48); // AUMENTADO (antes 36)
-        doc.setTextColor(0, 139, 139); // Dark Cyan (próximo ao print) ou Preto
+        doc.setFontSize(48);
+        doc.setTextColor(0, 139, 139);
         
         const splitTitle = doc.splitTextToSize(story.title.toUpperCase(), pageWidth - 40);
         doc.text(splitTitle, pageWidth / 2, 40, { align: "center" });
 
-        // Imagem Central Grande com borda grossa
         if (story.characters && story.characters[0]) {
              try {
                 const imgData = await fetchImageAsBase64(story.characters[0].imageUrl);
-                // Borda grossa preta
                 doc.setDrawColor(0,0,0);
                 doc.setLineWidth(2);
                 doc.setFillColor(255, 255, 255);
                 
-                // Quadrado central
                 const imgSize = 140;
                 const imgX = (pageWidth - imgSize) / 2;
                 const imgY = 80;
@@ -263,37 +325,29 @@ const StoryReader: React.FC = () => {
              } catch(e) {}
         }
         
-        // Caixa do Autor Embaixo (Igual ao print "AUTOR: HEBER")
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0,0,0);
         doc.setLineWidth(1.5);
         doc.roundedRect(30, pageHeight - 50, pageWidth - 60, 20, 3, 3, "FD");
         
-        doc.setFontSize(20); // AUMENTADO
+        doc.setFontSize(20);
         doc.setTextColor(0, 0, 0);
         const authorName = user?.name || 'Cineasta Kids';
         doc.text(`AUTOR: ${authorName.toUpperCase()}`, pageWidth / 2, pageHeight - 38, { align: "center" });
 
-
-        // --- PÁGINAS DA HISTÓRIA (Estilo Vertical) ---
-        
+        // --- PÁGINAS DA HISTÓRIA ---
         for (let i = 0; i < story.chapters.length; i++) {
             const chapter = story.chapters[i];
             doc.addPage();
             
-            // 1. Metade de Cima: Imagem
-            // Fundo da imagem (pode ser preto ou branco, no print é full bleed ou borda preta)
-            // Vamos fazer a imagem ocupar a metade superior (~45%)
             const imgHeight = pageHeight * 0.45;
             
-            // Fundo da página inteira preto (borda da imagem)
             doc.setFillColor(0, 0, 0);
             doc.rect(0, 0, pageWidth, pageHeight, "F");
 
             if (chapter.generatedImage) {
                 try {
                     const imgBase64 = await fetchImageAsBase64(chapter.generatedImage);
-                    // Imagem ocupando a parte de cima
                     doc.addImage(imgBase64, "JPEG", 0, 0, pageWidth, imgHeight);
                 } catch (e) {
                     doc.setFillColor(200, 200, 200);
@@ -301,42 +355,29 @@ const StoryReader: React.FC = () => {
                 }
             }
 
-            // 2. Metade de Baixo: Texto
-            // Fundo Creme (#FFFACD) igual ao print
             doc.setFillColor(255, 250, 205); 
             doc.rect(0, imgHeight, pageWidth, pageHeight - imgHeight, "F");
 
-            // Título do Capítulo (Roxo/Lilás e sublinhado simples)
-            const textStartY = imgHeight + 25; // Mais espaço
+            const textStartY = imgHeight + 25; 
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(30); // AUMENTADO (antes 22)
-            doc.setTextColor(147, 112, 219); // Medium Purple
+            doc.setFontSize(30); 
+            doc.setTextColor(147, 112, 219); 
             doc.text(chapter.title, pageWidth / 2, textStartY, { align: "center" });
             
-            // Linha decorativa embaixo do título
             doc.setDrawColor(200, 200, 200);
             doc.setLineWidth(0.5);
             doc.line(40, textStartY + 3, pageWidth - 40, textStartY + 3);
 
-            // Texto da História
-            // Fonte Grande e Escura
             doc.setFont("helvetica", "normal");
-            doc.setFontSize(24); // AUMENTADO 150% (antes 16)
-            doc.setTextColor(50, 50, 50); // Cinza escuro/Preto suave
+            doc.setFontSize(24);
+            doc.setTextColor(50, 50, 50); 
             
             const margin = 20;
             const maxWidth = pageWidth - (margin * 2);
             const textY = textStartY + 20;
             
             const splitText = doc.splitTextToSize(chapter.text, maxWidth);
-            
-            // Espaçamento entre linhas (line height)
             doc.text(splitText, margin, textY, { lineHeightFactor: 1.3, align: "justify", maxWidth: maxWidth });
-
-            // Paginação discreta no fundo
-            // doc.setFontSize(10);
-            // doc.setTextColor(150,150,150);
-            // doc.text(`${i + 1}`, pageWidth / 2, pageHeight - 10, { align: "center" });
         }
 
         doc.save(`Livro_${story.title.replace(/\s+/g, '_')}.pdf`);
@@ -399,6 +440,44 @@ const StoryReader: React.FC = () => {
                        >
                             {processingDownload ? 'Processando áudio...' : '🎵 Baixar Áudio Completo'}
                        </Button>
+                   </div>
+
+                   {/* SHOTSTACK VIDEO GENERATION UI */}
+                   <div className="border-t-2 border-black/10 pt-6 mb-4 w-full">
+                        {videoStatus === 'idle' && (
+                            <Button 
+                                variant="danger" 
+                                onClick={handleGenerateVideo} 
+                                className="w-full text-xl py-4 flex items-center justify-center gap-2 shadow-cartoon"
+                            >
+                                🎥 Gerar Filme MP4 (SD)
+                            </Button>
+                        )}
+
+                        {(videoStatus === 'queued' || videoStatus === 'rendering') && (
+                            <div className="w-full bg-black text-white p-4 rounded-xl border-4 border-gray-600 text-center animate-pulse">
+                                <div className="text-4xl mb-2">🎬</div>
+                                <div className="font-heading text-2xl">Luz, Câmera, Ação...</div>
+                                <div className="text-sm text-gray-400">Renderizando seu filme. Aguarde!</div>
+                            </div>
+                        )}
+
+                        {videoStatus === 'done' && videoUrl && (
+                            <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="block w-full">
+                                <Button 
+                                    variant="success" 
+                                    className="w-full text-xl py-4 flex items-center justify-center gap-2 animate-bounce-slow"
+                                >
+                                    📥 Baixar Filme Pronto!
+                                </Button>
+                            </a>
+                        )}
+
+                        {videoStatus === 'failed' && (
+                            <div className="w-full bg-red-100 text-red-600 p-4 rounded-xl border-4 border-red-500 text-center">
+                                ❌ Erro ao criar o vídeo. Tente mais tarde.
+                            </div>
+                        )}
                    </div>
 
                    <div className="flex flex-col gap-4 justify-center border-t-2 border-black/10 pt-6">
