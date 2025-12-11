@@ -1,9 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 
 const { Link, useNavigate } = ReactRouterDOM;
+
+// Imagens de reserva caso o arquivo local não exista
+const FALLBACK_IMAGES: Record<string, string> = {
+    '/print_cadastro.png': 'https://images.unsplash.com/photo-1555421689-491a97ff2040?auto=format&fit=crop&w=800&q=80',
+    '/print_avatar.png': 'https://images.unsplash.com/photo-1560785496-4c9f2c27749c?auto=format&fit=crop&w=800&q=80',
+    '/print_historia.png': 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=800&q=80',
+    '/print_leitura.png': 'https://images.unsplash.com/photo-1491841550275-ad7854e35ca6?auto=format&fit=crop&w=800&q=80',
+    '/print_escola.png': 'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=800&q=80'
+};
 
 const Tutorial: React.FC = () => {
   const navigate = useNavigate();
@@ -167,30 +176,35 @@ const Section: React.FC<{number: string, title: string, color: any, emoji: strin
     </Card>
 );
 
-// Componente inteligente de imagem
+// Componente inteligente de imagem com Fallback
 const TutorialImage: React.FC<{src: string, label: string}> = ({ src, label }) => {
-    const [error, setError] = React.useState(false);
+    const [imgSrc, setImgSrc] = useState(src);
+    const [hasError, setHasError] = useState(false);
 
-    if (error) {
-        return (
-            <div className="mt-6 w-full h-64 border-4 border-dashed border-black/30 rounded-xl bg-gray-50 flex flex-col items-center justify-center text-center p-4 group hover:bg-gray-100 transition-colors cursor-help">
-                <div className="text-6xl opacity-20 mb-2 group-hover:scale-110 transition-transform">📷</div>
-                <p className="font-bold text-gray-500 text-sm">Imagem não encontrada</p>
-                <p className="text-xs text-blue-600 font-mono mt-2 bg-blue-50 p-2 rounded select-all">Arquivo: {src}</p>
-                <p className="text-[10px] text-gray-400 mt-1">Coloque o arquivo na pasta 'public'</p>
-            </div>
-        );
-    }
+    const handleError = () => {
+        // Se der erro ao carregar o arquivo local, tenta o fallback da web
+        if (!hasError && FALLBACK_IMAGES[src]) {
+            setImgSrc(FALLBACK_IMAGES[src]);
+            setHasError(true); // Marca que usou fallback
+        }
+    };
 
     return (
-        <div className="mt-6 rounded-xl border-4 border-black overflow-hidden shadow-lg transform rotate-1 hover:rotate-0 transition-transform bg-white">
+        <div className="mt-6 rounded-xl border-4 border-black overflow-hidden shadow-lg transform rotate-1 hover:rotate-0 transition-transform bg-white relative group">
             <img 
-                src={src} 
+                src={imgSrc} 
                 alt={label} 
-                className="w-full h-auto object-cover"
-                onError={() => setError(true)}
+                className="w-full h-64 md:h-80 object-cover"
+                onError={handleError}
                 loading="lazy"
             />
+            
+            {/* Aviso discreto se estiver usando fallback */}
+            {hasError && (
+                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    Imagem ilustrativa. Adicione '{src}' na pasta 'public' para ver seu print.
+                </div>
+            )}
         </div>
     );
 };
