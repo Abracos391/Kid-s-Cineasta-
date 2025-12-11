@@ -1,3 +1,4 @@
+
 import React from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import Button from '../components/ui/Button';
@@ -40,7 +41,10 @@ const Tutorial: React.FC = () => {
                 <li>Digite um e-mail válido.</li>
                 <li>Crie uma senha secreta!</li>
             </ul>
-            <TutorialImage src="/print_cadastro.png" label="Salve o print como: public/print_cadastro.png" />
+            <TutorialImage 
+                src="https://placehold.co/600x300/FFD700/000000?text=Passo+1:+Criar+Conta+no+Cineasta+Kids&font=roboto" 
+                label="Tela de Cadastro" 
+            />
         </Section>
 
         {/* PASSO 2: AVATARES */}
@@ -63,7 +67,10 @@ const Tutorial: React.FC = () => {
             <p className="mt-4 text-sm bg-yellow-100 p-2 rounded border border-yellow-500">
                 💡 <strong>Dica:</strong> O robô vai transformar sua foto em desenho 3D automaticamente!
             </p>
-            <TutorialImage src="/print_avatar.png" label="Salve o print como: public/print_avatar.png" />
+            <TutorialImage 
+                src="https://placehold.co/600x300/32CD32/000000?text=Passo+2:+Criar+Avatar+3D&font=roboto" 
+                label="Tela de Criação de Avatar" 
+            />
         </Section>
 
         {/* PASSO 3: CRIAR HISTÓRIA */}
@@ -79,7 +86,10 @@ const Tutorial: React.FC = () => {
                 <li>Escreva sua ideia na caixa de texto. Pode ser qualquer coisa! <br/><em>Ex: "Uma viagem para a lua feita de queijo".</em></li>
                 <li>Clique no botão gigante <strong>CRIAR HISTÓRIA</strong>.</li>
             </ol>
-            <TutorialImage src="/print_historia.png" label="Salve o print como: public/print_historia.png" />
+            <TutorialImage 
+                src="https://placehold.co/600x300/FF69B4/ffffff?text=Passo+3:+Escrever+Historia&font=roboto" 
+                label="Tela de Criação de História" 
+            />
         </Section>
 
         {/* PASSO 4: LENDO E OUVINDO */}
@@ -93,9 +103,13 @@ const Tutorial: React.FC = () => {
             <ul className="list-disc pl-6 space-y-2 mt-2 font-sans font-bold text-gray-700">
                 <li>Ler os capítulos ilustrados.</li>
                 <li>Clicar em <strong>"🔊 Narrar"</strong> para o computador ler para você.</li>
+                <li>Clicar em <strong>"🎥 Gerar Filme"</strong> para criar um vídeo MP4!</li>
                 <li>No final, clicar em <strong>"📚 Baixar PDF"</strong> para imprimir seu livro!</li>
             </ul>
-            <TutorialImage src="/print_leitura.png" label="Salve o print como: public/print_leitura.png" />
+            <TutorialImage 
+                src="https://placehold.co/600x300/40E0D0/ffffff?text=Passo+4:+Leitura,+Video+e+PDF&font=roboto" 
+                label="Tela de Leitura e Vídeo" 
+            />
         </Section>
 
         {/* EXTRA: MODO ESCOLA */}
@@ -114,7 +128,10 @@ const Tutorial: React.FC = () => {
                     <li>Na <strong>Sala de Aula</strong>, organize os alunos nas cadeiras.</li>
                     <li>Use a <strong>Lousa Mágica</strong> para criar fábulas educativas baseadas na BNCC.</li>
                 </ol>
-                <TutorialImage src="/print_escola.png" label="Salve o print como: public/print_escola.png" />
+                <TutorialImage 
+                    src="https://placehold.co/600x300/ffffff/000000?text=Extra:+Modo+Escola+e+BNCC&font=roboto" 
+                    label="Tela da Sala de Aula" 
+                />
             </Section>
         </div>
 
@@ -159,7 +176,7 @@ const TutorialImage: React.FC<{src: string, label: string}> = ({ src, label }) =
         return (
             <div className="mt-6 w-full h-64 border-4 border-dashed border-black/30 rounded-xl bg-gray-50 flex flex-col items-center justify-center text-center p-4 group hover:bg-gray-100 transition-colors cursor-help">
                 <div className="text-6xl opacity-20 mb-2 group-hover:scale-110 transition-transform">📷</div>
-                <p className="font-bold text-gray-500 text-sm">Imagem não encontrada</p>
+                <p className="font-bold text-gray-500 text-sm">Imagem indisponível</p>
                 <p className="text-xs text-blue-600 font-mono mt-2 bg-blue-50 p-2 rounded select-all">{label}</p>
             </div>
         );
@@ -172,6 +189,7 @@ const TutorialImage: React.FC<{src: string, label: string}> = ({ src, label }) =
                 alt="Tutorial" 
                 className="w-full h-auto object-cover"
                 onError={() => setError(true)}
+                loading="lazy"
             />
         </div>
     );

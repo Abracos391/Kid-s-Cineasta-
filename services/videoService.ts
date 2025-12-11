@@ -22,21 +22,19 @@ export const videoService = {
   
   /**
    * Estima o tempo de leitura (em segundos)
-   * Velocidade média de leitura infantil: ~100 palavras por minuto.
+   * Velocidade média de leitura infantil: ~80-100 palavras por minuto.
+   * Ajustado para ser mais lento.
    */
   calculateDuration: (text: string): number => {
     const words = text.split(' ').length;
-    // Mínimo 5s, Máximo 15s por cena para não ficar entediante
-    const estimated = Math.max(5, Math.min(words / 1.5, 15)); 
+    // Divide por 2.5 para dar mais tempo de leitura (leitura pausada)
+    // Mínimo 6s (para apreciar a imagem), Máximo 20s
+    const estimated = Math.max(6, Math.min(words / 2.0, 20)); 
     return estimated;
   },
 
   /**
    * Constrói o JSON do Shotstack e envia para a API
-   * CORREÇÕES FEITAS EM RELAÇÃO AO SNIPPET ORIGINAL:
-   * 1. Asset type 'image' em vez de 'video'.
-   * 2. Lógica de 'startTime' sequencial (não start:0 fixo).
-   * 3. Adição de camada de texto (HTML Asset).
    */
   generateStoryVideo: async (story: Story): Promise<string> => {
     if (!API_KEY) {
@@ -52,11 +50,11 @@ export const videoService = {
       const chapter = story.chapters[i];
       const duration = videoService.calculateDuration(chapter.text);
       
-      // Asset de Imagem (Do Pollinations AI)
+      // Asset de Imagem (Do Pollinations AI ou Fallback genérico colorido)
       clips.push({
         asset: {
           type: 'image',
-          src: chapter.generatedImage || 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/images/transport/plane.jpg',
+          src: chapter.generatedImage || 'https://images.unsplash.com/photo-1606092195730-5d7b9af1ef4d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1280&q=80',
         },
         start: startTime,
         length: duration,
@@ -71,8 +69,8 @@ export const videoService = {
       textClips.push({
         asset: {
           type: 'html',
-          html: `<div style="font-family: 'Montserrat', sans-serif; text-align: center;">
-                    <h1 style="font-size: 42px; color: #FFD700; text-shadow: 3px 3px 0 #000; margin-bottom: 10px;">${chapter.title.toUpperCase()}</h1>
+          html: `<div style="font-family: 'Montserrat', sans-serif; text-align: center; width: 100%;">
+                    <h1 style="font-size: 48px; color: #FFD700; text-shadow: 4px 4px 0 #000; margin-bottom: 20px; font-weight: 900;">${chapter.title.toUpperCase()}</h1>
                  </div>`,
           css: "@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@900&display=swap');",
           width: 1000,
@@ -93,8 +91,6 @@ export const videoService = {
     }
 
     // --- FAIXA 3: MÚSICA DE FUNDO ---
-    // Nota: Não podemos usar a narração gerada localmente (Base64) pois o Shotstack exige URL pública (S3/Cloud).
-    // Usamos uma trilha divertida padrão.
     const audioTrack = {
       clips: [
         {
@@ -129,7 +125,6 @@ export const videoService = {
 
     // --- CHAMADA API ---
     try {
-      // Usamos fetch nativo para evitar dependência extra do axios
       const response = await fetch(`${SHOTSTACK_API}/render`, {
         method: 'POST',
         headers: {
