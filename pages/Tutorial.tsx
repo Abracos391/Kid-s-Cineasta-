@@ -1,17 +1,15 @@
 import React, { useState } from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 
-const { Link, useNavigate } = ReactRouterDOM;
-
-// Imagens de reserva caso o arquivo local não exista
+// Imagens provisórias da internet para não deixar o app quebrado
 const FALLBACK_IMAGES: Record<string, string> = {
-    '/print_cadastro.png': 'https://images.unsplash.com/photo-1555421689-491a97ff2040?auto=format&fit=crop&w=800&q=80',
-    '/print_avatar.png': 'https://images.unsplash.com/photo-1560785496-4c9f2c27749c?auto=format&fit=crop&w=800&q=80',
-    '/print_historia.png': 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=800&q=80',
-    '/print_leitura.png': 'https://images.unsplash.com/photo-1491841550275-ad7854e35ca6?auto=format&fit=crop&w=800&q=80',
-    '/print_escola.png': 'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=800&q=80'
+    '/print_cadastro.png': 'https://images.unsplash.com/photo-1614036634955-897d51970663?auto=format&fit=crop&w=800&q=80', // Ex: Tela de Login
+    '/print_avatar.png': 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80',   // Ex: Livro/Criação
+    '/print_historia.png': 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=800&q=80', // Ex: Montanhas/História
+    '/print_leitura.png': 'https://images.unsplash.com/photo-1533227268428-f9ed0900fb3b?auto=format&fit=crop&w=800&q=80',  // Ex: Leitura
+    '/print_escola.png': 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=80'    // Ex: Escola
 };
 
 const Tutorial: React.FC = () => {
@@ -46,7 +44,7 @@ const Tutorial: React.FC = () => {
             <p>Antes de começar a diversão, você precisa do seu passaporte! Na tela inicial, escolha <strong>"Criar Conta"</strong>.</p>
             <ul className="list-disc pl-6 space-y-2 mt-2 font-sans font-bold text-gray-700">
                 <li>Coloque o nome do seu responsável (Papai ou Mamãe).</li>
-                <li>Digite um e-mail válido.</li>
+                <li>Digite um e-mail válido ou WhatsApp.</li>
                 <li>Crie uma senha secreta!</li>
             </ul>
             <TutorialImage 
@@ -176,7 +174,8 @@ const Section: React.FC<{number: string, title: string, color: any, emoji: strin
     </Card>
 );
 
-// Componente inteligente de imagem com Fallback
+// Componente de imagem inteligente
+// Se não encontrar o arquivo no computador, usa uma imagem da internet (Fallback)
 const TutorialImage: React.FC<{src: string, label: string}> = ({ src, label }) => {
     const [imgSrc, setImgSrc] = useState(src);
     const [hasError, setHasError] = useState(false);
@@ -185,7 +184,7 @@ const TutorialImage: React.FC<{src: string, label: string}> = ({ src, label }) =
         // Se der erro ao carregar o arquivo local, tenta o fallback da web
         if (!hasError && FALLBACK_IMAGES[src]) {
             setImgSrc(FALLBACK_IMAGES[src]);
-            setHasError(true); // Marca que usou fallback
+            setHasError(true); 
         }
     };
 
@@ -194,15 +193,14 @@ const TutorialImage: React.FC<{src: string, label: string}> = ({ src, label }) =
             <img 
                 src={imgSrc} 
                 alt={label} 
-                className="w-full h-64 md:h-80 object-cover"
+                className="w-full h-auto object-cover max-h-80"
                 onError={handleError}
                 loading="lazy"
             />
             
-            {/* Aviso discreto se estiver usando fallback */}
             {hasError && (
-                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    Imagem ilustrativa. Adicione '{src}' na pasta 'public' para ver seu print.
+                <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] p-2 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    (Imagem ilustrativa. Adicione o arquivo '{src}' na pasta 'public' para ver o original)
                 </div>
             )}
         </div>
