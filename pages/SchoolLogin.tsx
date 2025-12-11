@@ -11,7 +11,7 @@ const SchoolLogin: React.FC = () => {
   const [name, setName] = useState(''); 
   const [schoolName, setSchoolName] = useState(''); 
   const [code, setCode] = useState(''); 
-  const [whatsapp, setWhatsapp] = useState(''); // Novo Campo
+  const [whatsapp, setWhatsapp] = useState(''); 
   
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false); 
@@ -49,48 +49,59 @@ const SchoolLogin: React.FC = () => {
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-[#1a3c28] flex items-center justify-center text-white font-bold">Carregando Escola...</div>;
+  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white font-bold">Carregando Escola...</div>;
 
   return (
-    <div className="min-h-screen bg-[#1a3c28] flex items-center justify-center p-4 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
+    <div className="min-h-screen relative flex items-center justify-center p-4 overflow-hidden bg-[#0f172a]">
         
-        <div className="max-w-md w-full relative z-10">
-            <div className="text-center mb-8">
-                <div className="text-6xl mb-4 animate-bounce">🍎</div>
-                <h1 className="font-comic text-5xl text-white text-stroke-black drop-shadow-lg mb-2">
-                    Modo Escola
+        {/* Imagem de Fundo com Overlay Escuro (Estilo Tech/Escola Moderna) */}
+        <div className="absolute inset-0 z-0 opacity-20" 
+             style={{
+                 backgroundImage: 'url("https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2029&auto=format&fit=crop")', // Fundo abstrato azul escuro
+                 backgroundSize: 'cover',
+                 backgroundPosition: 'center',
+             }}>
+        </div>
+        
+        {/* Overlay Gradiente para garantir legibilidade idêntica ao print */}
+        <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#0f172a] via-[#0f172a]/90 to-[#1e293b]"></div>
+
+        <div className="max-w-xl w-full relative z-10 flex flex-col items-center">
+            
+            <div className="text-center mb-10 animate-fade-in">
+                <h1 className="font-comic text-6xl md:text-7xl text-white tracking-widest italic mb-2" style={{ textShadow: '4px 4px 0 #000' }}>
+                    MODO ESCOLA
                 </h1>
-                <p className="text-yellow-400 font-bold font-heading text-xl">
-                    {isRegistering ? 'Cadastro Institucional' : 'Área Restrita aos Educadores'}
-                </p>
+                <h2 className="font-heading text-2xl md:text-3xl text-orange-500 font-bold mb-4 drop-shadow-md">
+                    Área Restrita aos Educadores
+                </h2>
             </div>
 
-            <div className="bg-[#2d5a3f] border-[8px] border-[#5c3a21] rounded-lg p-8 shadow-2xl transform rotate-1 transition-all duration-300">
-                <div className="text-center text-white/50 mb-6 font-comic text-sm border-b border-white/10 pb-2">
-                    Sistema de Gestão Pedagógica - Cineasta Kids
+            <div className="w-full p-2">
+                
+                <div className="text-center text-blue-300/60 mb-6 font-heading text-sm uppercase tracking-[0.1em] font-bold">
+                    SISTEMA DE GESTÃO PEDAGÓGICA - CINEASTA KIDS
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-6">
                     
                     {isRegistering && (
-                        <div className="animate-fade-in space-y-4">
+                        <div className="animate-fade-in space-y-6">
                             <div>
-                                <label className="block text-white font-bold mb-1 font-heading uppercase text-xs tracking-wider">Nome da Instituição</label>
+                                <label className="block text-white font-bold mb-2 font-heading uppercase text-sm tracking-wider">Nome da Instituição</label>
                                 <input 
                                     type="text" 
-                                    className="w-full p-3 bg-black/20 border-b-2 border-white/30 text-white font-hand text-xl placeholder-white/30 outline-none focus:border-yellow-400 transition-colors"
+                                    className="w-full p-4 bg-blue-50/90 border-2 border-transparent rounded-sm text-gray-900 font-bold placeholder-gray-500 outline-none focus:border-green-400 focus:ring-4 focus:ring-green-400/20 transition-all"
                                     placeholder="Ex: Escola Municipal do Saber"
                                     value={schoolName}
                                     onChange={e => setSchoolName(e.target.value)}
-                                    style={{ fontFamily: '"Comic Neue", cursive' }}
                                 />
                             </div>
                             <div>
-                                <label className="block text-white font-bold mb-1 font-heading uppercase text-xs tracking-wider">WhatsApp para Contato</label>
+                                <label className="block text-white font-bold mb-2 font-heading uppercase text-sm tracking-wider">WhatsApp</label>
                                 <input 
                                     type="tel" 
-                                    className="w-full p-3 bg-black/20 border-b-2 border-white/30 text-white font-hand text-xl placeholder-white/30 outline-none focus:border-yellow-400 transition-colors"
+                                    className="w-full p-4 bg-blue-50/90 border-2 border-transparent rounded-sm text-gray-900 font-bold placeholder-gray-500 outline-none focus:border-green-400 focus:ring-4 focus:ring-green-400/20 transition-all"
                                     placeholder="(00) 00000-0000"
                                     value={whatsapp}
                                     onChange={e => setWhatsapp(e.target.value)}
@@ -100,50 +111,53 @@ const SchoolLogin: React.FC = () => {
                     )}
 
                     <div>
-                        <label className="block text-white font-bold mb-1 font-heading uppercase text-xs tracking-wider">Nome do Educador</label>
+                        <label className="block text-white font-bold mb-2 font-heading uppercase text-sm tracking-wider">Nome do Educador</label>
                         <input 
                             type="text" 
-                            className="w-full p-3 bg-black/20 border-b-2 border-white/30 text-white font-hand text-xl placeholder-white/30 outline-none focus:border-yellow-400 transition-colors"
-                            placeholder="Ex: Maria Silva"
+                            className="w-full p-4 bg-blue-50/90 border-2 border-transparent rounded-sm text-gray-900 font-bold placeholder-gray-500 outline-none focus:border-green-400 focus:ring-4 focus:ring-green-400/20 transition-all shadow-inner"
+                            placeholder="Ex: professor@email.com"
                             value={name}
                             onChange={e => setName(e.target.value)}
-                            style={{ fontFamily: '"Comic Neue", cursive' }}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-white font-bold mb-1 font-heading uppercase text-xs tracking-wider">
-                            {isRegistering ? 'Crie seu Código de Acesso' : 'Código de Acesso Escolar'}
+                        <label className="block text-white font-bold mb-2 font-heading uppercase text-sm tracking-wider">
+                            {isRegistering ? 'Criar Código de Acesso' : 'Código de Acesso Escolar'}
                         </label>
                         <input 
                             type="password" 
-                            className="w-full p-3 bg-black/20 border-b-2 border-white/30 text-white font-hand text-xl placeholder-white/30 outline-none focus:border-yellow-400 transition-colors"
+                            className="w-full p-4 bg-blue-50/90 border-2 border-transparent rounded-sm text-gray-900 font-bold placeholder-gray-500 outline-none focus:border-green-400 focus:ring-4 focus:ring-green-400/20 transition-all shadow-inner tracking-widest"
                             placeholder="••••••••"
                             value={code}
                             onChange={e => setCode(e.target.value)}
                         />
-                        {!isRegistering && <p className="text-xs text-white/40 mt-1">Dica para teste: PROFESSOR123</p>}
+                        {!isRegistering && <p className="text-xs text-blue-200 mt-2 opacity-60">Dica para teste: PROFESSOR123</p>}
                     </div>
 
                     {error && (
-                        <div className="bg-red-500/20 border border-red-500 text-red-100 p-2 rounded text-center text-sm font-bold animate-pulse">
+                        <div className="bg-red-500/20 border border-red-500 text-red-100 p-3 rounded text-center text-sm font-bold animate-pulse">
                             🚨 {error}
                         </div>
                     )}
 
-                    <Button variant="success" size="lg" className="w-full border-white shadow-none mt-4" loading={submitting}>
-                        {isRegistering ? 'CADASTRAR ESCOLA ✨' : 'ACESSAR SALA DE AULA 🎓'}
+                    <Button variant="success" size="lg" className="w-full py-5 text-2xl shadow-lg hover:scale-[1.01] active:scale-95 transition-transform flex items-center justify-center gap-2 border-b-4 border-green-700 italic font-comic tracking-wide" loading={submitting}>
+                        {isRegistering ? 'CADASTRAR ESCOLA ✨' : (
+                            <>
+                                ACESSAR SALA DE AULA 🎓
+                            </>
+                        )}
                     </Button>
                 </form>
 
-                <div className="mt-6 text-center border-t border-white/10 pt-4">
+                <div className="mt-12 text-center border-t border-white/10 pt-6">
                     <button 
                         onClick={() => {
                             setIsRegistering(!isRegistering);
                             setError('');
                             setCode('');
                         }}
-                        className="text-yellow-300 hover:text-yellow-100 underline text-sm font-bold"
+                        className="text-orange-400 hover:text-orange-300 font-bold hover:underline transition-colors font-heading tracking-wide text-lg"
                         type="button"
                     >
                         {isRegistering 
@@ -152,12 +166,10 @@ const SchoolLogin: React.FC = () => {
                     </button>
                 </div>
             </div>
-
-            <div className="text-center mt-8">
-                <Link to="/" className="text-white/60 hover:text-white underline text-sm font-bold">
-                    ← Voltar para Cineasta Kids (App Principal)
-                </Link>
-            </div>
+            
+            <Link to="/" className="mt-8 text-blue-300/40 hover:text-white font-bold text-xs transition-colors uppercase tracking-widest">
+                 ← Voltar para o App Principal
+            </Link>
         </div>
     </div>
   );
