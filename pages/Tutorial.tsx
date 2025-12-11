@@ -1,4 +1,3 @@
-
 import React from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import Button from '../components/ui/Button';
@@ -42,7 +41,7 @@ const Tutorial: React.FC = () => {
                 <li>Crie uma senha secreta!</li>
             </ul>
             <TutorialImage 
-                src="https://placehold.co/600x300/FFD700/000000?text=Passo+1:+Criar+Conta+no+Cineasta+Kids&font=roboto" 
+                src="/print_cadastro.png" 
                 label="Tela de Cadastro" 
             />
         </Section>
@@ -68,7 +67,7 @@ const Tutorial: React.FC = () => {
                 💡 <strong>Dica:</strong> O robô vai transformar sua foto em desenho 3D automaticamente!
             </p>
             <TutorialImage 
-                src="https://placehold.co/600x300/32CD32/000000?text=Passo+2:+Criar+Avatar+3D&font=roboto" 
+                src="/print_avatar.png" 
                 label="Tela de Criação de Avatar" 
             />
         </Section>
@@ -87,7 +86,7 @@ const Tutorial: React.FC = () => {
                 <li>Clique no botão gigante <strong>CRIAR HISTÓRIA</strong>.</li>
             </ol>
             <TutorialImage 
-                src="https://placehold.co/600x300/FF69B4/ffffff?text=Passo+3:+Escrever+Historia&font=roboto" 
+                src="/print_historia.png" 
                 label="Tela de Criação de História" 
             />
         </Section>
@@ -107,7 +106,7 @@ const Tutorial: React.FC = () => {
                 <li>No final, clicar em <strong>"📚 Baixar PDF"</strong> para imprimir seu livro!</li>
             </ul>
             <TutorialImage 
-                src="https://placehold.co/600x300/40E0D0/ffffff?text=Passo+4:+Leitura,+Video+e+PDF&font=roboto" 
+                src="/print_leitura.png" 
                 label="Tela de Leitura e Vídeo" 
             />
         </Section>
@@ -129,7 +128,7 @@ const Tutorial: React.FC = () => {
                     <li>Use a <strong>Lousa Mágica</strong> para criar fábulas educativas baseadas na BNCC.</li>
                 </ol>
                 <TutorialImage 
-                    src="https://placehold.co/600x300/ffffff/000000?text=Extra:+Modo+Escola+e+BNCC&font=roboto" 
+                    src="/print_escola.png" 
                     label="Tela da Sala de Aula" 
                 />
             </Section>
@@ -176,8 +175,9 @@ const TutorialImage: React.FC<{src: string, label: string}> = ({ src, label }) =
         return (
             <div className="mt-6 w-full h-64 border-4 border-dashed border-black/30 rounded-xl bg-gray-50 flex flex-col items-center justify-center text-center p-4 group hover:bg-gray-100 transition-colors cursor-help">
                 <div className="text-6xl opacity-20 mb-2 group-hover:scale-110 transition-transform">📷</div>
-                <p className="font-bold text-gray-500 text-sm">Imagem indisponível</p>
-                <p className="text-xs text-blue-600 font-mono mt-2 bg-blue-50 p-2 rounded select-all">{label}</p>
+                <p className="font-bold text-gray-500 text-sm">Imagem não encontrada</p>
+                <p className="text-xs text-blue-600 font-mono mt-2 bg-blue-50 p-2 rounded select-all">Arquivo: {src}</p>
+                <p className="text-[10px] text-gray-400 mt-1">Coloque o arquivo na pasta 'public'</p>
             </div>
         );
     }
@@ -186,7 +186,7 @@ const TutorialImage: React.FC<{src: string, label: string}> = ({ src, label }) =
         <div className="mt-6 rounded-xl border-4 border-black overflow-hidden shadow-lg transform rotate-1 hover:rotate-0 transition-transform bg-white">
             <img 
                 src={src} 
-                alt="Tutorial" 
+                alt={label} 
                 className="w-full h-auto object-cover"
                 onError={() => setError(true)}
                 loading="lazy"
