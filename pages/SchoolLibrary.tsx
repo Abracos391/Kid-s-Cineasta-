@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { Story } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { dbService } from '../services/dbService';
-
-const { Link } = ReactRouterDOM;
 
 const SchoolLibrary: React.FC = () => {
   const { user } = useAuth();

@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
-
-const { useNavigate, Link } = ReactRouterDOM;
 
 const SchoolLogin: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false);

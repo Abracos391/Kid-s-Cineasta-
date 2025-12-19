@@ -1,5 +1,5 @@
 import React from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
@@ -15,8 +15,6 @@ import SchoolLogin from './pages/SchoolLogin';
 import SchoolLibrary from './pages/SchoolLibrary';
 import Tutorial from './pages/Tutorial';
 import ErrorBoundary from './components/ErrorBoundary';
-
-const { HashRouter: Router, Routes, Route } = ReactRouterDOM;
 
 const App: React.FC = () => {
   return (

@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { Avatar } from '../types';
@@ -8,8 +7,6 @@ import { generateStory } from '../services/geminiService';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
 import { dbService } from '../services/dbService';
-
-const { useNavigate } = ReactRouterDOM;
 
 const StoryWizard: React.FC = () => {
   const navigate = useNavigate();

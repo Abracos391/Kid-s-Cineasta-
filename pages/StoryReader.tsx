@@ -1,6 +1,5 @@
-
 import React, { useEffect, useState, useRef } from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { jsPDF } from "jspdf";
 import { Story } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -10,8 +9,6 @@ import { generateSpeech, generateChapterIllustration } from '../services/geminiS
 import { videoService } from '../services/videoService';
 import AudioPlayer from '../components/AudioPlayer';
 import { dbService } from '../services/dbService';
-
-const { useParams, useNavigate } = ReactRouterDOM;
 
 const StoryReader: React.FC = () => {
   const { id } = useParams();

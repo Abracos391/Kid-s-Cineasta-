@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Modality, Schema, Type } from "@google/genai";
+import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { Avatar, StoryChapter } from "../types";
 
 // --- CONFIGURAÇÃO DO CLIENTE ---
@@ -12,6 +12,7 @@ const getAiClient = () => {
       console.error("API Key inválida ou não encontrada.");
       throw new Error("Chave de API do Google não configurada no arquivo .env");
   }
+  // Initialize with named parameter as required by the SDK
   return new GoogleGenAI({ apiKey });
 };
 
@@ -66,8 +67,9 @@ const cleanAndParseJSON = (text: string | undefined): any => {
 export const analyzeFaceForAvatar = async (base64Image: string): Promise<string> => {
   try {
     const ai = getAiClient();
+    // Using gemini-3-flash-preview for general vision tasks
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
           { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
@@ -75,6 +77,7 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
         ]
       }
     });
+    // Use response.text property directly
     return response.text || "Cute cartoon character";
   } catch (error) {
     console.error("AnalyzeFace falhou, usando fallback.", error);
@@ -100,8 +103,8 @@ export const generateChapterIllustration = (visualDescription: string, character
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
 };
 
-// SCHEMA OTIMIZADO PARA HISTÓRIA
-const storySchema: Schema = {
+// SCHEMA OTIMIZADO PARA HISTÓRIA - Removed prohibited Schema type import
+const storySchema = {
   type: Type.OBJECT,
   properties: {
     title: { type: Type.STRING },
@@ -137,8 +140,9 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
   `;
 
   try {
+    // Updated to gemini-3-flash-preview as per guidelines
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -146,6 +150,7 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
       }
     });
 
+    // Directly access text property
     const json = cleanAndParseJSON(response.text);
     
     if (!json.title || !json.chapters || !Array.isArray(json.chapters)) {
@@ -172,8 +177,9 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
   `;
 
   try {
+    // Updated to gemini-3-flash-preview as per guidelines
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -181,6 +187,7 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
       }
     });
 
+    // Access response text property
     const json = cleanAndParseJSON(response.text);
     return { 
         title: json.title, 
@@ -197,6 +204,7 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
 export const generateSpeech = async (text: string): Promise<string> => {
   try {
     const ai = getAiClient();
+    // Using gemini-2.5-flash-preview-tts as it's the correct model for TTS tasks
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-preview-tts',
       contents: { parts: [{ text }] },
@@ -208,6 +216,7 @@ export const generateSpeech = async (text: string): Promise<string> => {
       }
     });
 
+    // Extract audio data using the documented response structure
     const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (audioData) return audioData;
     throw new Error("Áudio não gerado.");

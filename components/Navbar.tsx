@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import Button from './ui/Button';
-
-const { Link, useLocation } = ReactRouterDOM;
 
 const Navbar: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { i18n, t } = useTranslation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
   // Não exibe navbar nas telas de login
@@ -17,16 +17,18 @@ const Navbar: React.FC = () => {
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
   const closeMenu = () => setIsMenuOpen(false);
 
-  // Lógica corrigida: Se é usuário de escola, ativa modo escola. Caso contrário, modo padrão.
   const isSchoolMode = user?.isSchoolUser;
+
+  const changeLanguage = (lng: string) => {
+    i18n.changeLanguage(lng);
+    localStorage.setItem('i18nextLng', lng);
+  };
 
   return (
     <nav className="sticky top-2 z-50 mx-auto max-w-6xl px-4 mb-8 font-comic">
-      {/* Main Navbar Container */}
       <div className={`bg-white rounded-full border-[3px] border-black shadow-doodle px-4 py-2 relative z-50 transition-all hover:shadow-doodle-hover ${isSchoolMode ? 'bg-[#f0f4f1]' : ''}`}>
         <div className="flex items-center justify-between">
           
-          {/* Logo - Redireciona para o lugar certo dependendo do usuário */}
           <Link to={isSchoolMode ? "/school" : "/"} className="flex items-center gap-3 group" onClick={closeMenu}>
             <div className="relative">
                 <div className={`w-12 h-12 rounded-full border-[3px] border-black flex items-center justify-center shadow-sm group-hover:rotate-12 transition-transform z-10 relative ${isSchoolMode ? 'bg-green-700' : 'bg-cartoon-yellow'}`}>
@@ -44,10 +46,8 @@ const Navbar: React.FC = () => {
             </div>
           </Link>
 
-          {/* Desktop Menu */}
           <div className="hidden md:flex items-center gap-2">
             {!isSchoolMode ? (
-                // MENU PADRÃO (Cineasta Kids)
                 <>
                     <NavLink to="/" active={isActive('/')} color="bg-cartoon-yellow">🏠 Início</NavLink>
                     <NavLink to="/avatars" active={isActive('/avatars')} color="bg-cartoon-green">👾 Avatares</NavLink>
@@ -55,7 +55,6 @@ const Navbar: React.FC = () => {
                     <NavLink to="/library" active={isActive('/library')} color="bg-cartoon-purple">🏰 Biblioteca</NavLink>
                 </>
             ) : (
-                // MENU ESCOLA
                 <>
                     <NavLink to="/school" active={isActive('/school')} color="bg-green-300">🏫 Sala de Aula</NavLink>
                     <NavLink to="/school-library" active={isActive('/school-library')} color="bg-yellow-300">📚 Biblioteca Escolar</NavLink>
@@ -67,10 +66,27 @@ const Navbar: React.FC = () => {
             
             <div className="w-0.5 h-8 bg-black/10 mx-2 rounded-full"></div>
 
+            {/* Language Switcher */}
+            <div className="flex gap-1 mr-2">
+              <button 
+                onClick={() => changeLanguage('pt-BR')} 
+                className={`w-8 h-8 rounded-full border-2 border-black flex items-center justify-center text-xs font-bold transition-all ${i18n.language === 'pt-BR' ? 'bg-cartoon-yellow scale-110 shadow-sm' : 'bg-gray-200 opacity-60'}`}
+                title={t('common.pt_br')}
+              >
+                PT
+              </button>
+              <button 
+                onClick={() => changeLanguage('en-US')} 
+                className={`w-8 h-8 rounded-full border-2 border-black flex items-center justify-center text-xs font-bold transition-all ${i18n.language === 'en-US' ? 'bg-cartoon-blue scale-110 shadow-sm' : 'bg-gray-200 opacity-60'}`}
+                title={t('common.en_us')}
+              >
+                EN
+              </button>
+            </div>
+
             <UserSection user={user} logout={logout} />
           </div>
 
-          {/* Mobile Hamburger Button */}
           <button 
             onClick={toggleMenu}
             className="md:hidden relative group"
@@ -83,19 +99,11 @@ const Navbar: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Dropdown Menu Overlay */}
       {isMenuOpen && (
         <>
-            {/* Backdrop */}
             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40" onClick={closeMenu}></div>
-            
-            {/* Menu Panel */}
             <div className="absolute top-full left-0 right-0 px-2 mt-4 z-50 md:hidden animate-float">
                 <div className="bg-white border-[3px] border-black rounded-hand p-6 shadow-cartoon relative overflow-hidden">
-                    {/* Decorative Blobs */}
-                    <div className="absolute -right-6 -top-6 w-32 h-32 bg-cartoon-yellow rounded-full opacity-30 mix-blend-multiply pointer-events-none"></div>
-                    <div className="absolute -left-6 -bottom-6 w-32 h-32 bg-cartoon-blue rounded-full opacity-30 mix-blend-multiply pointer-events-none"></div>
-
                     <div className="relative z-10 flex flex-col gap-3">
                         {!isSchoolMode ? (
                             <>
@@ -112,10 +120,15 @@ const Navbar: React.FC = () => {
                             </>
                         )}
 
-                        <MobileNavLink to="/tutorial" onClick={closeMenu} active={isActive('/tutorial')} emoji="❓" color="hover:bg-gray-200">Como Usar / Ajuda</MobileNavLink>
+                        <MobileNavLink to="/tutorial" onClick={closeMenu} active={isActive('/tutorial')} emoji="❓" color="hover:bg-gray-200">Ajuda</MobileNavLink>
+
+                        {/* Mobile Language Switcher */}
+                        <div className="flex justify-center gap-4 my-2">
+                           <button onClick={() => changeLanguage('pt-BR')} className={`px-4 py-2 rounded-xl border-2 border-black font-bold ${i18n.language === 'pt-BR' ? 'bg-cartoon-yellow' : 'bg-gray-100'}`}>PT-BR</button>
+                           <button onClick={() => changeLanguage('en-US')} className={`px-4 py-2 rounded-xl border-2 border-black font-bold ${i18n.language === 'en-US' ? 'bg-cartoon-blue' : 'bg-gray-100'}`}>EN-US</button>
+                        </div>
 
                         <div className="h-0.5 bg-black/10 w-full my-4 border-t-2 border-dashed border-black/20"></div>
-                        
                         <div className="flex justify-center w-full">
                             <UserSection user={user} logout={logout} isMobile={true} onClick={closeMenu} />
                         </div>
@@ -128,7 +141,6 @@ const Navbar: React.FC = () => {
   );
 };
 
-// Helper Components
 const UserSection: React.FC<{ user: any, logout: () => void, isMobile?: boolean, onClick?: () => void }> = ({ user, logout, isMobile, onClick }) => {
   if (!user) {
     return (
@@ -140,7 +152,6 @@ const UserSection: React.FC<{ user: any, logout: () => void, isMobile?: boolean,
 
   return (
     <div className={`flex ${isMobile ? 'flex-col items-center gap-4 w-full' : 'items-center gap-3'}`}>
-        {/* Plan Badge */}
         <div className="relative group cursor-help">
           {user.isSchoolUser ? (
              <span className="bg-green-700 text-white border-2 border-black px-3 py-1 rounded-lg font-bold text-xs shadow-sm flex items-center gap-1">
@@ -171,7 +182,7 @@ const UserSection: React.FC<{ user: any, logout: () => void, isMobile?: boolean,
             onClick={() => { logout(); if(onClick) onClick(); }} 
             className="w-full bg-red-400 text-white px-3 py-1.5 rounded-lg border-2 border-black font-bold hover:bg-red-500 hover:shadow-sm transition-colors text-sm flex items-center justify-center gap-1"
           >
-            {user.isSchoolUser ? 'Sair da Escola' : 'Sair'}
+            {user.isSchoolUser ? 'Sair' : 'Sair'}
           </button>
       </div>
     </div>
@@ -203,7 +214,6 @@ const MobileNavLink: React.FC<{ to: string; onClick: () => void; active: boolean
   >
     <span className="text-2xl">{emoji}</span>
     <span>{children}</span>
-    {active && <span className="ml-auto text-cartoon-yellow animate-spin-slow">★</span>}
   </Link>
 );
 
