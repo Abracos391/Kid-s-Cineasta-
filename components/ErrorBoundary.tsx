@@ -1,5 +1,5 @@
 
-import React, { ErrorInfo, ReactNode } from "react";
+import React, { Component, ErrorInfo, ReactNode } from "react";
 import Button from "./ui/Button";
 
 interface Props {
@@ -11,8 +11,8 @@ interface State {
   error: Error | null;
 }
 
-// Fixed inheritance by using React.Component to ensure 'props' is correctly typed and recognized
-class ErrorBoundary extends React.Component<Props, State> {
+// Fix: Use named import for Component to ensure 'this.props' is correctly recognized by TypeScript in class-based components
+class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
@@ -47,6 +47,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
+    // Fix: Accessing children via this.props now works correctly after fixing Component inheritance
     return this.props.children;
   }
 }
