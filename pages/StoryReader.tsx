@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { jsPDF } from "jspdf";
@@ -91,7 +92,7 @@ const StoryReader: React.FC = () => {
     loadStory();
   }, [id, user]);
 
-  // Geração automática de imagens ao mudar de capítulo
+  // Fixed: Updated to await the asynchronous generateChapterIllustration call now using Gemini API
   useEffect(() => {
     if (story && story.chapters && story.chapters[activeChapterIndex]) {
       const chapter = story.chapters[activeChapterIndex];
@@ -99,7 +100,7 @@ const StoryReader: React.FC = () => {
         const genImage = async () => {
             try {
                 const charsDesc = story.characters ? story.characters.map(c => `${c.name} (${c.description})`).join(', ') : '';
-                const imageUrl = generateChapterIllustration(chapter.visualDescription, charsDesc);
+                const imageUrl = await generateChapterIllustration(chapter.visualDescription, charsDesc);
                 
                 const updatedChapters = [...story.chapters];
                 updatedChapters[activeChapterIndex] = { ...chapter, generatedImage: imageUrl };

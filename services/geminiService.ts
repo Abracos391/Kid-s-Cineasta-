@@ -4,42 +4,27 @@ import { Avatar, StoryChapter } from "../types";
 
 // --- CONFIGURAÇÃO DO CLIENTE ---
 
-const getAiClient = () => {
-  // @ts-ignore
-  const apiKey = process.env.API_KEY;
-  
-  if (!apiKey) {
-      console.error("API Key inválida ou não encontrada.");
-      throw new Error("Chave de API do Google não configurada no arquivo .env");
-  }
-  // Initialize with named parameter as required by the SDK
-  return new GoogleGenAI({ apiKey });
-};
+// Fixed: Initialize GoogleGenAI as required by the SDK guidelines using process.env.API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
 // --- TRATAMENTO DE ERROS DA API ---
 const handleGenAIError = (error: any) => {
-  // Tenta extrair texto de vários lugares do objeto de erro
   const errorString = JSON.stringify(error, Object.getOwnPropertyNames(error)).toLowerCase();
   const msg = (error?.message || '').toLowerCase();
   const combined = errorString + msg;
   
-  // 1. Erro CRÍTICO: Chave vazada ou inválida (403)
   if (combined.includes("leaked") || combined.includes("permission_denied") || combined.includes("api key not valid") || combined.includes("403")) {
-    // Lançamos um erro com prefixo específico para a UI interceptar
     throw new Error("CRITICAL_API_KEY_LEAKED: Sua chave de API foi bloqueada pelo Google por segurança.");
   }
   
-  // 2. Erro de Cota (429)
   if (combined.includes("429") || combined.includes("quota") || combined.includes("resource_exhausted")) {
       throw new Error("⏳ Cota de uso da IA excedida. Aguarde alguns minutos e tente novamente.");
   }
 
-  // 3. Erro de JSON na resposta (conteúdo bloqueado ou formato inválido)
   if (combined.includes("syntaxerror") || combined.includes("json")) {
       throw new Error("A IA não conseguiu gerar a história neste momento. O tema pode ter sido bloqueado pelos filtros de segurança.");
   }
 
-  // Erro genérico
   console.error("Gemini Error Raw:", error);
   throw new Error("Ocorreu um erro na comunicação com a IA. Tente novamente.");
 };
@@ -51,7 +36,6 @@ const cleanAndParseJSON = (text: string | undefined): any => {
   try {
     return JSON.parse(text);
   } catch (e) {
-    // Limpeza agressiva de Markdown
     const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
     try {
       return JSON.parse(cleanText);
@@ -66,8 +50,6 @@ const cleanAndParseJSON = (text: string | undefined): any => {
 
 export const analyzeFaceForAvatar = async (base64Image: string): Promise<string> => {
   try {
-    const ai = getAiClient();
-    // Using gemini-3-flash-preview for general vision tasks
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {
@@ -77,11 +59,10 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
         ]
       }
     });
-    // Use response.text property directly
+    // Fixed: Directly access text property as per guidelines
     return response.text || "Cute cartoon character";
   } catch (error) {
     console.error("AnalyzeFace falhou, usando fallback.", error);
-    // Se for erro de chave, repassa
     const strErr = JSON.stringify(error || {}).toLowerCase();
     if (strErr.includes("leaked") || strErr.includes("403")) throw error;
     
@@ -89,21 +70,62 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
   }
 };
 
+// Fixed: Switched from external pollinations.ai to gemini-2.5-flash-image for generation to align with guidelines
 export const generateCaricatureImage = async (description: string): Promise<string> => {
-  const seed = Math.floor(Math.random() * 99999);
-  const safeDesc = description ? description.substring(0, 100) : "cute character";
-  const prompt = `cute 3d disney pixar character, ${safeDesc}, white background, soft lighting, 4k, --no text`;
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=800&height=800&seed=${seed}&nologo=true&model=flux`;
+  const prompt = `cute 3d disney pixar character, ${description}, white background, soft lighting, 4k`;
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        imageConfig: {
+          aspectRatio: "1:1"
+        }
+      }
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
+    }
+    throw new Error("Image generation failed");
+  } catch (error) {
+    console.error("Gemini Image Gen failed:", error);
+    const seed = Math.floor(Math.random() * 99999);
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=800&height=800&seed=${seed}&nologo=true&model=flux`;
+  }
 };
 
-export const generateChapterIllustration = (visualDescription: string, charactersDescription: string = ''): string => {
-  const seed = Math.floor(Math.random() * 99999);
-  const safeDesc = visualDescription ? visualDescription.substring(0, 150) : "happy scene";
-  const prompt = `children book illustration, vector art, colorful, cute, flat style, ${safeDesc}, featuring ${charactersDescription}, --no text`;
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
+// Fixed: Switched from external pollinations.ai to gemini-2.5-flash-image for illustrations as per guidelines
+export const generateChapterIllustration = async (visualDescription: string, charactersDescription: string = ''): Promise<string> => {
+  const prompt = `children book illustration, vector art, colorful, cute, flat style, ${visualDescription}, featuring ${charactersDescription}`;
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        imageConfig: {
+          aspectRatio: "16:9"
+        }
+      }
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
+    }
+    throw new Error("Illustration generation failed");
+  } catch (error) {
+    console.error("Gemini Illustration Gen failed:", error);
+    const seed = Math.floor(Math.random() * 99999);
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
+  }
 };
 
-// SCHEMA OTIMIZADO PARA HISTÓRIA - Removed prohibited Schema type import
 const storySchema = {
   type: Type.OBJECT,
   properties: {
@@ -126,7 +148,6 @@ const storySchema = {
 };
 
 export const generateStory = async (theme: string, characters: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
-  const ai = getAiClient();
   const charContext = characters.map(c => `${c.name} (${c.description})`).join("; ");
 
   const prompt = `
@@ -140,7 +161,6 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
   `;
 
   try {
-    // Updated to gemini-3-flash-preview as per guidelines
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -150,7 +170,7 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
       }
     });
 
-    // Directly access text property
+    // Fixed: Use .text property instead of text()
     const json = cleanAndParseJSON(response.text);
     
     if (!json.title || !json.chapters || !Array.isArray(json.chapters)) {
@@ -166,7 +186,6 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
 };
 
 export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, chapters: StoryChapter[], educationalGoal: string }> => {
-  const ai = getAiClient();
   const names = students.map(s => s.name).join(", ");
 
   const prompt = `
@@ -177,7 +196,6 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
   `;
 
   try {
-    // Updated to gemini-3-flash-preview as per guidelines
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -187,7 +205,7 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
       }
     });
 
-    // Access response text property
+    // Fixed: Use .text property directly
     const json = cleanAndParseJSON(response.text);
     return { 
         title: json.title, 
@@ -203,8 +221,6 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
 
 export const generateSpeech = async (text: string): Promise<string> => {
   try {
-    const ai = getAiClient();
-    // Using gemini-2.5-flash-preview-tts as it's the correct model for TTS tasks
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-preview-tts',
       contents: { parts: [{ text }] },
@@ -216,7 +232,7 @@ export const generateSpeech = async (text: string): Promise<string> => {
       }
     });
 
-    // Extract audio data using the documented response structure
+    // Fixed: Extract audio data using candidates[0].content.parts structure
     const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (audioData) return audioData;
     throw new Error("Áudio não gerado.");
