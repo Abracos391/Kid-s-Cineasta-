@@ -10,6 +10,7 @@ import { generateSpeech, generateChapterIllustration } from '../services/geminiS
 import { videoService } from '../services/videoService';
 import AudioPlayer from '../components/AudioPlayer';
 import { dbService } from '../services/dbService';
+import { CinemaPlayer } from '../components/CinemaPlayer';
 
 const StoryReader: React.FC = () => {
   const { id } = useParams();
@@ -21,10 +22,12 @@ const StoryReader: React.FC = () => {
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [processingDownload, setProcessingDownload] = useState(false);
+  const [isCinemaOpen, setIsCinemaOpen] = useState(false);
 
   // VIDEO STATE
   const [videoStatus, setVideoStatus] = useState<'idle' | 'queued' | 'rendering' | 'done' | 'failed'>('idle');
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoProgress, setVideoProgress] = useState<number>(0);
   const pollingRef = useRef<number | null>(null);
 
   // Limpeza do intervalo ao desmontar
@@ -140,6 +143,45 @@ const StoryReader: React.FC = () => {
 
   // --- VIDEO GENERATION ---
 
+  const playKidsChimes = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioContextClass();
+      
+      const playTone = (freq: number, start: number, duration: number) => {
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, start);
+        gainNode.gain.setValueAtTime(0.12, start);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, start + duration);
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + duration);
+      };
+
+      // Play joyful bell chime
+      playTone(523.25, ctx.currentTime, 0.25); // C5
+      playTone(659.25, ctx.currentTime + 0.15, 0.25); // E5
+      playTone(783.99, ctx.currentTime + 0.3, 0.25); // G5
+      playTone(1046.50, ctx.currentTime + 0.45, 0.65); // C6
+
+      // Use Speech Synthesis
+      if ('speechSynthesis' in window) {
+        setTimeout(() => {
+          const utterance = new SpeechSynthesisUtterance("Kids! O seu filme do Cineasta Kids está prontinho!");
+          utterance.lang = 'pt-BR';
+          utterance.rate = 1.1;
+          utterance.pitch = 1.35;
+          window.speechSynthesis.speak(utterance);
+        }, 800);
+      }
+    } catch (e) {
+      console.warn("Kids sound synth fell back", e);
+    }
+  };
+
   const handleGenerateVideo = async () => {
     if (!story) return;
     
@@ -147,6 +189,7 @@ const StoryReader: React.FC = () => {
     if (videoStatus === 'queued' || videoStatus === 'rendering') return;
 
     setVideoStatus('queued');
+    setVideoProgress(0);
     
     try {
         const renderId = await videoService.generateStoryVideo(story);
@@ -154,19 +197,28 @@ const StoryReader: React.FC = () => {
         // Inicia Polling
         if (pollingRef.current) clearInterval(pollingRef.current);
         
+        let attempts = 0;
+        const maxAttempts = 120; // 120 * 4s = 480s (8 minutos - timeout ampliado e robusto)
+
         pollingRef.current = window.setInterval(async () => {
+            attempts++;
             try {
                 const result = await videoService.checkStatus(renderId);
-                console.log("Video Status:", result.status);
+                console.log(`Video Status Polling (attempt ${attempts}/${maxAttempts}):`, result);
                 
+                const currentProgress = result.progress || 0;
+                setVideoProgress(Math.min(99, Math.round(currentProgress)));
+
                 if (result.status === 'done' && result.url) {
                     setVideoStatus('done');
                     setVideoUrl(result.url);
+                    setVideoProgress(100);
+                    playKidsChimes();
                     if (pollingRef.current) {
                         clearInterval(pollingRef.current);
                         pollingRef.current = null;
                     }
-                } else if (result.status === 'failed') {
+                } else if (result.status === 'failed' || attempts >= maxAttempts) {
                     setVideoStatus('failed');
                     if (pollingRef.current) {
                         clearInterval(pollingRef.current);
@@ -177,10 +229,13 @@ const StoryReader: React.FC = () => {
                 }
             } catch (e) {
                 console.error("Polling error", e);
-                setVideoStatus('failed');
-                if (pollingRef.current) {
-                    clearInterval(pollingRef.current);
-                    pollingRef.current = null;
+                // Permite falha temporária de internet sem quebrar o polling instantaneamente
+                if (attempts >= maxAttempts) {
+                    setVideoStatus('failed');
+                    if (pollingRef.current) {
+                        clearInterval(pollingRef.current);
+                        pollingRef.current = null;
+                    }
                 }
             }
         }, 4000); // Checa a cada 4s
@@ -420,6 +475,19 @@ const StoryReader: React.FC = () => {
                <Card color={story.isEducational ? 'green' : 'yellow'} className="text-center p-8 md:p-12 max-w-2xl w-full border-[6px] shadow-2xl animate-fade-in">
                    <h1 className="font-heading text-4xl md:text-5xl mb-4">Fim da Aventura!</h1>
                    
+                   {/* NOVO ESTÚDIO DE CINEMA CLIENT-SIDE GRÁTIS */}
+                   <div className="w-full max-w-md mx-auto mb-6 p-4 rounded-2xl bg-cartoon-cream border-4 border-black shadow-cartoon text-center">
+                       <h2 className="font-heading text-2xl text-cartoon-purple mb-1">🎬 Estúdio de Cinema Kids!</h2>
+                       <p className="text-sm text-gray-700 mb-4 font-bold">Grave um vídeo do seu livro com narrações animadas e efeitos grátis!</p>
+                       <Button 
+                            variant="success" 
+                            onClick={() => setIsCinemaOpen(true)}
+                            className="w-full text-xl py-4 flex items-center justify-center gap-2 animate-pulse"
+                       >
+                            📽️ Criar Desenho Animado (Grátis)
+                       </Button>
+                   </div>
+                   
                    <div className="grid grid-cols-1 gap-4 w-full max-w-md mx-auto mb-8">
                        <Button 
                             variant="primary" 
@@ -453,10 +521,30 @@ const StoryReader: React.FC = () => {
                         )}
 
                         {(videoStatus === 'queued' || videoStatus === 'rendering') && (
-                            <div className="w-full bg-black text-white p-4 rounded-xl border-4 border-gray-600 text-center animate-pulse">
-                                <div className="text-4xl mb-2">🎬</div>
-                                <div className="font-heading text-2xl">Luz, Câmera, Ação...</div>
-                                <div className="text-sm text-gray-400">Renderizando seu filme. Aguarde!</div>
+                            <div className="w-full bg-black text-white p-6 rounded-xl border-4 border-gray-600 text-center">
+                                <div className="text-4xl mb-2 animate-bounce">🎬</div>
+                                <div className="font-heading text-2xl text-cartoon-yellow">Luz, Câmera, Ação...</div>
+                                <div className="text-xs text-gray-400 mb-4 font-bold uppercase tracking-widest">
+                                    {videoStatus === 'queued' ? 'Entrando na fila de produção...' : 'Renderizando seu desenho...'}
+                                </div>
+                                
+                                <div className="relative pt-1 max-w-xs mx-auto">
+                                  <div className="flex mb-2 items-center justify-between">
+                                    <span className="text-[10px] font-semibold py-0.5 px-2 uppercase rounded bg-cartoon-pink text-black">
+                                        Fila Shotstack
+                                    </span>
+                                    <span className="text-sm font-bold text-cartoon-yellow font-mono">
+                                        {videoProgress}%
+                                    </span>
+                                  </div>
+                                  <div className="overflow-hidden h-4 text-xs flex rounded-full bg-gray-800 border-2 border-black">
+                                    <div 
+                                      style={{ width: `${videoProgress}%` }} 
+                                      className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-cartoon-green transition-all duration-500"
+                                    />
+                                  </div>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-4">Isso pode levar de 1 a 3 minutos. Quando terminar, você ouvirá um toque mágico!</p>
                             </div>
                         )}
 
@@ -491,7 +579,10 @@ const StoryReader: React.FC = () => {
                     <h1 className="font-heading text-3xl text-cartoon-purple">{story.title}</h1>
                     <div className="text-gray-500 font-bold">Capítulo {activeChapterIndex + 1} de {story.chapters.length}</div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                    <Button size="sm" variant="success" onClick={() => setIsCinemaOpen(true)} className="animate-pulse shadow-doodle hover:scale-105 transition-transform text-base py-2">
+                        🎬 Assistir Filme
+                    </Button>
                     <Button size="sm" variant="danger" onClick={handleExit}>❌ Salvar e Sair</Button>
                 </div>
             </div>
@@ -536,6 +627,14 @@ const StoryReader: React.FC = () => {
                 </div>
             </div>
           </>
+      )}
+
+      {isCinemaOpen && (
+        <CinemaPlayer 
+          story={story} 
+          onClose={() => setIsCinemaOpen(false)} 
+          onUpdateStory={(updatedStory) => setStory(updatedStory)}
+        />
       )}
     </div>
   );

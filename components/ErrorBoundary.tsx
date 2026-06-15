@@ -1,5 +1,5 @@
 
-import React, { ErrorInfo, ReactNode } from "react";
+import React, { Component, ErrorInfo, ReactNode } from "react";
 import Button from "./ui/Button";
 
 interface Props {
@@ -11,8 +11,8 @@ interface State {
   error: Error | null;
 }
 
-// Fixed: Use React.Component to ensure 'this.props' is correctly recognized by TypeScript
-class ErrorBoundary extends React.Component<Props, State> {
+// Fixed: Inherit from Component<Props, State> to ensure 'this.props' is correctly typed and recognized by TypeScript.
+class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
@@ -27,13 +27,16 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   render() {
-    if (this.state.hasError) {
+    const { hasError, error } = this.state;
+    const { children } = this.props;
+
+    if (hasError) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center bg-cartoon-cream font-comic">
           <div className="text-6xl mb-4">🤕</div>
           <h1 className="text-4xl font-bold mb-4 text-cartoon-orange">Ops! Deu tilt no sistema.</h1>
           <p className="text-xl mb-8 bg-white p-4 rounded-xl border-2 border-black max-w-lg">
-             {this.state.error?.message || "Erro desconhecido"}
+             {error?.message || "Erro desconhecido"}
           </p>
           <div className="flex gap-4">
               <Button onClick={() => window.location.reload()} variant="primary">
@@ -47,8 +50,8 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    // Fixed: Accessing children via this.props now works correctly after ensuring proper React.Component inheritance
-    return this.props.children;
+    // Fixed: Correctly return children from props by using the inherited this.props property.
+    return children;
   }
 }
 

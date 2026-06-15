@@ -15,6 +15,7 @@ interface ShotstackResponse {
     id: string;
     status?: string;
     url?: string;
+    progress?: number;
   };
 }
 
@@ -50,11 +51,22 @@ export const videoService = {
       const chapter = story.chapters[i];
       const duration = videoService.calculateDuration(chapter.text);
       
-      // Asset de Imagem (Do Pollinations AI ou Fallback genérico colorido)
+      // Se a imagem for um base64 local (gerado pelo Gemini no navegador e salvo offline),
+      // enviamos um URL público equivalente do Pollinations AI para que o Shotstack consiga baixar!
+      let imageUrl = chapter.generatedImage || 'https://images.unsplash.com/photo-1606092195730-5d7b9af1ef4d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1280&q=80';
+      if (imageUrl.startsWith('data:')) {
+        const seed = Math.floor(Math.random() * 99999);
+        const visualDesc = chapter.visualDescription || chapter.title || "children illustration";
+        // Prompt otimizado para cartoon fofinho infantil
+        const visualPrompt = `children book illustration, vector art, colorful, cute, flat style, ${visualDesc}`;
+        imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(visualPrompt)}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
+      }
+      
+      // Asset de Imagem
       clips.push({
         asset: {
           type: 'image',
-          src: chapter.generatedImage || 'https://images.unsplash.com/photo-1606092195730-5d7b9af1ef4d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1280&q=80',
+          src: imageUrl,
         },
         start: startTime,
         length: duration,
@@ -152,7 +164,7 @@ export const videoService = {
   /**
    * Verifica o status da renderização (Polling)
    */
-  checkStatus: async (renderId: string): Promise<{ status: string; url?: string }> => {
+  checkStatus: async (renderId: string): Promise<{ status: string; url?: string; progress?: number }> => {
     if (!API_KEY) throw new Error("API Key missing");
 
     try {
@@ -169,10 +181,11 @@ export const videoService = {
         return {
         status: data.response.status || 'failed',
         url: data.response.url,
+        progress: data.response.progress || 0,
         };
     } catch (e) {
         console.error("Erro no polling:", e);
-        return { status: 'failed' };
+        return { status: 'failed', progress: 0 };
     }
   }
 };

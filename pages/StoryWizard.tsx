@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { Avatar } from '../types';
@@ -10,6 +12,7 @@ import { dbService } from '../services/dbService';
 
 const StoryWizard: React.FC = () => {
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
   const { user, refreshUser } = useAuth();
   const [avatars, setAvatars] = useState<Avatar[]>([]);
   const [selectedAvatarIds, setSelectedAvatarIds] = useState<string[]>([]);
@@ -18,7 +21,6 @@ const StoryWizard: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [canCreate, setCanCreate] = useState(true);
   
-  // Estado específico para o erro de chave vazada
   const [isKeyLeaked, setIsKeyLeaked] = useState(false);
 
   useEffect(() => {
@@ -75,8 +77,8 @@ const StoryWizard: React.FC = () => {
     const selectedChars = avatars.filter(a => selectedAvatarIds.includes(a.id));
 
     try {
-      // GERAÇÃO DA HISTÓRIA
-      const storyData = await generateStory(theme, selectedChars);
+      // GERAÇÃO DA HISTÓRIA - Agora passando o idioma atual
+      const storyData = await generateStory(theme, selectedChars, i18n.language);
       
       const storyId = crypto.randomUUID();
       const fullStory = {
@@ -103,7 +105,6 @@ const StoryWizard: React.FC = () => {
       const errStr = JSON.stringify(error, Object.getOwnPropertyNames(error)).toLowerCase();
       const msg = (error.message || '').toLowerCase();
       
-      // Detecção agressiva do erro de chave vazada
       if (
           msg.includes("leaked") || 
           msg.includes("critical_api_key_leaked") || 
@@ -119,7 +120,6 @@ const StoryWizard: React.FC = () => {
     }
   };
 
-  // UI Especial para quando a chave vazou
   if (isKeyLeaked) {
       return (
           <div className="max-w-3xl mx-auto px-4 py-12 text-center">
@@ -219,7 +219,7 @@ const StoryWizard: React.FC = () => {
                     <textarea
                     className="w-full h-40 p-4 rounded-xl outline-none resize-none font-sans text-xl bg-cartoon-cream disabled:opacity-50"
                     placeholder="Ex: Eles encontraram uma nave espacial no quintal e viajaram para o planeta dos doces..."
-                    value={theme}
+                    theme={theme}
                     onChange={(e) => setTheme(e.target.value)}
                     disabled={!canCreate || loading}
                     />

@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { Avatar, SchoolMember, SchoolRole, Story } from '../types';
@@ -10,6 +12,7 @@ import { dbService } from '../services/dbService';
 
 const SchoolRoom: React.FC = () => {
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
   const { user, refreshUser } = useAuth();
   
   const [avatars, setAvatars] = useState<Avatar[]>([]);
@@ -91,7 +94,8 @@ const SchoolRoom: React.FC = () => {
     const studentAvatars = avatars.filter(a => participatingStudents.includes(a.id));
 
     try {
-      const storyData = await generatePedagogicalStory(situation, goal, teacherAvatar, studentAvatars);
+      // GERAÇÃO PASSANDO O IDIOMA ATUAL
+      const storyData = await generatePedagogicalStory(situation, goal, teacherAvatar, studentAvatars, i18n.language);
       
       const storyId = crypto.randomUUID();
       const fullStory: Story = {
@@ -108,7 +112,6 @@ const SchoolRoom: React.FC = () => {
       await authService.consumeStoryCredit(user.id, 'premium');
       refreshUser();
 
-      // SALVAR DIRETAMENTE NO BANCO (SEM LOCALSTORAGE LIMITADO)
       await dbService.saveStory(user.id, fullStory);
       
       navigate(`/story/${storyId}`);
@@ -202,6 +205,59 @@ const SchoolRoom: React.FC = () => {
                         </div>
                     );
                 })}
+            </div>
+        </div>
+
+        {/* Dicas Pedagógicas Section */}
+        <div className="bg-white rounded-3xl border-4 border-black p-8 shadow-doodle mt-12 relative overflow-hidden">
+            <div className="absolute top-2 right-2 text-4xl opacity-20">💡</div>
+            <h2 className="font-heading text-4xl text-cartoon-purple mb-4 text-center">🧠 Dicas Pedagógicas para os Pais</h2>
+            <p className="text-gray-800 text-lg text-center font-sans font-bold max-w-2xl mx-auto mb-8">
+                Incentive os pais a conversarem com os pequenos após a história! Aqui estão sugestões mágicas de perguntas para fortalecer a empatia, a inteligência socioemocional e o diálogo ativo em família:
+            </p>
+            
+            <div className="grid md:grid-cols-3 gap-6">
+                <div className="bg-cartoon-cream border-2 border-black rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className="text-3xl">🤗</span>
+                        <h3 className="font-heading text-xl text-cartoon-orange font-bold">1. Sentimentos &amp; Empatia</h3>
+                    </div>
+                    <ul className="space-y-3 font-sans text-sm font-bold text-gray-700">
+                        <li>• "Como você acha que o herói se sentiu quando o desafio aconteceu?"</li>
+                        <li>• "O que você diria para um amiguinho que estivesse chateado na escola?"</li>
+                        <li>• "Você já sentiu o que o personagem sentiu hoje?"</li>
+                    </ul>
+                </div>
+
+                <div className="bg-cartoon-blue/20 border-2 border-black rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className="text-3xl">🧩</span>
+                        <h3 className="font-heading text-xl text-blue-700 font-bold">2. Criatividade &amp; Resolução</h3>
+                    </div>
+                    <ul className="space-y-3 font-sans text-sm font-bold text-gray-700">
+                        <li>• "Qual foi a ideia genial que ajudou a resolver o conflito?"</li>
+                        <li>• "Se você estivesse na aventura, de qual outra forma resolveria o problema?"</li>
+                        <li>• "Qual superpoder você usaria para ajudar o professor na história?"</li>
+                    </ul>
+                </div>
+
+                <div className="bg-cartoon-green/20 border-2 border-black rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className="text-3xl">🌱</span>
+                        <h3 className="font-heading text-xl text-green-700 font-bold">3. Conexão com o Cotidiano</h3>
+                    </div>
+                    <ul className="space-y-3 font-sans text-sm font-bold text-gray-700">
+                        <li>• "Você já passou por uma situação parecida com essa na sua escola?"</li>
+                        <li>• "O que nós podemos aprender com essa história para usarmos em casa ou nas brincadeiras?"</li>
+                        <li>• "Qual personagem você gostaria de convidar para brincar amanhã?"</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div className="mt-8 text-center bg-gray-50 rounded-xl p-4 border border-gray-200">
+                <span className="text-sm text-gray-500 font-sans font-bold">
+                    💡 <strong>Dica BNCC:</strong> Estimular a conversa guiada após histórias infantis desenvolve o campo de experiência <em>'O eu, o outro e o nós'</em>, essencial para a Educação Infantil.
+                </span>
             </div>
         </div>
       </div>

@@ -4,8 +4,27 @@ import { Avatar, StoryChapter } from "../types";
 
 // --- CONFIGURAÇÃO DO CLIENTE ---
 
-// Fixed: Initialize GoogleGenAI as required by the SDK guidelines using process.env.API_KEY
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Initialize GoogleGenAI with either GEMINI_API_KEY or API_KEY.
+const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+const ai = new GoogleGenAI({ 
+  apiKey,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
+
+// Helper para converter códigos de idioma para nomes completos que a IA entende bem
+const getLanguageName = (langCode: string): string => {
+  const map: Record<string, string> = {
+    'pt-BR': 'Português do Brasil',
+    'en-US': 'English',
+    'es-ES': 'Español',
+    'fr-FR': 'Français'
+  };
+  return map[langCode] || 'Português do Brasil';
+};
 
 // --- TRATAMENTO DE ERROS DA API ---
 const handleGenAIError = (error: any) => {
@@ -51,7 +70,7 @@ const cleanAndParseJSON = (text: string | undefined): any => {
 export const analyzeFaceForAvatar = async (base64Image: string): Promise<string> => {
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.5-flash',
       contents: {
         parts: [
           { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
@@ -59,7 +78,7 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
         ]
       }
     });
-    // Fixed: Directly access text property as per guidelines
+    // Access generated text using the property .text (not a method).
     return response.text || "Cute cartoon character";
   } catch (error) {
     console.error("AnalyzeFace falhou, usando fallback.", error);
@@ -70,7 +89,6 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
   }
 };
 
-// Fixed: Switched from external pollinations.ai to gemini-2.5-flash-image for generation to align with guidelines
 export const generateCaricatureImage = async (description: string): Promise<string> => {
   const prompt = `cute 3d disney pixar character, ${description}, white background, soft lighting, 4k`;
   
@@ -85,6 +103,7 @@ export const generateCaricatureImage = async (description: string): Promise<stri
       }
     });
 
+    // Fixed: Iterate through response parts to identify the correct image part.
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
         return `data:image/png;base64,${part.inlineData.data}`;
@@ -98,7 +117,6 @@ export const generateCaricatureImage = async (description: string): Promise<stri
   }
 };
 
-// Fixed: Switched from external pollinations.ai to gemini-2.5-flash-image for illustrations as per guidelines
 export const generateChapterIllustration = async (visualDescription: string, charactersDescription: string = ''): Promise<string> => {
   const prompt = `children book illustration, vector art, colorful, cute, flat style, ${visualDescription}, featuring ${charactersDescription}`;
   
@@ -113,6 +131,7 @@ export const generateChapterIllustration = async (visualDescription: string, cha
       }
     });
 
+    // Fixed: Iterate through response parts to identify the correct image part.
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
         return `data:image/png;base64,${part.inlineData.data}`;
@@ -147,8 +166,9 @@ const storySchema = {
   required: ["title", "chapters"],
 };
 
-export const generateStory = async (theme: string, characters: Avatar[]): Promise<{ title: string, chapters: StoryChapter[] }> => {
+export const generateStory = async (theme: string, characters: Avatar[], language: string = 'pt-BR'): Promise<{ title: string, chapters: StoryChapter[] }> => {
   const charContext = characters.map(c => `${c.name} (${c.description})`).join("; ");
+  const languageName = getLanguageName(language);
 
   const prompt = `
     Crie uma história infantil curta e divertida.
@@ -156,13 +176,13 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
     Personagens: ${charContext}.
     
     Estrutura: Título e exatamente 4 capítulos curtos.
-    Idioma: Português do Brasil.
+    IDIOMA OBRIGATÓRIO DA HISTÓRIA: ${languageName}.
     VisualDescription: Em Inglês (prompt para imagem).
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.5-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -170,7 +190,7 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
       }
     });
 
-    // Fixed: Use .text property instead of text()
+    // Access generated text output via the property .text.
     const json = cleanAndParseJSON(response.text);
     
     if (!json.title || !json.chapters || !Array.isArray(json.chapters)) {
@@ -185,19 +205,21 @@ export const generateStory = async (theme: string, characters: Avatar[]): Promis
   }
 };
 
-export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[]): Promise<{ title: string, chapters: StoryChapter[], educationalGoal: string }> => {
+export const generatePedagogicalStory = async (situation: string, goal: string, teacher: Avatar, students: Avatar[], language: string = 'pt-BR'): Promise<{ title: string, chapters: StoryChapter[], educationalGoal: string }> => {
   const names = students.map(s => s.name).join(", ");
+  const languageName = getLanguageName(language);
 
   const prompt = `
     Crie uma fábula educativa escolar com 4 capítulos.
     Situação: "${situation}".
-    Objetivo Pedagógico (BNCC): "${goal}".
+    Objetivo Pedagógico (BNCC ou similar): "${goal}".
     Professor: ${teacher.name}. Alunos: ${names}.
+    IDIOMA OBRIGATÓRIO DA HISTÓRIA: ${languageName}.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.5-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -205,7 +227,7 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
       }
     });
 
-    // Fixed: Use .text property directly
+    // Access generated text output via the property .text.
     const json = cleanAndParseJSON(response.text);
     return { 
         title: json.title, 
@@ -222,17 +244,20 @@ export const generatePedagogicalStory = async (situation: string, goal: string, 
 export const generateSpeech = async (text: string): Promise<string> => {
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-preview-tts',
-      contents: { parts: [{ text }] },
+      model: 'gemini-3.1-flash-tts-preview',
+      // Wrapped content parameters in an array of objects to comply with SDK requirements.
+      contents: [{ parts: [{ text }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
+          voiceConfig: { 
+            prebuiltVoiceConfig: { voiceName: 'Kore' } 
+          }
         }
       }
     });
 
-    // Fixed: Extract audio data using candidates[0].content.parts structure
+    // Fixed: Extract encoded audio data correctly from the first part of the model turn.
     const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (audioData) return audioData;
     throw new Error("Áudio não gerado.");

@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
   // 3. Busca robusta das chaves
   // Voltamos para SHOTSTACK baseado na documentação recebida
   const shotstackKey = getKey('SHOTSTACK_API_KEY') || getKey('VITE_SHOTSTACK_API_KEY');
-  const geminiKey = getKey('API_KEY') || getKey('VITE_API_KEY');
+  const geminiKey = getKey('GEMINI_API_KEY') || getKey('VITE_GEMINI_API_KEY') || getKey('API_KEY') || getKey('VITE_API_KEY');
 
   // Logs visíveis apenas no terminal de build do Render
   console.log('--- VITE BUILD CONFIG ---');
@@ -38,12 +38,14 @@ export default defineConfig(({ mode }) => {
     define: {
       // Injeta as variáveis no código final
       'process.env.API_KEY': JSON.stringify(geminiKey),
+      'process.env.GEMINI_API_KEY': JSON.stringify(geminiKey),
       'process.env.SHOTSTACK_API_KEY': JSON.stringify(shotstackKey),
       'process.env.VITE_SHOTSTACK_API_KEY': JSON.stringify(shotstackKey),
       
       // Fallbacks
       'import.meta.env.SHOTSTACK_API_KEY': JSON.stringify(shotstackKey),
-      'import.meta.env.VITE_SHOTSTACK_API_KEY': JSON.stringify(shotstackKey)
+      'import.meta.env.VITE_SHOTSTACK_API_KEY': JSON.stringify(shotstackKey),
+      'import.meta.env.GEMINI_API_KEY': JSON.stringify(geminiKey)
     }
   };
 });
