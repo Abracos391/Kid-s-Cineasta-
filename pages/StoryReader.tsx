@@ -23,6 +23,7 @@ const StoryReader: React.FC = () => {
   const [loadError, setLoadError] = useState(false);
   const [processingDownload, setProcessingDownload] = useState(false);
   const [isCinemaOpen, setIsCinemaOpen] = useState(false);
+  const [cinemaInitialMode, setCinemaInitialMode] = useState<'selection' | 'playback' | 'record'>('selection');
 
   // VIDEO STATE
   const [videoStatus, setVideoStatus] = useState<'idle' | 'queued' | 'rendering' | 'done' | 'failed'>('idle');
@@ -476,16 +477,35 @@ const StoryReader: React.FC = () => {
                    <h1 className="font-heading text-4xl md:text-5xl mb-4">Fim da Aventura!</h1>
                    
                    {/* NOVO ESTÚDIO DE CINEMA CLIENT-SIDE GRÁTIS */}
-                   <div className="w-full max-w-md mx-auto mb-6 p-4 rounded-2xl bg-cartoon-cream border-4 border-black shadow-cartoon text-center">
-                       <h2 className="font-heading text-2xl text-cartoon-purple mb-1">🎬 Estúdio de Cinema Kids!</h2>
-                       <p className="text-sm text-gray-700 mb-4 font-bold">Grave um vídeo do seu livro com narrações animadas e efeitos grátis!</p>
-                       <Button 
-                            variant="success" 
-                            onClick={() => setIsCinemaOpen(true)}
-                            className="w-full text-xl py-4 flex items-center justify-center gap-2 animate-pulse"
-                       >
-                            📽️ Criar Desenho Animado (Grátis)
-                       </Button>
+                   <div id="estudio-cinema-panel" className="w-full max-w-md mx-auto mb-6 p-6 rounded-2xl bg-cartoon-cream border-4 border-black shadow-cartoon text-center">
+                       <h2 className="font-heading text-3xl text-cartoon-purple mb-2">🎬 Estúdio de Cinema Kids!</h2>
+                       <p className="text-sm text-gray-700 mb-6 font-bold">Transforme seu livro em um desenho animado completo com narração, música de fundo e efeitos especiais!</p>
+                       
+                       <div className="flex flex-col gap-4">
+                           <Button 
+                                id="btn-theater-playback"
+                                variant="success" 
+                                onClick={() => {
+                                    setCinemaInitialMode('playback');
+                                    setIsCinemaOpen(true);
+                                }}
+                                className="w-full text-xl py-4 flex items-center justify-center gap-2 shadow-cartoon"
+                           >
+                                📺 Assistir Filme Interativo
+                           </Button>
+
+                           <Button 
+                                id="btn-theater-record"
+                                variant="danger" 
+                                onClick={() => {
+                                    setCinemaInitialMode('record');
+                                    setIsCinemaOpen(true);
+                                }}
+                                className="w-full text-xl py-4 flex items-center justify-center gap-2 shadow-cartoon animate-pulse"
+                           >
+                                🎥 Gravar e Baixar Desenho (MP4)
+                           </Button>
+                       </div>
                    </div>
                    
                    <div className="grid grid-cols-1 gap-4 w-full max-w-md mx-auto mb-8">
@@ -508,63 +528,7 @@ const StoryReader: React.FC = () => {
                        </Button>
                    </div>
 
-                   {/* SHOTSTACK VIDEO GENERATION UI */}
-                   <div className="border-t-2 border-black/10 pt-6 mb-4 w-full">
-                        {videoStatus === 'idle' && (
-                            <Button 
-                                variant="danger" 
-                                onClick={handleGenerateVideo} 
-                                className="w-full text-xl py-4 flex items-center justify-center gap-2 shadow-cartoon"
-                            >
-                                🎥 Gerar Filme MP4 (SD)
-                            </Button>
-                        )}
 
-                        {(videoStatus === 'queued' || videoStatus === 'rendering') && (
-                            <div className="w-full bg-black text-white p-6 rounded-xl border-4 border-gray-600 text-center">
-                                <div className="text-4xl mb-2 animate-bounce">🎬</div>
-                                <div className="font-heading text-2xl text-cartoon-yellow">Luz, Câmera, Ação...</div>
-                                <div className="text-xs text-gray-400 mb-4 font-bold uppercase tracking-widest">
-                                    {videoStatus === 'queued' ? 'Entrando na fila de produção...' : 'Renderizando seu desenho...'}
-                                </div>
-                                
-                                <div className="relative pt-1 max-w-xs mx-auto">
-                                  <div className="flex mb-2 items-center justify-between">
-                                    <span className="text-[10px] font-semibold py-0.5 px-2 uppercase rounded bg-cartoon-pink text-black">
-                                        Fila Shotstack
-                                    </span>
-                                    <span className="text-sm font-bold text-cartoon-yellow font-mono">
-                                        {videoProgress}%
-                                    </span>
-                                  </div>
-                                  <div className="overflow-hidden h-4 text-xs flex rounded-full bg-gray-800 border-2 border-black">
-                                    <div 
-                                      style={{ width: `${videoProgress}%` }} 
-                                      className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-cartoon-green transition-all duration-500"
-                                    />
-                                  </div>
-                                </div>
-                                <p className="text-xs text-gray-400 mt-4">Isso pode levar de 1 a 3 minutos. Quando terminar, você ouvirá um toque mágico!</p>
-                            </div>
-                        )}
-
-                        {videoStatus === 'done' && videoUrl && (
-                            <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="block w-full">
-                                <Button 
-                                    variant="success" 
-                                    className="w-full text-xl py-4 flex items-center justify-center gap-2 animate-bounce-slow"
-                                >
-                                    📥 Baixar Filme Pronto!
-                                </Button>
-                            </a>
-                        )}
-
-                        {videoStatus === 'failed' && (
-                            <div className="w-full bg-red-100 text-red-600 p-4 rounded-xl border-4 border-red-500 text-center">
-                                ❌ Erro ao criar o vídeo. Tente mais tarde.
-                            </div>
-                        )}
-                   </div>
 
                    <div className="flex flex-col gap-4 justify-center border-t-2 border-black/10 pt-6">
                        <Button variant="secondary" onClick={() => setActiveChapterIndex(0)}>📖 Ler Novamente</Button>
@@ -592,7 +556,12 @@ const StoryReader: React.FC = () => {
                 <Card className="min-h-[500px] flex flex-col bg-white" color="white">
                     <div className="w-full h-64 md:h-96 mb-8 rounded-xl border-4 border-black overflow-hidden bg-gray-100 relative shadow-inner">
                         {currentChapter.generatedImage ? (
-                            <img src={currentChapter.generatedImage} className="w-full h-full object-cover animate-fade-in" crossOrigin="anonymous" />
+                            <img 
+                                src={currentChapter.generatedImage} 
+                                className="w-full h-full object-cover animate-fade-in" 
+                                crossOrigin={currentChapter.generatedImage.startsWith('data:') ? undefined : "anonymous"} 
+                                referrerPolicy="no-referrer"
+                            />
                         ) : (
                             <div className="flex items-center justify-center h-full text-gray-500 flex-col"><span className="text-4xl animate-bounce">🎨</span><span>Ilustrando...</span></div>
                         )}
@@ -634,6 +603,7 @@ const StoryReader: React.FC = () => {
           story={story} 
           onClose={() => setIsCinemaOpen(false)} 
           onUpdateStory={(updatedStory) => setStory(updatedStory)}
+          initialMode={cinemaInitialMode}
         />
       )}
     </div>

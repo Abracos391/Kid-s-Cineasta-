@@ -77,21 +77,22 @@ export const videoService = {
         },
       });
 
-      // Asset de Texto (Título do Capítulo)
+      // Asset de Texto (Título do Capítulo e Legendas completas)
       textClips.push({
         asset: {
           type: 'html',
-          html: `<div style="font-family: 'Montserrat', sans-serif; text-align: center; width: 100%;">
-                    <h1 style="font-size: 48px; color: #FFD700; text-shadow: 4px 4px 0 #000; margin-bottom: 20px; font-weight: 900;">${chapter.title.toUpperCase()}</h1>
+          html: `<div style="font-family: 'Comic Neue', sans-serif; text-align: center; width: 100%;">
+                    <h1 style="font-size: 36px; color: #FFD700; text-shadow: 3px 3px 0 #000; margin-bottom: 10px; font-weight: 900;">${chapter.title.toUpperCase()}</h1>
+                    <p style="font-size: 20px; color: #FFFFFF; text-shadow: 2px 2px 0 #000; font-weight: 700; line-height: 1.4; max-width: 90%; margin: 0 auto;">${chapter.text}</p>
                  </div>`,
-          css: "@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@900&display=swap');",
-          width: 1000,
-          height: 200,
+          css: "@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@700&display=swap');",
+          width: 1100,
+          height: 320,
           background: 'transparent',
           position: 'bottom'
         },
         start: startTime + 0.5, // Entra um pouco depois da imagem
-        length: Math.min(duration - 1, 6), // Fica no máximo 6 segundos
+        length: Math.max(duration - 1, 3), // Garante tempo para a criança ler inteira
         transition: {
           in: 'slideUp',
           out: 'fade',
@@ -108,7 +109,7 @@ export const videoService = {
         {
           asset: {
             type: 'audio',
-            src: 'https://github.com/shotstack/test-media/raw/main/audio/happy.mp3',
+            src: 'https://cdn.jsdelivr.net/gh/shotstack/test-media@main/audio/happy.mp3',
             volume: 0.5,
             effect: 'fadeOut'
           },

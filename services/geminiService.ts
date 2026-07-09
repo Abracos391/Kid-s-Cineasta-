@@ -32,7 +32,7 @@ const handleGenAIError = (error: any) => {
   const msg = (error?.message || '').toLowerCase();
   const combined = errorString + msg;
   
-  if (combined.includes("leaked") || combined.includes("permission_denied") || combined.includes("api key not valid") || combined.includes("403")) {
+  if (combined.includes("leaked") || combined.includes("api key not valid")) {
     throw new Error("CRITICAL_API_KEY_LEAKED: Sua chave de API foi bloqueada pelo Google por segurança.");
   }
   
@@ -83,7 +83,7 @@ export const analyzeFaceForAvatar = async (base64Image: string): Promise<string>
   } catch (error) {
     console.error("AnalyzeFace falhou, usando fallback.", error);
     const strErr = JSON.stringify(error || {}).toLowerCase();
-    if (strErr.includes("leaked") || strErr.includes("403")) throw error;
+    if (strErr.includes("leaked")) throw error;
     
     return "Happy child cartoon character"; 
   }
@@ -94,7 +94,7 @@ export const generateCaricatureImage = async (description: string): Promise<stri
   
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3.1-flash-lite-image',
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         imageConfig: {
@@ -122,7 +122,7 @@ export const generateChapterIllustration = async (visualDescription: string, cha
   
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3.1-flash-lite-image',
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         imageConfig: {
@@ -171,13 +171,19 @@ export const generateStory = async (theme: string, characters: Avatar[], languag
   const languageName = getLanguageName(language);
 
   const prompt = `
-    Crie uma história infantil curta e divertida.
-    Tema: "${theme}".
-    Personagens: ${charContext}.
+    Crie uma história infantil curta, extremamente divertida, carismática e engraçada.
+    Tema ou Lição de Vida: "${theme}".
+    Personagens principais: ${charContext}.
+    
+    Diretrizes Criativas & Tom:
+    - O tom deve ser alegre, caloroso e cativante, perfeito para um pai/mãe ocupado ler e se divertir junto com o filho pequeno.
+    - Se o tema focar em uma lição pedagógica/social (ex: "Não fale com estranhos"), ensine-a de forma lúdica, amigável e segura, SEM assustar ou traumatizar a criança. Mostre os personagens agindo com inteligência e humor (ex: recusando educadamente um convite engraçado ou uma oferta absurda, como um pato de óculos escuros oferecendo chiclete de brócolis).
+    - Faça os personagens interagirem de forma engraçada e expressiva.
+    - Cada capítulo deve ser curto (3-5 frases), de fácil leitura em voz alta.
     
     Estrutura: Título e exatamente 4 capítulos curtos.
     IDIOMA OBRIGATÓRIO DA HISTÓRIA: ${languageName}.
-    VisualDescription: Em Inglês (prompt para imagem).
+    VisualDescription: Em Inglês (prompt para imagem, ultra detalhado, estilo livro de ilustração infantil 3D Pixar, colorido e vibrante).
   `;
 
   try {

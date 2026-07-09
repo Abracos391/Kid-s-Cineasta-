@@ -215,14 +215,36 @@ const StoryWizard: React.FC = () => {
         <div className="space-y-8">
           <div className="transform rotate-1">
             <Card title="2. O que vai acontecer?" color="orange">
-                <div className="bg-white p-2 rounded-2xl border-4 border-black">
+                <div className="bg-white p-2 rounded-2xl border-4 border-black mb-3">
                     <textarea
                     className="w-full h-40 p-4 rounded-xl outline-none resize-none font-sans text-xl bg-cartoon-cream disabled:opacity-50"
                     placeholder="Ex: Eles encontraram uma nave espacial no quintal e viajaram para o planeta dos doces..."
-                    theme={theme}
+                    value={theme}
                     onChange={(e) => setTheme(e.target.value)}
                     disabled={!canCreate || loading}
                     />
+                </div>
+                
+                <div className="mt-4">
+                    <p className="text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">💡 Lições & Ideias Rápidas para os Pais:</p>
+                    <div className="flex flex-wrap gap-2">
+                        {[
+                            { label: "🚫 Não falar com estranhos", text: "Não fale com estranhos: mostre de forma lúdica a importância de sempre avisar os pais se algum desconhecido vier falar com eles." },
+                            { label: "🥦 Comer vegetais saudáveis", text: "Comer vegetais: mostre que os legumes dão super-poderes engraçados de energia e alegria." },
+                            { label: "🦷 Escovar os dentes", text: "Escovar os dentes: uma batalha divertida contra os monstrinhos invisíveis das cáries usando super escovas." },
+                            { label: "🤝 Compartilhar brinquedos", text: "Compartilhar e brincar juntos: mostre que dividir o brinquedo multiplica a diversão." },
+                            { label: "🛌 Dormir cedo", text: "Dormir na hora certa: uma aventura mágica na terra dos sonhos que só começa quando fechamos os olhos." }
+                        ].map((lesson, idx) => (
+                            <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setTheme(lesson.text)}
+                                className="bg-white text-gray-800 hover:bg-cartoon-pink hover:text-white px-3 py-1.5 rounded-full border-2 border-black font-bold text-xs transition-all transform hover:scale-105 active:scale-95 shadow-cartoon"
+                            >
+                                {lesson.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </Card>
           </div>

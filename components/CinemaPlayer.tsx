@@ -10,15 +10,16 @@ interface CinemaPlayerProps {
   story: Story;
   onClose: () => void;
   onUpdateStory: (updatedStory: Story) => void;
+  initialMode?: 'selection' | 'playback' | 'record';
 }
 
-const CINEMA_MUSIC_URL = 'https://github.com/shotstack/test-media/raw/main/audio/happy.mp3';
+const CINEMA_MUSIC_URL = 'https://cdn.jsdelivr.net/gh/shotstack/test-media@main/audio/happy.mp3';
 
-export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUpdateStory }) => {
+export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUpdateStory, initialMode }) => {
   const { user } = useAuth();
   
   // Modes: 'playback' or 'record'
-  const [mode, setMode] = useState<'selection' | 'playback' | 'record'>('selection');
+  const [mode, setMode] = useState<'selection' | 'playback' | 'record'>(initialMode || 'selection');
   
   // Playback control states
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
@@ -43,6 +44,52 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
   const recordedChunksRef = useRef<Blob[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const activeBlobUrlRef = useRef<string | null>(null);
+
+  const pcmToWavBlobUrl = (base64PCM: string, sampleRate: number = 24000): string => {
+    if (activeBlobUrlRef.current) {
+      URL.revokeObjectURL(activeBlobUrlRef.current);
+    }
+    const cleanBase64 = base64PCM.includes('base64,') ? base64PCM.split('base64,')[1] : base64PCM;
+    const binaryString = window.atob(cleanBase64.trim());
+    const len = binaryString.length;
+    
+    const pcmBuffer = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      pcmBuffer[i] = binaryString.charCodeAt(i);
+    }
+    
+    const wavHeader = new ArrayBuffer(44);
+    const view = new DataView(wavHeader);
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    const fileSize = 36 + len;
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, fileSize, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // Linear PCM
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true);
+    view.setUint16(32, numChannels * (bitsPerSample / 8), true);
+    view.setUint16(34, bitsPerSample, true);
+    writeString(36, 'data');
+    view.setUint32(40, len, true);
+
+    const blob = new Blob([wavHeader, pcmBuffer], { type: 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+    activeBlobUrlRef.current = url;
+    return url;
+  };
 
   const chapters = story.chapters;
   const currentChapter = chapters[currentChapterIndex];
@@ -59,6 +106,10 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
       if (narratorAudioRef.current) narratorAudioRef.current.pause();
       if (bMusicAudioRef.current) bMusicAudioRef.current.pause();
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (activeBlobUrlRef.current) URL.revokeObjectURL(activeBlobUrlRef.current);
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, []);
 
@@ -80,30 +131,90 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
       narratorAudioRef.current.pause();
     }
 
-    if (isPlaying && currentChapter && currentChapter.generatedAudio) {
-      const audio = new Audio(`data:audio/wav;base64,${currentChapter.generatedAudio}`);
-      audio.volume = isMuted ? 0 : 1.0;
-      narratorAudioRef.current = audio;
+    // Stop any ongoing native speech synthesis
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
 
-      audio.onended = () => {
-        // Auto-advance to next chapter if there is one
-        if (currentChapterIndex < chapters.length - 1) {
-          setTimeout(() => {
+    const fallbackToSpeechSynthesis = () => {
+      if ('speechSynthesis' in window && currentChapter) {
+        const utterance = new SpeechSynthesisUtterance(currentChapter.text);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.3;
+        utterance.volume = isMuted ? 0 : 1.0;
+        
+        utterance.onend = () => {
+          if (currentChapterIndex < chapters.length - 1) {
+            setTimeout(() => {
+              setCurrentChapterIndex(prev => prev + 1);
+            }, 1200);
+          } else {
+            setIsPlaying(false);
+            if (bMusicAudioRef.current) bMusicAudioRef.current.pause();
+          }
+        };
+
+        utterance.onerror = (e) => {
+          console.error('SpeechSynthesis error:', e);
+          if (currentChapterIndex < chapters.length - 1) {
+            setTimeout(() => {
+              setCurrentChapterIndex(prev => prev + 1);
+            }, 4000); // 4 seconds safe default
+          } else {
+            setIsPlaying(false);
+          }
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } else {
+        // If not supported, standard auto-advance with timer based on word length
+        const words = currentChapter ? currentChapter.text.split(' ').length : 10;
+        const duration = Math.max(5000, words * 300);
+        setTimeout(() => {
+          if (currentChapterIndex < chapters.length - 1) {
             setCurrentChapterIndex(prev => prev + 1);
-          }, 1200);
-        } else {
-          setIsPlaying(false);
-          if (bMusicAudioRef.current) bMusicAudioRef.current.pause();
-        }
-      };
+          } else {
+            setIsPlaying(false);
+          }
+        }, duration);
+      }
+    };
 
-      audio.play().catch(err => console.log('Speech play interrupted', err));
+    if (isPlaying && currentChapter) {
+      if (currentChapter.generatedAudio) {
+        const wavUrl = pcmToWavBlobUrl(currentChapter.generatedAudio);
+        const audio = new Audio(wavUrl);
+        audio.volume = isMuted ? 0 : 1.0;
+        narratorAudioRef.current = audio;
+
+        audio.onended = () => {
+          if (currentChapterIndex < chapters.length - 1) {
+            setTimeout(() => {
+              setCurrentChapterIndex(prev => prev + 1);
+            }, 1200);
+          } else {
+            setIsPlaying(false);
+            if (bMusicAudioRef.current) bMusicAudioRef.current.pause();
+          }
+        };
+
+        audio.play().catch(err => {
+          console.log('Speech play interrupted, trying fallback SpeechSynthesis', err);
+          fallbackToSpeechSynthesis();
+        });
+      } else {
+        fallbackToSpeechSynthesis();
+      }
 
       if (bMusicAudioRef.current && bMusicAudioRef.current.paused) {
         bMusicAudioRef.current.play().catch(err => console.log('BGM play interrupted', err));
       }
     } else {
       if (narratorAudioRef.current) narratorAudioRef.current.pause();
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
     }
   }, [isPlaying, currentChapterIndex, mode]);
 
@@ -223,38 +334,94 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
     return '';
   };
 
-  // Pre-load an image asynchronously and handle crossOrigin anonymous settings
-  const loadImageAsync = (src: string): Promise<HTMLImageElement> => {
-    return new Promise((resolve, reject) => {
+  // Pre-load an image asynchronously and handle crossOrigin anonymous settings with cache-busting CORS bypass
+  const loadImageAsync = async (src: string): Promise<HTMLImageElement> => {
+    return new Promise(async (resolve, reject) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      
+      if (src && !src.startsWith('data:')) {
+        try {
+          // Fetch image as blob with cache buster to bypass browser cached non-CORS header issues
+          const busterUrl = src.includes('?') 
+            ? `${src}&cors_bypass=${Date.now()}` 
+            : `${src}?cors_bypass=${Date.now()}`;
+          
+          const res = await fetch(busterUrl, { mode: 'cors' });
+          if (res.ok) {
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            img.src = blobUrl;
+            img.onload = () => {
+              URL.revokeObjectURL(blobUrl);
+              resolve(img);
+            };
+            img.onerror = () => {
+              URL.revokeObjectURL(blobUrl);
+              fallbackImg(resolve, reject);
+            };
+            return;
+          }
+        } catch (e) {
+          console.warn("CORS fetch bypass failed, falling back to direct load:", e);
+        }
+        
+        img.crossOrigin = 'anonymous';
+      }
+      
       img.src = src;
       img.onload = () => resolve(img);
-      img.onerror = () => {
-        // Fallback placeholder image if loading fails
-        const fallback = new Image();
-        fallback.crossOrigin = 'anonymous';
-        fallback.src = 'https://images.unsplash.com/photo-1606092195730-5d7b9af1ef4d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1280&q=80';
-        fallback.onload = () => resolve(fallback);
-        fallback.onerror = (err) => reject(err);
-      };
+      img.onerror = () => fallbackImg(resolve, reject);
     });
   };
 
-  // Base64 decoding directly into AudioBuffer
+  const fallbackImg = (resolve: any, reject: any) => {
+    const fallback = new Image();
+    fallback.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><rect width="100%" height="100%" fill="%234A3E85"/><circle cx="640" cy="360" r="150" fill="%23FFD700" opacity="0.3"/><text x="50%" y="50%" font-family="sans-serif" font-weight="bold" font-size="48" fill="%23FFFFFF" dominant-baseline="middle" text-anchor="middle">CineastaKids 🎨</text></svg>';
+    fallback.onload = () => resolve(fallback);
+    fallback.onerror = (err) => reject(err);
+  };
+
+  // Base64 decoding directly into AudioBuffer from RAW 16-bit PCM little-endian mono 24kHz data
   const decodeBase64ToAudioBuffer = async (audioCtx: AudioContext, base64: string): Promise<AudioBuffer> => {
-    const binaryString = window.atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
+    const cleanBase64 = base64.includes('base64,') ? base64.split('base64,')[1] : base64;
+    const binaryString = window.atob(cleanBase64.trim());
+    const len = binaryString.length;
+    
+    // Each 16-bit sample is 2 bytes. So number of samples is len / 2
+    const numOfSamples = Math.floor(len / 2);
+    const audioBuffer = audioCtx.createBuffer(1, numOfSamples, 24000);
+    const channelData = audioBuffer.getChannelData(0);
+    
+    // Read 16-bit signed integers (little-endian)
+    const dataView = new DataView(new ArrayBuffer(len));
+    for (let i = 0; i < len; i++) {
+      dataView.setUint8(i, binaryString.charCodeAt(i));
     }
-    return await audioCtx.decodeAudioData(bytes.buffer);
+    
+    for (let i = 0; i < numOfSamples; i++) {
+      // 16-bit signed integer at byte offset i * 2, little-endian = true
+      const int16Sample = dataView.getInt16(i * 2, true);
+      // Convert to float [-1.0, 1.0]
+      channelData[i] = int16Sample / 32768.0;
+    }
+    
+    return audioBuffer;
   };
 
   const fetchAndDecodeAudio = async (audioCtx: AudioContext, url: string): Promise<AudioBuffer> => {
     const response = await fetch(url);
     const arrayBuffer = await response.arrayBuffer();
-    return await audioCtx.decodeAudioData(arrayBuffer);
+    
+    return new Promise((resolve, reject) => {
+      try {
+        const promiseOrVoid = audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
+        if (promiseOrVoid && typeof (promiseOrVoid as any).then === 'function') {
+          (promiseOrVoid as any).then(resolve).catch(reject);
+        }
+      } catch (err) {
+        reject(err);
+      }
+    });
   };
 
   // Pure Client-side High Fidelity Recording Engine
@@ -400,6 +567,16 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
       try { audioCtx.close(); } catch (_) {}
     }
   };
+
+  // Auto-start recording if initialMode is 'record'
+  useEffect(() => {
+    if (initialMode === 'record') {
+      const timer = setTimeout(() => {
+        recordVideo();
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [initialMode]);
 
   // Dynamic Scene Creator on Canvas
   const renderChapterToCanvas = (
@@ -609,8 +786,8 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
   return (
     <div id="cinema-player-overlay" className="fixed inset-0 z-50 overflow-y-auto bg-black/95 flex items-center justify-center p-4 md:p-6 backdrop-blur-md">
       
-      {/* Hidden Render Canvas for capturing stream offline */}
-      <canvas ref={canvasRef} className="hidden" />
+      {/* Active Off-screen Render Canvas for capturing stream correctly on all browser engines */}
+      <canvas id="cinema-recording-canvas" ref={canvasRef} style={{ position: 'absolute', left: '-9999px', top: '0', width: '1280px', height: '720px', pointerEvents: 'none' }} />
 
       {/* Modern Neon Retro Screen Chassis */}
       <div id="cinema-cabinet" className="relative w-full max-w-4xl bg-gradient-to-b from-gray-900 to-black rounded-3xl border-8 border-cartoon-yellow shadow-2xl overflow-hidden text-white flex flex-col p-4 md:p-6">
