@@ -19,6 +19,78 @@ interface ShotstackResponse {
   };
 }
 
+/**
+ * Auxiliar para fazer upload de imagens em base64 para o backend local do Express,
+ * permitindo que o Shotstack as acesse por um link público e estável.
+ */
+const uploadBase64Image = async (base64Data: string, index: number): Promise<string> => {
+  try {
+    const response = await fetch('/api/upload-image', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        base64Data,
+        filename: `story_img_${Date.now()}_${index}.png`
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to upload image. Status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.success && data.url) {
+      // Retorna a URL pública completa com base no window.location.origin
+      return window.location.origin + data.url;
+    }
+    throw new Error("Upload did not return success or url.");
+  } catch (error) {
+    console.error("Error uploading image to local backend:", error);
+    return base64Data;
+  }
+};
+
+/**
+ * Garante uma URL estável e pública para a renderização do Shotstack.
+ * Se a imagem for base64 ou um link dinâmico do Pollinations, baixa o conteúdo
+ * e hospeda estaticamente no nosso servidor do Cloud Run.
+ */
+const ensurePublicImageUrl = async (imageUrl: string, index: number, chapterInfo: any): Promise<string> => {
+  if (!imageUrl) {
+    return 'https://images.unsplash.com/photo-1606092195730-5d7b9af1ef4d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1280&q=80';
+  }
+
+  // 1. Se for base64 (gerada na hora pela IA no cliente), sobe pro nosso Express
+  if (imageUrl.startsWith('data:')) {
+    return await uploadBase64Image(imageUrl, index);
+  }
+
+  // 2. Se for link do Pollinations ou outro link dinâmico, tenta baixar e hospedar localmente
+  // para blindar contra timeouts e instabilidades de APIs de terceiros.
+  if (imageUrl.includes('pollinations.ai') || imageUrl.includes('image.pollinations.ai')) {
+    try {
+      const res = await fetch(imageUrl);
+      if (res.ok) {
+        const blob = await res.blob();
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve, reject) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+        });
+        reader.readAsDataURL(blob);
+        const base64Data = await base64Promise;
+        return await uploadBase64Image(base64Data, index);
+      }
+    } catch (e) {
+      console.warn("Could not download/cache pollinations image, using direct URL as fallback", e);
+    }
+  }
+
+  return imageUrl;
+};
+
 export const videoService = {
   
   /**
@@ -51,16 +123,19 @@ export const videoService = {
       const chapter = story.chapters[i];
       const duration = videoService.calculateDuration(chapter.text);
       
-      // Se a imagem for um base64 local (gerado pelo Gemini no navegador e salvo offline),
-      // enviamos um URL público equivalente do Pollinations AI para que o Shotstack consiga baixar!
-      let imageUrl = chapter.generatedImage || 'https://images.unsplash.com/photo-1606092195730-5d7b9af1ef4d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1280&q=80';
-      if (imageUrl.startsWith('data:')) {
+      // Garante uma imagem estática e estável no nosso próprio servidor do Cloud Run!
+      let rawImage = chapter.generatedImage;
+      
+      // Fallback caso não tenha imagem gerada
+      if (!rawImage) {
         const seed = Math.floor(Math.random() * 99999);
         const visualDesc = chapter.visualDescription || chapter.title || "children illustration";
-        // Prompt otimizado para cartoon fofinho infantil
         const visualPrompt = `children book illustration, vector art, colorful, cute, flat style, ${visualDesc}`;
-        imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(visualPrompt)}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
+        rawImage = `https://image.pollinations.ai/prompt/${encodeURIComponent(visualPrompt)}?width=1024&height=600&seed=${seed}&nologo=true&model=flux`;
       }
+
+      // Converte para link estático local hospedado por nós
+      const imageUrl = await ensurePublicImageUrl(rawImage, i, chapter);
       
       // Asset de Imagem
       clips.push({

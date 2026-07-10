@@ -164,7 +164,10 @@ export const authService = {
       const user = await idbService.get('users', userId);
       if (!user) return;
       
-      if (packType === 'premium_5') {
+      if (packType === 'single_story' || packType === 'single_story_donation') {
+          user.plan = 'premium';
+          user.credits = (user.credits || 0) + 1;
+      } else if (packType === 'premium_5') {
           user.plan = 'premium';
           user.credits = (user.credits || 0) + 5;
       } else if (packType === 'enterprise_100') {
