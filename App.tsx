@@ -14,7 +14,9 @@ import SchoolRoom from './pages/SchoolRoom';
 import SchoolLogin from './pages/SchoolLogin';
 import SchoolLibrary from './pages/SchoolLibrary';
 import Tutorial from './pages/Tutorial';
+import Admin from './pages/Admin';
 import ErrorBoundary from './components/ErrorBoundary';
+import { TutorialWidget } from './components/TutorialWidget';
 
 const App: React.FC = () => {
   return (
@@ -36,6 +38,12 @@ const App: React.FC = () => {
                 <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
                 
                 <Route path="/pricing" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
+                
+                <Route path="/admin" element={
+                <ProtectedRoute>
+                    <Admin />
+                </ProtectedRoute>
+                } />
                 
                 <Route path="/avatars" element={
                 <ProtectedRoute>
@@ -75,6 +83,7 @@ const App: React.FC = () => {
                 </ProtectedRoute>
                 } />
             </Routes>
+            <TutorialWidget />
             </div>
         </Router>
         </AuthProvider>

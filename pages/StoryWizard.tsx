@@ -22,6 +22,9 @@ const StoryWizard: React.FC = () => {
   const [canCreate, setCanCreate] = useState(true);
   
   const [isKeyLeaked, setIsKeyLeaked] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState('Kore');
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<'16:9' | '9:16'>('16:9');
+  const [selectedStyle, setSelectedStyle] = useState<'kids' | 'dynamic' | 'musical'>('kids');
 
   useEffect(() => {
     const loadAvatars = async () => {
@@ -77,8 +80,8 @@ const StoryWizard: React.FC = () => {
     const selectedChars = avatars.filter(a => selectedAvatarIds.includes(a.id));
 
     try {
-      // GERAÇÃO DA HISTÓRIA - Agora passando o idioma atual
-      const storyData = await generateStory(theme, selectedChars, i18n.language);
+      // GERAÇÃO DA HISTÓRIA - Agora passando o idioma atual e o estilo selecionado
+      const storyData = await generateStory(theme, selectedChars, i18n.language, selectedStyle);
       
       const storyId = crypto.randomUUID();
       const fullStory = {
@@ -88,6 +91,9 @@ const StoryWizard: React.FC = () => {
         theme,
         isPremium: check.type === 'premium',
         isEducational: false,
+        voiceName: selectedVoice,
+        videoAspectRatio: selectedAspectRatio,
+        style: selectedStyle,
         ...storyData
       };
 
@@ -246,6 +252,118 @@ const StoryWizard: React.FC = () => {
                         ))}
                     </div>
                 </div>
+            </Card>
+          </div>
+
+          <div className="transform -rotate-1">
+            <Card title="3. Quem vai narrar a história? 🗣️" color="purple">
+              <p className="text-xs text-white/90 mb-4 leading-tight">
+                Selecione o dublador ideal para dar vida aos diálogos e narrações!
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: 'Kore', label: '👧 Tia Cine', desc: 'Feminina Suave' },
+                  { value: 'Aoede', label: '👩 Mamãe', desc: 'Feminina Doce' },
+                  { value: 'Puck', label: '👦 Tio Cine', desc: 'Masculina Jovem' },
+                  { value: 'Charon', label: '👨 Papai / Tio', desc: 'Masculina Suave' },
+                  { value: 'Fenrir', label: '🦁 Monstro', desc: 'Masculina Grave' }
+                ].map((v) => {
+                  const isSel = selectedVoice === v.value;
+                  return (
+                    <button
+                      key={v.value}
+                      type="button"
+                      onClick={() => setSelectedVoice(v.value)}
+                      className={`relative flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all duration-150 cursor-pointer text-center ${
+                        isSel 
+                          ? 'bg-cartoon-yellow text-black border-black scale-105 shadow-cartoon' 
+                          : 'bg-white text-gray-800 border-black/30 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="font-heading text-xs font-bold block leading-tight">{v.label}</span>
+                      <span className="text-[9px] text-gray-500 block">{v.desc}</span>
+                      {isSel && (
+                        <span className="absolute -top-1 -right-1 bg-cartoon-pink text-white text-[9px] font-heading px-1.5 rounded-full border border-black scale-90">
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+
+          <div className="transform rotate-1">
+            <Card title="4. Formato da Aventura 📺" color="green">
+              <p className="text-xs text-white/90 mb-4 leading-tight">
+                Selecione o formato ideal para as imagens e o vídeo da sua aventura!
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: '16:9', label: '📺 Paisagem (16:9)', desc: 'Ideal para TV, Notebook' },
+                  { value: '9:16', label: '📱 Retrato (9:16)', desc: 'Ideal para Celulares' }
+                ].map((v) => {
+                  const isSel = selectedAspectRatio === v.value;
+                  return (
+                    <button
+                      key={v.value}
+                      type="button"
+                      onClick={() => setSelectedAspectRatio(v.value as '16:9' | '9:16')}
+                      className={`relative flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all duration-150 cursor-pointer text-center ${
+                        isSel 
+                          ? 'bg-cartoon-yellow text-black border-black scale-105 shadow-cartoon' 
+                          : 'bg-white text-gray-800 border-black/30 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="font-heading text-xs font-bold block leading-tight">{v.label}</span>
+                      <span className="text-[9px] text-gray-500 block">{v.desc}</span>
+                      {isSel && (
+                        <span className="absolute -top-1 -right-1 bg-cartoon-pink text-white text-[9px] font-heading px-1.5 rounded-full border border-black scale-90">
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+
+          <div className="transform -rotate-1">
+            <Card title="5. Estilo de Roteiro 🎭" color="pink">
+              <p className="text-xs text-white/95 mb-4 leading-tight">
+                Escolha o estilo de roteiro ideal para sua história! Nosso mecanismo flexível se adapta a diferentes propostas.
+              </p>
+              <div className="grid grid-cols-1 gap-2">
+                {[
+                  { value: 'kids', label: '🎭 Padrão Kids (Retenção)', desc: 'Narrativa clássica com suspense lúdico, humor e lições sociais ou de vida.' },
+                  { value: 'dynamic', label: '⚡ Reels Dinâmico (Facebook/TikTok)', desc: 'Estrutura acelerada com gancho imediato, ação frenética em escalada, climax e efeitos visuais/sonoros.' },
+                  { value: 'musical', label: '🎵 Fábrica de Musicais (Broadway)', desc: 'Os personagens dialogam em prosa e rompem em cantoria alegre com estrofes rimadas!' }
+                ].map((v) => {
+                  const isSel = selectedStyle === v.value;
+                  return (
+                    <button
+                      key={v.value}
+                      type="button"
+                      onClick={() => setSelectedStyle(v.value as 'kids' | 'dynamic' | 'musical')}
+                      className={`relative flex flex-col items-start justify-center p-3 rounded-xl border-2 transition-all duration-150 cursor-pointer text-left w-full ${
+                        isSel 
+                          ? 'bg-cartoon-yellow text-black border-black scale-102 shadow-cartoon' 
+                          : 'bg-white text-gray-800 border-black/30 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="font-heading text-xs font-bold block leading-tight">{v.label}</span>
+                      <span className="text-[10px] text-gray-500 block mt-1 leading-normal">{v.desc}</span>
+                      {isSel && (
+                        <span className="absolute top-2 right-2 bg-cartoon-pink text-white text-[9px] font-heading px-1.5 py-0.5 rounded-full border border-black scale-90">
+                          ATIVADO ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </Card>
           </div>
 

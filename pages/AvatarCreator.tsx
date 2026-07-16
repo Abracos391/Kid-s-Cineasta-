@@ -134,7 +134,7 @@ const AvatarCreator: React.FC = () => {
     try {
       setStatusMsg("🧐 O robô está olhando sua foto...");
       const base64Data = preview!.split(',')[1];
-      const description = await analyzeFaceForAvatar(base64Data);
+      const description = await analyzeFaceForAvatar(base64Data, name);
       
       setStatusMsg("🎨 Pintando sua caricatura 3D...");
       const cartoonUrl = await generateCaricatureImage(description);

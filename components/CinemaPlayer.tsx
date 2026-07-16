@@ -27,6 +27,48 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
   const [isMuted, setIsMuted] = useState(false);
   const [voicesLoading, setVoicesLoading] = useState(false);
   const [voiceLoadingText, setVoiceLoadingText] = useState<string>('');
+  const [selectedVoice, setSelectedVoice] = useState<string>(story.voiceName || 'Puck');
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<'16:9' | '9:16'>(story.videoAspectRatio || '16:9');
+
+  const handleVoiceChange = async (voice: string) => {
+    setSelectedVoice(voice);
+    setIsPlaying(false);
+    // Limpar o áudio gerado anteriormente para forçar a nova dublagem com a voz escolhida
+    const updatedChapters = story.chapters.map(chap => ({
+      ...chap,
+      generatedAudio: undefined
+    }));
+    const updatedStory = {
+      ...story,
+      voiceName: voice,
+      chapters: updatedChapters
+    };
+    onUpdateStory(updatedStory);
+    if (user) {
+      try {
+        await dbService.updateStory(user.id, updatedStory);
+      } catch (e) {
+        console.error("Erro ao salvar voz no banco de dados:", e);
+      }
+    }
+    await ensureAllVoicesGenerated(voice);
+  };
+
+  const handleAspectRatioChange = async (aspectRatio: '16:9' | '9:16') => {
+    setSelectedAspectRatio(aspectRatio);
+    const updatedStory = {
+      ...story,
+      videoAspectRatio: aspectRatio
+    };
+    onUpdateStory(updatedStory);
+    if (user) {
+      try {
+        await dbService.updateStory(user.id, updatedStory);
+      } catch (e) {
+        console.error("Erro ao salvar formato no banco de dados:", e);
+      }
+    }
+  };
   
   // Recording states
   const [recordProgress, setRecordProgress] = useState(0); // 0 to 100%
@@ -219,8 +261,9 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
   }, [isPlaying, currentChapterIndex, mode]);
 
   // Safety trigger: ensure all chapters have narration generated before starting
-  const ensureAllVoicesGenerated = async (): Promise<boolean> => {
+  const ensureAllVoicesGenerated = async (overrideVoice?: string): Promise<boolean> => {
     if (!user) return false;
+    const voiceToUse = overrideVoice || selectedVoice;
     setVoicesLoading(true);
     setVoiceLoadingText("Conectando ao estúdio de dublagem...");
     let updated = false;
@@ -254,7 +297,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
           try {
             console.log(`Generating audio for chapter ${i + 1}/${updatedChapters.length} (Attempt ${attempts})...`);
             const speechBase64 = await promiseWithTimeout(
-              generateSpeech(chap.text),
+              generateSpeech(chap.text, voiceToUse),
               12000,
               new Error("Tempo limite excedido de 12 segundos")
             );
@@ -426,6 +469,9 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
 
   // Pure Client-side High Fidelity Recording Engine
   const recordVideo = async () => {
+    // Abre o vídeo tutorial explicativo em primeiro plano automaticamente
+    window.dispatchEvent(new Event('open-tutorial-video-force'));
+
     setRecordStatus('preparing');
     setRecordProgress(0);
     setRecordedVideoUrl(null);
@@ -465,8 +511,11 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
       const canvas = canvasRef.current;
       if (!canvas) throw new Error('Render canvas not available');
 
-      canvas.width = 1280;
-      canvas.height = 720;
+      const aspectRatio = selectedAspectRatio;
+      const isPortrait = aspectRatio === '9:16';
+
+      canvas.width = isPortrait ? 720 : 1280;
+      canvas.height = isPortrait ? 1280 : 720;
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('Could not get canvas context');
 
@@ -666,21 +715,23 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
           ctx.drawImage(chapterImg, x, y, finalWidth, finalHeight);
 
           // Dark bottom gradient overlay for maximum subtitle legibility
-          const grad = ctx.createLinearGradient(0, canvas.height - 240, 0, canvas.height);
+          const isPortrait = (selectedAspectRatio === '9:16');
+          const gradientHeight = isPortrait ? 400 : 240;
+          const grad = ctx.createLinearGradient(0, canvas.height - gradientHeight, 0, canvas.height);
           grad.addColorStop(0, 'rgba(0, 0, 0, 0.0)');
           grad.addColorStop(0.3, 'rgba(0, 0, 0, 0.5)');
           grad.addColorStop(1, 'rgba(0, 0, 0, 0.85)');
           ctx.fillStyle = grad;
-          ctx.fillRect(0, canvas.height - 240, canvas.width, 240);
+          ctx.fillRect(0, canvas.height - gradientHeight, canvas.width, gradientHeight);
 
           // 2. Render Narrating Avatars (Animated bounce)
           avatarImgs.forEach((avImg, idx) => {
             const isLeft = idx === 0;
             const bounce = Math.abs(Math.sin((elapsed / 1000) * 5)) * 12;
-            const avWidth = 110;
-            const avHeight = 110;
-            const avX = isLeft ? 60 : canvas.width - 60 - avWidth;
-            const avY = canvas.height - 180 - bounce;
+            const avWidth = isPortrait ? 80 : 110;
+            const avHeight = isPortrait ? 80 : 110;
+            const avX = isLeft ? (isPortrait ? 40 : 60) : canvas.width - (isPortrait ? 40 : 60) - avWidth;
+            const avY = canvas.height - (isPortrait ? 330 : 180) - bounce;
 
             // White cartoonish round border
             ctx.beginPath();
@@ -701,22 +752,23 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
           });
 
           // 3. Subtitles & Chapter Label in Fredoka / Comic Neue Styling
-          ctx.font = '900 24px "Fredoka", "Comic Neue", "Fredoka One", cursive, sans-serif';
+          ctx.font = `900 ${isPortrait ? '30px' : '24px'} "Fredoka", "Comic Neue", "Fredoka One", cursive, sans-serif`;
           ctx.fillStyle = '#FFD700'; // Cartoon gold yellow
           ctx.strokeStyle = '#000000';
           ctx.lineWidth = 6;
           ctx.textAlign = 'center';
-          ctx.strokeText(chapterTitle.toUpperCase(), canvas.width / 2, canvas.height - 150);
-          ctx.fillText(chapterTitle.toUpperCase(), canvas.width / 2, canvas.height - 150);
+          const labelY = canvas.height - (isPortrait ? 260 : 150);
+          ctx.strokeText(chapterTitle.toUpperCase(), canvas.width / 2, labelY);
+          ctx.fillText(chapterTitle.toUpperCase(), canvas.width / 2, labelY);
 
           // Split subtitle text to fit inside widescreen safe area
-          ctx.font = 'bold 26px "Comic Neue", cursive, sans-serif';
+          ctx.font = `bold ${isPortrait ? '26px' : '26px'} "Comic Neue", cursive, sans-serif`;
           ctx.fillStyle = '#FFFFFF';
           ctx.lineWidth = 5;
           ctx.strokeStyle = '#000000';
 
           const subtitleText = chapter.text;
-          const maxTextWidth = canvas.width - 360; // leave margins for avatars
+          const maxTextWidth = canvas.width - (isPortrait ? 120 : 360); // leave margins for avatars
           const words = subtitleText.split(' ');
           const lines = [];
           let currentLine = '';
@@ -734,9 +786,9 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
           lines.push(currentLine.trim());
 
           // Draw the subtitles line by line
-          const startY = canvas.height - 100;
-          lines.slice(0, 3).forEach((line, lineIdx) => {
-            const lineY = startY + (lineIdx * 34);
+          const startY = canvas.height - (isPortrait ? 190 : 100);
+          lines.slice(0, isPortrait ? 4 : 3).forEach((line, lineIdx) => {
+            const lineY = startY + (lineIdx * (isPortrait ? 38 : 34));
             ctx.strokeText(line, canvas.width / 2, lineY);
             ctx.fillText(line, canvas.width / 2, lineY);
           });
@@ -775,6 +827,15 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
 
   const handleDownloadVideo = () => {
     if (!recordedVideoUrl) return;
+
+    // Verifica se a inscrição/like do YouTube foi validada
+    const hasLiked = localStorage.getItem('cineastakids_tutorial_liked') === 'true';
+    if (!hasLiked) {
+      // Força a abertura do painel do tutorial do YouTube com aviso de bloqueio de download
+      window.dispatchEvent(new Event('open-tutorial-video-force'));
+      return;
+    }
+
     const a = document.createElement('a');
     a.href = recordedVideoUrl;
     a.download = `Filme_CineastaKids_${story.title.replace(/\s+/g, '_')}.webm`;
@@ -814,11 +875,101 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
 
         {/* --- 1. SELECTION SPLASH SCREEN --- */}
         {mode === 'selection' && (
-          <div id="selection-screen" className="flex flex-col items-center justify-center min-h-[350px] gap-8 py-6">
-            <div className="text-center max-w-lg mb-2">
-              <span className="text-6xl animate-bounce mb-4 block">🍿</span>
+          <div id="selection-screen" className="flex flex-col items-center justify-center min-h-[350px] gap-6 py-4">
+            <div className="text-center max-w-lg mb-1">
+              <span className="text-5xl animate-bounce mb-2 block">🍿</span>
               <h3 className="font-heading text-2xl text-cartoon-blue">Escolha uma ação para o livro:</h3>
-              <p className="text-gray-300 mt-2">Você pode assistir o filme completo com as vozes, ou gravar direto em um arquivo de vídeo de alta qualidade!</p>
+              <p className="text-gray-300 text-sm mt-1">Você pode assistir o filme completo com as vozes, ou gravar direto em um arquivo de vídeo de alta qualidade!</p>
+            </div>
+
+            {/* 🗣️ SELETOR DE VOZ DO NARRADOR */}
+            <div className="w-full max-w-2xl px-4 bg-gray-800/40 border-4 border-black rounded-3xl p-4 shadow-inner">
+              <h4 className="font-heading text-base text-cartoon-yellow flex items-center justify-center gap-2 mb-2">
+                🗣️ Quem vai dublar a história hoje?
+              </h4>
+              <p className="text-[11px] text-gray-400 text-center mb-3">
+                Escolha o dublador dos heróis! Mudar de dublador irá zerar a dublagem anterior para aplicar a nova voz escolhida.
+              </p>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {[
+                  { id: 'Puck', label: 'Tio Cine', desc: 'Alegre 🚀', emoji: '🧑‍💼' },
+                  { id: 'Charon', label: 'Papai / Tio', desc: 'Sério 📖', emoji: '🧔' },
+                  { id: 'Aoede', label: 'Mamãe', desc: 'Doce 🌸', emoji: '👩‍🍼' },
+                  { id: 'Kore', label: 'Tia Cine', desc: 'Moderna ✨', emoji: '👩‍💼' },
+                  { id: 'Fenrir', label: 'Monstro', desc: 'Grave 🦁', emoji: '👾' },
+                ].map((v) => {
+                  const isSel = selectedVoice === v.id;
+                  return (
+                    <button
+                      key={v.id}
+                      onClick={() => handleVoiceChange(v.id)}
+                      className={`relative flex flex-col items-center p-2 rounded-xl border-4 transition-all duration-200 cursor-pointer ${
+                        isSel 
+                          ? 'bg-cartoon-yellow text-black border-black scale-105 shadow-doodle' 
+                          : 'bg-gray-700/40 text-white border-transparent hover:border-gray-500 hover:bg-gray-700'
+                      }`}
+                    >
+                      <span className="text-2xl mb-0.5">{v.emoji}</span>
+                      <span className="font-heading text-xs font-bold text-center block leading-tight">{v.label}</span>
+                      <span className={`text-[9px] text-center block ${isSel ? 'text-gray-800' : 'text-gray-400'}`}>{v.desc}</span>
+                      {isSel && (
+                        <span className="absolute -top-1 -right-1 bg-cartoon-pink text-white text-[9px] font-heading px-1 rounded-full border-2 border-black scale-90">
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 📺 SELETOR DE FORMATO DO VÍDEO (ASPECT RATIO) */}
+            <div className="w-full max-w-2xl px-4 bg-gray-800/40 border-4 border-black rounded-3xl p-4 shadow-inner">
+              <h4 className="font-heading text-base text-cartoon-yellow flex items-center justify-center gap-2 mb-2">
+                📺 Formato do Filme / Livro
+              </h4>
+              <p className="text-[11px] text-gray-400 text-center mb-3">
+                Escolha o formato ideal para o seu vídeo e para as imagens!
+              </p>
+              
+              <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
+                <button
+                  onClick={() => handleAspectRatioChange('16:9')}
+                  className={`relative flex flex-col items-center p-3 rounded-xl border-4 transition-all duration-200 cursor-pointer ${
+                    selectedAspectRatio === '16:9'
+                      ? 'bg-cartoon-yellow text-black border-black scale-105 shadow-doodle'
+                      : 'bg-gray-700/40 text-white border-transparent hover:border-gray-500 hover:bg-gray-700'
+                  }`}
+                >
+                  <span className="text-2xl mb-1">📺</span>
+                  <span className="font-heading text-sm font-bold text-center block">Paisagem (16:9)</span>
+                  <span className={`text-[10px] text-center block ${selectedAspectRatio === '16:9' ? 'text-gray-800' : 'text-gray-400'}`}>Ideal para PC, TV, YouTube</span>
+                  {selectedAspectRatio === '16:9' && (
+                    <span className="absolute -top-1 -right-1 bg-cartoon-pink text-white text-[9px] font-heading px-1.5 rounded-full border-2 border-black scale-90">
+                      ✓
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => handleAspectRatioChange('9:16')}
+                  className={`relative flex flex-col items-center p-3 rounded-xl border-4 transition-all duration-200 cursor-pointer ${
+                    selectedAspectRatio === '9:16'
+                      ? 'bg-cartoon-yellow text-black border-black scale-105 shadow-doodle'
+                      : 'bg-gray-700/40 text-white border-transparent hover:border-gray-500 hover:bg-gray-700'
+                  }`}
+                >
+                  <span className="text-2xl mb-1">📱</span>
+                  <span className="font-heading text-sm font-bold text-center block">Retrato (9:16)</span>
+                  <span className={`text-[10px] text-center block ${selectedAspectRatio === '9:16' ? 'text-gray-800' : 'text-gray-400'}`}>Ideal para Celular, Reels, TikTok, Shorts</span>
+                  {selectedAspectRatio === '9:16' && (
+                    <span className="absolute -top-1 -right-1 bg-cartoon-pink text-white text-[9px] font-heading px-1.5 rounded-full border-2 border-black scale-90">
+                      ✓
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl px-4">
@@ -852,11 +1003,14 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
             </div>
 
             {voicesLoading && (
-              <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center font-heading text-xl gap-4 rounded-3xl">
-                <div className="w-16 h-16 border-t-4 border-cartoon-yellow border-solid rounded-full animate-spin"></div>
-                <div className="text-cartoon-yellow text-center px-6">
-                  Preparando vozes dos heróis... <br />
-                  <span className="text-sm text-gray-400">Falando com a diretora de dublagem (Inteligência Artificial)</span>
+              <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center font-heading text-xl gap-4 rounded-3xl z-50 animate-fade-in">
+                <div className="text-8xl animate-bounce mb-3 select-none">📽️</div>
+                <div className="text-cartoon-yellow text-center px-6 font-comic text-3xl uppercase tracking-wider">
+                  ESTÚDIO DE DUBLAGEM
+                </div>
+                <div className="text-white text-center text-sm px-6 max-w-md font-sans">
+                  {voiceLoadingText || 'Preparando as vozes dos heróis com inteligência artificial...'} <br />
+                  <span className="text-xs text-gray-400 mt-2 block">Por favor, mantenha esta tela aberta enquanto o robô dubla os personagens!</span>
                 </div>
               </div>
             )}
@@ -964,6 +1118,26 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
                 </button>
               </div>
               <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 bg-gray-800 border-2 border-black rounded-lg px-2 py-1">
+                  <span className="text-xs">🗣️</span>
+                  <select
+                    value={selectedVoice}
+                    onChange={(e) => handleVoiceChange(e.target.value)}
+                    className="bg-transparent text-white text-xs font-bold font-sans cursor-pointer outline-none border-none pr-1"
+                  >
+                    {[
+                      { id: 'Kore', label: 'Tia Cine (Fem.)' },
+                      { id: 'Aoede', label: 'Mamãe (Fem.)' },
+                      { id: 'Puck', label: 'Tio Cine (Masc.)' },
+                      { id: 'Charon', label: 'Papai/Tio (Masc.)' },
+                      { id: 'Fenrir', label: 'Monstro (Masc.)' },
+                    ].map((v) => (
+                      <option key={v.id} value={v.id} className="bg-gray-950 text-white font-sans text-xs">
+                        {v.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <button
                   onClick={() => setIsMuted(!isMuted)}
                   className="bg-gray-800 border-2 border-black px-3 py-2 rounded-lg text-lg"
@@ -990,10 +1164,10 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ story, onClose, onUp
           <div id="recording-studio-screen" className="flex flex-col items-center justify-center p-6 gap-6 text-center">
             
             {recordStatus === 'preparing' && (
-              <div className="my-8 flex flex-col items-center gap-4">
-                <div className="w-16 h-16 border-t-4 border-cartoon-yellow border-solid rounded-full animate-spin"></div>
-                <h4 className="font-heading text-2xl text-cartoon-yellow">Inicializando Estúdio Kids...</h4>
-                <p className="text-gray-400">Misturando trilha musical, gerando animação adaptativa de câmera e sincronizando áudio.</p>
+              <div className="my-8 flex flex-col items-center gap-4 animate-fade-in">
+                <div className="text-8xl animate-bounce mb-3 select-none">🎥</div>
+                <h4 className="font-comic text-4xl text-cartoon-yellow uppercase tracking-widest text-stroke-black">Iniciando Estúdio Kids...</h4>
+                <p className="text-gray-200 max-w-md text-sm font-sans">Sincronizando as cenas, mixando trilhas sonoras e configurando a câmera animada!</p>
               </div>
             )}
 

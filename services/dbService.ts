@@ -43,6 +43,14 @@ export const dbService = {
     await idbService.delete('stories', storyId);
   },
 
+  getAllStories: async (): Promise<Story[]> => {
+    return await idbService.getAll('stories');
+  },
+
+  getAllUsers: async (): Promise<any[]> => {
+    return await idbService.getAll('users');
+  },
+
   // --- ESCOLA ---
 
   getSchoolRoster: async (userId: string): Promise<SchoolMember[]> => {

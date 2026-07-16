@@ -33,6 +33,14 @@ export interface StoryChapter {
   generatedAudio?: string; 
 }
 
+export interface YoutubePromo {
+  titles: string[];
+  description: string;
+  tags: string[];
+  thumbnailPrompt: string; // Detalhado para criar capa no gerador
+  thumbnailIdea: string;   // Dicas de layout e headlines para o Canva
+}
+
 export interface Story {
   id: string;
   title: string;
@@ -42,9 +50,13 @@ export interface Story {
   characters: Avatar[];
   isPremium?: boolean;
   isEducational?: boolean; 
+  voiceName?: string;
+  style?: 'kids' | 'dynamic' | 'musical';
   
   educationalGoal?: string;
   bnccCode?: string;
+  youtubePromo?: YoutubePromo; // Metadados do YouTube exclusivos do administrador
+  videoAspectRatio?: '16:9' | '9:16';
 }
 
 export enum AppStatus {

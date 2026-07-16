@@ -24,6 +24,7 @@ const SchoolRoom: React.FC = () => {
   const [goal, setGoal] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
   const [participatingStudents, setParticipatingStudents] = useState<string[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState('Kore');
 
   useEffect(() => {
     if (user && !user.isSchoolUser) {
@@ -106,6 +107,7 @@ const SchoolRoom: React.FC = () => {
         isPremium: true,
         isEducational: true,
         educationalGoal: goal,
+        voiceName: selectedVoice,
         ...storyData
       };
 
@@ -160,6 +162,20 @@ const SchoolRoom: React.FC = () => {
                         <div>
                             <label className="text-white/60 text-xs font-bold uppercase block mb-1">2. Objetivo BNCC</label>
                             <input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Ex: Resolver conflitos..." className="w-full bg-black/20 text-white font-hand text-xl placeholder-white/30 outline-none border-b border-white/10 p-2 focus:border-white/50 transition-colors" />
+                        </div>
+                        <div>
+                            <label className="text-white/60 text-xs font-bold uppercase block mb-1">3. Voz do Narrador</label>
+                            <select 
+                                value={selectedVoice} 
+                                onChange={(e) => setSelectedVoice(e.target.value)} 
+                                className="w-full bg-black/20 text-white font-sans text-sm font-bold outline-none border-b border-white/10 p-2 focus:border-white/50 transition-colors cursor-pointer"
+                            >
+                                <option value="Kore" className="bg-[#1a3c28] text-white">👧 Tia Cine (Fem. Suave)</option>
+                                <option value="Aoede" className="bg-[#1a3c28] text-white">👩 Mamãe (Fem. Doce)</option>
+                                <option value="Puck" className="bg-[#1a3c28] text-white">👦 Tio Cine (Masc. Jovem)</option>
+                                <option value="Charon" className="bg-[#1a3c28] text-white">👨 Papai/Tio (Masc. Suave)</option>
+                                <option value="Fenrir" className="bg-[#1a3c28] text-white">🦁 Monstro (Masc. Grave)</option>
+                            </select>
                         </div>
                     </div>
                     <div className="border-t-4 border-[#5c3a21] pt-4 mt-6">

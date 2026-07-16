@@ -40,6 +40,34 @@ export const authService = {
   // --- LOGIN ---
 
   login: async (whatsapp: string, password: string): Promise<User> => {
+    // --- LOGIN ADMINISTRATIVO ---
+    if (whatsapp.toLowerCase() === 'cineastakids.acao@gmail.com') {
+      if (password !== '132435aG@#') {
+        throw new Error('Senha incorreta para acesso administrativo.');
+      }
+      
+      // Busca ou cria o usuário admin no DB
+      let adminUser = await idbService.findUserByWhatsapp('cineastakids.acao@gmail.com');
+      if (!adminUser) {
+        adminUser = {
+          id: 'admin-cineasta-kids',
+          name: 'Cineasta Kids Admin',
+          whatsapp: 'cineastakids.acao@gmail.com',
+          // @ts-ignore
+          password: '132435aG@#',
+          plan: 'enterprise',
+          credits: 999999,
+          monthlyFreeUsed: 0,
+          monthlyPremiumTrialUsed: 0,
+          lastResetDate: Date.now(),
+          isSchoolUser: false
+        };
+        await idbService.add('users', adminUser);
+      }
+      sessionStorage.setItem(SESSION_KEY, adminUser.id);
+      return adminUser;
+    }
+
     const cleanWhatsapp = whatsapp.replace(/\D/g, '');
     console.log(`Tentando login para: ${cleanWhatsapp}`);
     

@@ -16,6 +16,7 @@ const Auth: React.FC = () => {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false); 
+  const [loginMethod, setLoginMethod] = useState<'whatsapp' | 'email'>('whatsapp');
   
   const { login, register, user, loading } = useAuth(); 
   const navigate = useNavigate();
@@ -32,7 +33,15 @@ const Auth: React.FC = () => {
 
   // Máscara de Telefone (BR) - Mantida para manter compatibilidade
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(/\D/g, '');
+    const rawVal = e.target.value;
+    
+    // Se o usuário estiver digitando um email (conter letras ou @), não aplica máscara de telefone
+    if (/[a-zA-Z@]/.test(rawVal)) {
+      setWhatsapp(rawVal);
+      return;
+    }
+
+    let val = rawVal.replace(/\D/g, '');
     if (val.length > 11) val = val.substring(0, 11);
     
     if (val.length > 2) val = `(${val.substring(0, 2)}) ${val.substring(2)}`;
@@ -53,14 +62,23 @@ const Auth: React.FC = () => {
     setSubmitting(true);
     
     try {
-      const cleanPhone = whatsapp.replace(/\D/g, '');
-      if (cleanPhone.length < 10) throw new Error("Número de WhatsApp inválido");
+      const isEmail = whatsapp.includes('@') || /[a-zA-Z]/.test(whatsapp);
+      let loginIdentifier = whatsapp;
+
+      if (!isEmail) {
+        const cleanPhone = whatsapp.replace(/\D/g, '');
+        if (cleanPhone.length < 10) throw new Error("Número de WhatsApp inválido");
+        loginIdentifier = cleanPhone;
+      }
 
       if (isLogin) {
-        await login(cleanPhone, password);
+        await login(loginIdentifier, password);
       } else {
+        if (isEmail) {
+          throw new Error("Cadastros devem ser feitos com um número de WhatsApp.");
+        }
         if (!name) throw new Error("Nome é obrigatório");
-        await register(name, cleanPhone, password);
+        await register(name, loginIdentifier, password);
         notifyAdmin(name, whatsapp);
         alert("Cadastro realizado!");
       }
@@ -99,6 +117,41 @@ const Auth: React.FC = () => {
 
         <Card color="white" className="transform rotate-1">
             <form onSubmit={handleSubmit} className="space-y-6">
+                {isLogin && (
+                    <div className="flex bg-gray-100 p-1 rounded-xl border-2 border-black mb-4">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setLoginMethod('whatsapp');
+                                setWhatsapp('');
+                                setError('');
+                            }}
+                            className={`flex-1 py-2 font-heading font-bold text-xs md:text-sm rounded-lg transition-all cursor-pointer ${
+                                loginMethod === 'whatsapp'
+                                    ? 'bg-cartoon-blue text-white shadow-sm border border-black'
+                                    : 'text-gray-600 hover:text-black'
+                            }`}
+                        >
+                            💬 WhatsApp
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setLoginMethod('email');
+                                setWhatsapp('');
+                                setError('');
+                            }}
+                            className={`flex-1 py-2 font-heading font-bold text-xs md:text-sm rounded-lg transition-all cursor-pointer ${
+                                loginMethod === 'email'
+                                    ? 'bg-cartoon-purple text-white shadow-sm border border-black'
+                                    : 'text-gray-600 hover:text-black'
+                            }`}
+                        >
+                            ✉️ E-mail (Admin)
+                        </button>
+                    </div>
+                )}
+
                 {!isLogin && (
                     <div>
                         <label className="block font-bold mb-1 font-heading">{t('auth.name_label')}</label>
@@ -113,13 +166,15 @@ const Auth: React.FC = () => {
                 )}
                 
                 <div>
-                    <label className="block font-bold mb-1 font-heading">{t('auth.whatsapp_label')}</label>
+                    <label className="block font-bold mb-1 font-heading">
+                        {isLogin && loginMethod === 'email' ? 'E-mail' : t('auth.whatsapp_label')}
+                    </label>
                     <input 
-                        type="tel" 
+                        type={isLogin && loginMethod === 'email' ? 'email' : 'tel'} 
                         className="w-full p-3 border-4 border-black rounded-xl font-sans outline-none focus:border-cartoon-blue"
-                        placeholder={t('auth.whatsapp_placeholder')}
+                        placeholder={isLogin && loginMethod === 'email' ? 'exemplo@email.com' : t('auth.whatsapp_placeholder')}
                         value={whatsapp}
-                        onChange={handlePhoneChange}
+                        onChange={isLogin && loginMethod === 'email' ? e => setWhatsapp(e.target.value) : handlePhoneChange}
                     />
                 </div>
 
@@ -143,8 +198,8 @@ const Auth: React.FC = () => {
 
             <div className="mt-6 text-center border-t-2 border-gray-100 pt-4">
                 <button 
-                    onClick={() => { setIsLogin(!isLogin); setError(''); }}
-                    className="text-blue-600 font-bold hover:underline font-sans"
+                    onClick={() => { setIsLogin(!isLogin); setLoginMethod('whatsapp'); setWhatsapp(''); setError(''); }}
+                    className="text-blue-600 font-bold hover:underline font-sans cursor-pointer"
                     type="button"
                 >
                     {isLogin ? t('auth.toggle_to_register') : t('auth.toggle_to_login')}

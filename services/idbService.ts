@@ -100,6 +100,23 @@ export const idbService = {
     }
   },
 
+  getAll: async (storeName: string): Promise<any[]> => {
+    try {
+        const db = await idbService.openDB();
+        return new Promise<any[]>((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            const request = store.getAll();
+
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error(`Erro ao buscar todos de ${storeName}:`, e);
+        return [];
+    }
+  },
+
   get: async (storeName: string, key: string) => {
     try {
         const db = await idbService.openDB();

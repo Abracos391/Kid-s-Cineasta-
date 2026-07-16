@@ -117,6 +117,8 @@ export const videoService = {
     const clips = [];
     const textClips = [];
     let startTime = 0;
+    const aspectRatio = story.videoAspectRatio || '16:9';
+    const isPortrait = aspectRatio === '9:16';
 
     // --- FAIXA 1 e 2: IMAGENS e TEXTO ---
     for (let i = 0; i < story.chapters.length; i++) {
@@ -142,6 +144,7 @@ export const videoService = {
         asset: {
           type: 'image',
           src: imageUrl,
+          fit: 'cover',
         },
         start: startTime,
         length: duration,
@@ -156,15 +159,15 @@ export const videoService = {
       textClips.push({
         asset: {
           type: 'html',
-          html: `<div style="font-family: 'Comic Neue', sans-serif; text-align: center; width: 100%;">
-                    <h1 style="font-size: 36px; color: #FFD700; text-shadow: 3px 3px 0 #000; margin-bottom: 10px; font-weight: 900;">${chapter.title.toUpperCase()}</h1>
-                    <p style="font-size: 20px; color: #FFFFFF; text-shadow: 2px 2px 0 #000; font-weight: 700; line-height: 1.4; max-width: 90%; margin: 0 auto;">${chapter.text}</p>
+          html: `<div style="font-family: 'Comic Neue', sans-serif; text-align: center; width: 100%; box-sizing: border-box; padding: ${isPortrait ? '10px' : '0px'};">
+                    <h1 style="font-size: ${isPortrait ? '26px' : '36px'}; color: #FFD700; text-shadow: 3px 3px 0 #000; margin-bottom: ${isPortrait ? '8px' : '10px'}; font-weight: 900;">${chapter.title.toUpperCase()}</h1>
+                    <p style="font-size: ${isPortrait ? '18px' : '20px'}; color: #FFFFFF; text-shadow: 2px 2px 0 #000; font-weight: 700; line-height: 1.4; max-width: 95%; margin: 0 auto;">${chapter.text}</p>
                  </div>`,
           css: "@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@700&display=swap');",
-          width: 1100,
-          height: 320,
+          width: isPortrait ? 520 : 1100,
+          height: isPortrait ? 400 : 320,
           background: 'transparent',
-          position: 'bottom'
+          position: isPortrait ? 'center' : 'bottom'
         },
         start: startTime + 0.5, // Entra um pouco depois da imagem
         length: Math.max(duration - 1, 3), // Garante tempo para a criança ler inteira
@@ -207,6 +210,7 @@ export const videoService = {
       output: {
         format: 'mp4',
         resolution: 'sd', // SD para economizar créditos e renderizar rápido
+        aspectRatio: aspectRatio, // '16:9' ou '9:16'
         fps: 25,
       },
     };

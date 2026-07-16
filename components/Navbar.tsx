@@ -25,6 +25,15 @@ const Navbar: React.FC = () => {
 
   const isSchoolMode = user?.isSchoolUser;
 
+  const isAdmin = user && (
+    user.whatsapp === 'olivalexcelso@gmail.com' || 
+    user.whatsapp === 'admin' ||
+    user.whatsapp?.includes('olivalexcelso') ||
+    user.whatsapp === 'cineastakids.acao@gmail.com' ||
+    user.name?.toLowerCase().includes('admin') ||
+    user.plan === 'enterprise'
+  );
+
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
     localStorage.setItem('i18nextLng', lng);
@@ -69,6 +78,10 @@ const Navbar: React.FC = () => {
             )}
             
             <NavLink to="/tutorial" active={isActive('/tutorial')} color="bg-gray-200">{t('nav.help')}</NavLink>
+            
+            {isAdmin && (
+              <NavLink to="/admin" active={isActive('/admin')} color="bg-red-400">🛡️ Admin</NavLink>
+            )}
             
             <div className="w-0.5 h-8 bg-black/10 mx-2 rounded-full"></div>
 
@@ -123,6 +136,10 @@ const Navbar: React.FC = () => {
                         )}
 
                         <MobileNavLink to="/tutorial" onClick={closeMenu} active={isActive('/tutorial')} emoji="❓" color="hover:bg-gray-200">{t('nav.help')}</MobileNavLink>
+
+                        {isAdmin && (
+                            <MobileNavLink to="/admin" onClick={closeMenu} active={isActive('/admin')} emoji="🛡️" color="hover:bg-red-400">Admin</MobileNavLink>
+                        )}
 
                         {/* Mobile Language Switcher */}
                         <div className="flex justify-center gap-2 my-2 overflow-x-auto pb-2">
